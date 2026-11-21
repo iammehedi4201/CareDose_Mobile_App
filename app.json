@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "CareDose",
+    "slug": "caredose",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "caredose",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-notifications",
+      "expo-status-bar",
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}
