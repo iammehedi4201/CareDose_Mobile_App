@@ -17,6 +17,65 @@ export function formatCurrencyAmount(
   return `${symbol} ${amount.trim()}`;
 }
 
+export function isSolidDosageForm(dosageForm?: string | null): boolean {
+  if (!dosageForm) return false;
+  const lower = dosageForm.toLowerCase();
+  return (
+    lower.includes('tablet') ||
+    lower.includes('capsule') ||
+    lower.includes('suppository') ||
+    lower.includes('pessary') ||
+    lower.includes('cap') ||
+    lower.includes('tab')
+  );
+}
+
+export function getStripUnitsLabel(dosageForm?: string | null): string {
+  const lower = (dosageForm ?? '').toLowerCase();
+  if (lower.includes('capsule')) {
+    return 'Capsules per strip';
+  }
+  if (lower.includes('suppository') || lower.includes('pessary')) {
+    return 'Pieces per strip';
+  }
+  return 'Tablets per strip';
+}
+
+export function formatStripUnitsValue(
+  stripUnits?: number | null,
+  dosageForm?: string | null,
+  packUnits?: number | null,
+): string {
+  if (typeof stripUnits !== 'number' || !Number.isFinite(stripUnits) || stripUnits <= 0) {
+    return 'Not available';
+  }
+  const count = Math.round(stripUnits);
+  const lower = (dosageForm ?? '').toLowerCase();
+  const noun = lower.includes('capsule')
+    ? count === 1
+      ? 'capsule'
+      : 'capsules'
+    : lower.includes('suppository') || lower.includes('pessary')
+      ? count === 1
+        ? 'piece'
+        : 'pieces'
+      : count === 1
+        ? 'tablet'
+        : 'tablets';
+
+  if (
+    typeof packUnits === 'number' &&
+    Number.isInteger(packUnits) &&
+    packUnits > count &&
+    packUnits % count === 0
+  ) {
+    const strips = packUnits / count;
+    return `${count} ${noun} (${strips} ${strips === 1 ? 'strip' : 'strips'} in pack)`;
+  }
+
+  return `${count} ${noun}`;
+}
+
 export function formatPackSummary(pack: CataloguePackDto | null | undefined): string {
   if (!pack) {
     return 'Pack: Not available';
@@ -108,6 +167,7 @@ export const OFFLINE_FALLBACK_CATALOGUE_BRANDS: CatalogueBrandSummaryDto[] = [
       id: 'offline-pack-1',
       packQuantity: '5 x 10',
       packUnits: 50,
+      stripUnits: 10,
       unitPrice: '4.01',
       packPrice: '200.50',
       currency: 'BDT',
@@ -148,6 +208,7 @@ export const OFFLINE_FALLBACK_CATALOGUE_BRANDS: CatalogueBrandSummaryDto[] = [
       id: 'offline-pack-2',
       packQuantity: "100's pack",
       packUnits: 100,
+      stripUnits: 10,
       unitPrice: '7.00',
       packPrice: '700.00',
       currency: 'BDT',
@@ -193,6 +254,7 @@ export const OFFLINE_FALLBACK_CATALOGUE_BRANDS: CatalogueBrandSummaryDto[] = [
       id: 'offline-pack-358',
       packQuantity: '500 ml bottle',
       packUnits: null,
+      stripUnits: null,
       unitPrice: null,
       packPrice: '95.00',
       currency: 'BDT',

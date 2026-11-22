@@ -1,5 +1,27 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+
+export const AUTH_SESSION_STORAGE_KEY = 'caredose:auth-session:v1';
+
+export interface SavedAuthSession {
+  token: string;
+  activePatientId: string;
+}
+
+export async function readSavedAuthSession(): Promise<SavedAuthSession | null> {
+  try {
+    const raw = await AsyncStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { token?: string; activePatientId?: string };
+    if (parsed.token && parsed.activePatientId) {
+      return { token: parsed.token, activePatientId: parsed.activePatientId };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export class ApiRequestError extends Error {
   constructor(

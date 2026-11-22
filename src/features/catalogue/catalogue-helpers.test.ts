@@ -5,7 +5,10 @@ import {
   formatMissingCatalogueValue,
   formatPackSummary,
   formatPackWarningReason,
+  formatStripUnitsValue,
   formatUnitOrPackPrice,
+  getStripUnitsLabel,
+  isSolidDosageForm,
   resolveBrandBadge,
 } from './catalogue-helpers';
 
@@ -73,5 +76,25 @@ describe('Phase 4 — Mobile Catalogue Formatting & Safety Helpers', () => {
       /unit price/i,
     );
     expect(formatPackWarningReason('combination_product')).toMatch(/combination/i);
+  });
+
+  it('detects solid dosage forms and formats tablets/capsules/pieces per strip labels and values', () => {
+    expect(isSolidDosageForm('Tablet')).toBe(true);
+    expect(isSolidDosageForm('Tablet (Extended Release)')).toBe(true);
+    expect(isSolidDosageForm('Capsule (Enteric Coated)')).toBe(true);
+    expect(isSolidDosageForm('Suppository')).toBe(true);
+    expect(isSolidDosageForm('Syrup')).toBe(false);
+    expect(isSolidDosageForm('IV Infusion')).toBe(false);
+    expect(isSolidDosageForm(null)).toBe(false);
+
+    expect(getStripUnitsLabel('Tablet')).toBe('Tablets per strip');
+    expect(getStripUnitsLabel('Capsule')).toBe('Capsules per strip');
+    expect(getStripUnitsLabel('Suppository')).toBe('Pieces per strip');
+
+    expect(formatStripUnitsValue(10, 'Tablet')).toBe('10 tablets');
+    expect(formatStripUnitsValue(10, 'Tablet', 510)).toBe('10 tablets (51 strips in pack)');
+    expect(formatStripUnitsValue(14, 'Capsule', 140)).toBe('14 capsules (10 strips in pack)');
+    expect(formatStripUnitsValue(5, 'Suppository', 30)).toBe('5 pieces (6 strips in pack)');
+    expect(formatStripUnitsValue(null, 'Tablet')).toBe('Not available');
   });
 });

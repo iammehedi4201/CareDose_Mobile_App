@@ -1,101 +1,73 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
   BottomSheet,
   DoseCard,
+  EmptyState,
   FormField,
   MedicineCard,
   PrimaryButton,
   ScreenContainer,
   SecondaryButton,
-  StatusVariant,
   SuccessToast,
   validateRequiredFields,
 } from '../src/components';
+import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
 import {
   formatStockQuantity,
   isPersonalMedicationLowStock,
   resolveMedicationStatusVariant,
 } from '../src/features/medications/medication-helpers';
+import { formatStockWithUnit } from '../src/features/medications/stock-calculator';
 import { useMedications } from '../src/features/medications/MedicationsContext';
+import {
+  formatDayHeadingLabel,
+  formatDoseActionFeedback,
+  getTodayLocalYmd,
+} from '../src/features/schedule/dose-rules';
+import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
-interface HomeDoseItem {
-  id: string;
-  period: 'Morning' | 'Afternoon';
-  medicineName: string;
-  strength: string;
-  instruction: string;
-  time: string;
-  status: StatusVariant;
-}
-
-const INITIAL_HOME_DOSES: HomeDoseItem[] = [
-  {
-    id: 'd1',
-    period: 'Morning',
-    medicineName: 'Corvalen',
-    strength: '5 mg',
-    instruction: '1 tablet · After breakfast',
-    time: '8:00 AM',
-    status: 'missed',
-  },
-  {
-    id: 'd2',
-    period: 'Morning',
-    medicineName: 'Glymexa',
-    strength: '500 mg',
-    instruction: '1 tablet · With morning meal',
-    time: '8:30 AM',
-    status: 'missed',
-  },
-  {
-    id: 'd3',
-    period: 'Afternoon',
-    medicineName: 'Vitamin D3',
-    strength: '1000 IU',
-    instruction: '1 capsule · After lunch',
-    time: '1:30 PM',
-    status: 'upcoming',
-  },
-  {
-    id: 'd4',
-    period: 'Afternoon',
-    medicineName: 'Serenil',
-    strength: '10 mg',
-    instruction: '1 tablet · Afternoon',
-    time: '4:00 PM',
-    status: 'upcoming',
-  },
+const HOME_PERIODS: SchedulePeriodGroupDto[] = [
+  'Morning',
+  'Afternoon',
+  'Evening',
+  'Bedtime',
 ];
 
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const layout = useResponsiveLayout();
   const { medications } = useMedications();
-  const [doses, setDoses] = useState<HomeDoseItem[]>(INITIAL_HOME_DOSES);
+  const { getLocalRangeDoses, recordDoseAction, pendingOccurrenceKeys } = useSchedules();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [quickReadingOpen, setQuickReadingOpen] = useState(false);
   const [readingValue, setReadingValue] = useState('');
   const [readingErrors, setReadingErrors] = useState<Record<string, string>>({});
 
-  const totalScheduled = doses.length;
-  const completedCount = doses.filter((d) => d.status === 'taken').length;
-  const remainingCount = doses.filter((d) => d.status === 'upcoming' || d.status === 'due').length;
-  const nextDose = doses.find((d) => d.status === 'upcoming' || d.status === 'due');
+  const todayYmd = getTodayLocalYmd();
+  const dailyDoses = useMemo(
+    () => getLocalRangeDoses(todayYmd, 1),
+    [getLocalRangeDoses, todayYmd],
+  );
+  const doses = dailyDoses.days[0]?.items ?? [];
+  const totalScheduled = dailyDoses.summary.total;
+  const completedCount = dailyDoses.summary.taken;
+  const remainingCount = dailyDoses.summary.remaining;
+  const nextDose = dailyDoses.nextDose;
 
-  const markDoseStatus = (id: string, nextStatus: 'taken' | 'skipped'): void => {
-    setDoses((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: nextStatus } : d)),
+  const markDoseStatus = async (
+    item: ScheduledDoseItemDto,
+    nextStatus: 'taken' | 'skipped',
+  ): Promise<void> => {
+    const outcome = await recordDoseAction(
+      item,
+      nextStatus === 'taken' ? 'TAKEN' : 'SKIPPED',
     );
-    setToastMessage(
-      nextStatus === 'taken'
-        ? 'Dose marked as taken.'
-        : 'Dose marked as skipped (stock unchanged).',
-    );
+    setToastMessage(formatDoseActionFeedback(outcome));
   };
 
   const handleSaveQuickReading = (): void => {
@@ -112,8 +84,6 @@ export default function HomeScreen(): React.JSX.Element {
     setToastMessage('Glucose reading saved to Health Log.');
   };
 
-  const morningDoses = doses.filter((d) => d.period === 'Morning');
-  const afternoonDoses = doses.filter((d) => d.period === 'Afternoon');
   const activeMeds = medications.filter((m) => !m.archived);
   const lowStockMeds = activeMeds.filter(isPersonalMedicationLowStock);
   const supplyHighlight = lowStockMeds[0] ?? activeMeds[0] ?? null;
@@ -122,7 +92,7 @@ export default function HomeScreen(): React.JSX.Element {
     <ScreenContainer
       eyebrow="GOOD MORNING, KARIM"
       title="Today"
-      subtitle="Wed, 18 Nov 2026"
+      subtitle={formatDayHeadingLabel(todayYmd, todayYmd).replace(/^Today · /, '')}
       rightBadgeText="KH"
     >
       <SuccessToast message={toastMessage} />
@@ -163,28 +133,36 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
       </View>
 
-      {/* Next dose card */}
+      {/* Next dose card — strictly nearest upcoming or due dose */}
       {nextDose ? (
         <View style={[styles.sectionCard, styles.mintCard, { padding: layout.cardPadding }]}>
           <Text style={styles.eyebrowMint}>NEXT DOSE</Text>
           <View style={styles.nextDoseRow}>
             <View style={styles.nextDoseInfo}>
               <Text style={styles.nextDoseTitle}>
-                {nextDose.medicineName} {nextDose.strength}
+                {nextDose.strength
+                  ? `${nextDose.medicineName} ${nextDose.strength}`
+                  : nextDose.medicineName}
               </Text>
               <Text style={styles.supportingText}>
-                {nextDose.instruction} · {nextDose.time}
+                {nextDose.doseInstruction} · {nextDose.scheduledTime12}
               </Text>
             </View>
-            <View style={styles.nextDosePlusCircle}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add dose schedule"
+              onPress={() => router.push('/schedule')}
+              style={styles.nextDosePlusCircle}
+            >
               <Feather name="plus" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            </View>
+            </Pressable>
           </View>
           <View style={styles.nextDoseBtnWrap}>
             <PrimaryButton
               fullWidth
               label="✓ Mark as Taken"
-              onPress={() => markDoseStatus(nextDose.id, 'taken')}
+              loading={Boolean(pendingOccurrenceKeys[nextDose.occurrenceKey])}
+              onPress={() => void markDoseStatus(nextDose, 'taken')}
             />
           </View>
         </View>
@@ -202,43 +180,45 @@ export default function HomeScreen(): React.JSX.Element {
         </Pressable>
       </View>
 
-      <View style={styles.periodHeaderRow}>
-        <Text style={[styles.periodTitle, styles.headerTitleFlex]}>Morning</Text>
-        <View style={styles.countChip}>
-          <Text style={styles.countChipText}>{morningDoses.length} doses</Text>
-        </View>
-      </View>
-      {morningDoses.map((dose) => (
-        <DoseCard
-          key={dose.id}
-          medicineName={dose.medicineName}
-          strength={dose.strength}
-          doseInstruction={dose.instruction}
-          scheduledTime={dose.time}
-          status={dose.status}
-          onMarkTaken={() => markDoseStatus(dose.id, 'taken')}
-          onSkip={() => markDoseStatus(dose.id, 'skipped')}
+      {doses.length === 0 ? (
+        <EmptyState
+          title="No doses scheduled for today"
+          description="Open Schedule to add your first daily or timed medicine schedule."
+          actionLabel="Open Schedule"
+          onAction={() => router.push('/schedule')}
+          iconName="calendar"
         />
-      ))}
-
-      <View style={styles.periodHeaderRow}>
-        <Text style={[styles.periodTitle, styles.headerTitleFlex]}>Afternoon</Text>
-        <View style={styles.countChip}>
-          <Text style={styles.countChipText}>{afternoonDoses.length} doses</Text>
-        </View>
-      </View>
-      {afternoonDoses.map((dose) => (
-        <DoseCard
-          key={dose.id}
-          medicineName={dose.medicineName}
-          strength={dose.strength}
-          doseInstruction={dose.instruction}
-          scheduledTime={dose.time}
-          status={dose.status}
-          onMarkTaken={() => markDoseStatus(dose.id, 'taken')}
-          onSkip={() => markDoseStatus(dose.id, 'skipped')}
-        />
-      ))}
+      ) : (
+        HOME_PERIODS.map((period) => {
+          const periodDoses = doses.filter((d) => d.period === period);
+          if (periodDoses.length === 0) return null;
+          return (
+            <React.Fragment key={period}>
+              <View style={styles.periodHeaderRow}>
+                <Text style={[styles.periodTitle, styles.headerTitleFlex]}>{period}</Text>
+                <View style={styles.countChip}>
+                  <Text style={styles.countChipText}>
+                    {periodDoses.length} {periodDoses.length === 1 ? 'dose' : 'doses'}
+                  </Text>
+                </View>
+              </View>
+              {periodDoses.map((dose) => (
+                <DoseCard
+                  key={dose.occurrenceKey}
+                  medicineName={dose.medicineName}
+                  strength={dose.strength}
+                  doseInstruction={dose.doseInstruction}
+                  scheduledTime={dose.scheduledTime12}
+                  status={dose.status}
+                  actionLoading={Boolean(pendingOccurrenceKeys[dose.occurrenceKey])}
+                  onMarkTaken={() => void markDoseStatus(dose, 'taken')}
+                  onSkip={() => void markDoseStatus(dose, 'skipped')}
+                />
+              ))}
+            </React.Fragment>
+          );
+        })
+      )}
 
       {/* Low stock & medicine supplies snapshot */}
       <View style={styles.sectionHeaderRow}>
@@ -260,7 +240,7 @@ export default function HomeScreen(): React.JSX.Element {
           genericName={supplyHighlight.genericName}
           strength={supplyHighlight.strength}
           dosageForm={supplyHighlight.dosageForm}
-          stockText={`${formatStockQuantity(supplyHighlight.stockRemaining)} ${supplyHighlight.stockUnit}`}
+          stockText={formatStockWithUnit(supplyHighlight.stockRemaining, supplyHighlight.stockUnit)}
           rightSubtext={supplyHighlight.unitPriceText}
           priceText={`Refill threshold: ${formatStockQuantity(supplyHighlight.lowStockThreshold)}`}
           statusVariant={resolveMedicationStatusVariant(supplyHighlight)}

@@ -12,11 +12,13 @@ import {
   ToggleField,
 } from '../src/components';
 import { useMedications } from '../src/features/medications/MedicationsContext';
+import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 export default function SettingsScreen(): React.JSX.Element {
   const router = useRouter();
   const { resetDemoMedications } = useMedications();
+  const { resetDemoSchedules } = useSchedules();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [leadTime, setLeadTime] = useState('10');
@@ -37,7 +39,7 @@ export default function SettingsScreen(): React.JSX.Element {
     setGlucoseUnit('mg/dL');
     setMonthlyBudget('2500');
     setDisplayName('Karim');
-    await resetDemoMedications();
+    await Promise.all([resetDemoMedications(), resetDemoSchedules()]);
     setResetConfirmOpen(false);
     setToast('Fictional demo data restored to defaults.');
   };

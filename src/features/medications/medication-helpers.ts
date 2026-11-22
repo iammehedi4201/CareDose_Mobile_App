@@ -15,13 +15,18 @@ export interface PersonalMedicationRecord {
   instructions: string;
   stockRemaining: number;
   stockUnit: string;
+  stripUnits?: number | null;
   unitPriceText: string;
+  totalStockPrice?: number | null;
+  priceScopeLabel?: string | null;
   referencePackText?: string | null;
   lowStockThreshold: number;
   archived: boolean;
 }
 
-export const INITIAL_PERSONAL_MEDS: PersonalMedicationRecord[] = [
+export const INITIAL_PERSONAL_MEDS: PersonalMedicationRecord[] = [];
+
+export const DEMO_FIXTURE_MEDS: PersonalMedicationRecord[] = [
   {
     id: 'm1',
     catalogueBrandId: '101',
@@ -134,8 +139,15 @@ export function resolveMedicationStatusVariant(
 
 export function inferStockUnit(dosageForm?: string | null): string {
   const norm = (dosageForm ?? '').trim().toLowerCase();
+  if (norm.includes('suppository') || norm.includes('pessary')) return 'pieces';
+  if (norm.includes('sachet') || norm.includes('granules') || norm.includes('oral powder')) {
+    return 'sachets';
+  }
   if (norm.includes('capsule')) return 'capsules';
-  if (norm.includes('syrup') || norm.includes('suspension')) return 'ml';
+  if (norm.includes('syrup') || norm.includes('suspension') || norm.includes('solution') || norm.includes('elixir')) {
+    if (norm.includes('ophthalmic') || norm.includes('drop')) return 'bottle';
+    return 'ml';
+  }
   if (norm.includes('drop')) return 'bottle';
   if (norm.includes('injection') || norm.includes('infusion') || norm.includes('vial')) {
     return 'vials';
@@ -200,6 +212,7 @@ export function mapApiMedicationToRecord(dto: PatientMedicationDto): PersonalMed
     instructions: dto.personalInstructions,
     stockRemaining: Number(dto.stockRemaining) || 0,
     stockUnit: dto.stockUnit,
+    stripUnits: pack?.stripUnits ?? null,
     unitPriceText,
     referencePackText,
     lowStockThreshold: Number(dto.lowStockThreshold) || 0,

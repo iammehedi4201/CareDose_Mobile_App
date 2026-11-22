@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEMO_FIXTURE_MEDS,
   filterPersonalMedications,
   formatStockQuantity,
   inferStockUnit,
@@ -10,10 +11,14 @@ import {
 } from './medication-helpers';
 
 describe('Phase 5 — Personal Medication Helpers & Filtering Rules', () => {
+  it('starts with an empty personal medication list by default', () => {
+    expect(INITIAL_PERSONAL_MEDS).toEqual([]);
+  });
+
   it('computes low-stock status accurately and ignores archived medicines', () => {
-    const lowMed = INITIAL_PERSONAL_MEDS.find((m) => m.id === 'm2')!;
-    const okMed = INITIAL_PERSONAL_MEDS.find((m) => m.id === 'm1')!;
-    const archivedMed = INITIAL_PERSONAL_MEDS.find((m) => m.id === 'm6')!;
+    const lowMed = DEMO_FIXTURE_MEDS.find((m) => m.id === 'm2')!;
+    const okMed = DEMO_FIXTURE_MEDS.find((m) => m.id === 'm1')!;
+    const archivedMed = DEMO_FIXTURE_MEDS.find((m) => m.id === 'm6')!;
 
     expect(isPersonalMedicationLowStock(lowMed)).toBe(true);
     expect(resolveMedicationStatusVariant(lowMed)).toBe('low_stock');
@@ -26,7 +31,7 @@ describe('Phase 5 — Personal Medication Helpers & Filtering Rules', () => {
   });
 
   it('filters medications by status tab (All, Active, Low Stock, Archived) and text query', () => {
-    const allMeds = INITIAL_PERSONAL_MEDS;
+    const allMeds = DEMO_FIXTURE_MEDS;
     expect(filterPersonalMedications(allMeds, { filter: 'all' })).toHaveLength(6);
     expect(filterPersonalMedications(allMeds, { filter: 'active' })).toHaveLength(5);
     expect(filterPersonalMedications(allMeds, { filter: 'archived' })).toHaveLength(1);
@@ -46,6 +51,7 @@ describe('Phase 5 — Personal Medication Helpers & Filtering Rules', () => {
 
     expect(inferStockUnit('Tablet')).toBe('tablets');
     expect(inferStockUnit('Capsule')).toBe('capsules');
+    expect(inferStockUnit('Suppository')).toBe('pieces');
     expect(inferStockUnit('Eye Drops')).toBe('bottle');
     expect(inferStockUnit('Oral Suspension')).toBe('ml');
 

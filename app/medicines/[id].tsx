@@ -20,11 +20,26 @@ import {
   validateRequiredFields,
 } from '../../src/components';
 import {
-  formatStockQuantity,
   parseNonNegativeNumberInput,
   resolveMedicationStatusVariant,
 } from '../../src/features/medications/medication-helpers';
+import { formatBdtCurrency, formatStockWithUnit } from '../../src/features/medications/stock-calculator';
+import {
+  formatStripUnitsValue,
+  getStripUnitsLabel,
+  isSolidDosageForm,
+} from '../../src/features/catalogue/catalogue-helpers';
 import { useMedications } from '../../src/features/medications/MedicationsContext';
+import {
+  buildScheduledTimesForFrequency,
+  format24To12Hour,
+  formatFrequencyLabel,
+  formatHistoryDateLabel,
+  getTodayLocalYmd,
+  inferSingleDoseUnitFromStockUnit,
+  parseDoseAmountInput,
+} from '../../src/features/schedule/dose-rules';
+import { useSchedules } from '../../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../src/theme/tokens';
 
@@ -39,8 +54,19 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     restoreMedication,
     adjustMedicationStock,
   } = useMedications();
+  const {
+    schedules,
+    doseEvents,
+    createSchedule,
+    updateScheduleById,
+  } = useSchedules();
 
   const medication = id ? getMedicationById(id) : undefined;
+  const medSchedules = schedules.filter((s) => s.patientMedicationId === id);
+  const recentMedHistory = doseEvents
+    .filter((ev) => ev.patientMedicationId === id)
+    .sort((a, b) => b.scheduledFor.localeCompare(a.scheduledFor))
+    .slice(0, 3);
 
   // Edit modal controlled draft states synced from persisted record
   const [medName, setMedName] = useState(medication?.name ?? '');
@@ -71,8 +97,11 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   // Secondary modal form states
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [doseAmount, setDoseAmount] = useState('1 tablet');
+  const [scheduleFrequency, setScheduleFrequency] = useState('Once daily');
   const [scheduledTime, setScheduledTime] = useState('08:00 AM');
+  const [scheduleStartDate, setScheduleStartDate] = useState(getTodayLocalYmd());
   const [purchaseDate, setPurchaseDate] = useState('2026-11-21');
   const [packCount, setPackCount] = useState('1');
   const [unitsPerPack, setUnitsPerPack] = useState('30');
@@ -177,6 +206,26 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     }
   };
 
+  const openDoseScheduleModal = (
+    target?: (typeof medSchedules)[number],
+  ): void => {
+    setErrors({});
+    if (target) {
+      setEditingScheduleId(target.id);
+      setDoseAmount(`${target.doseAmount} ${target.doseUnit}`);
+      setScheduleFrequency(formatFrequencyLabel(target.frequency));
+      setScheduledTime(format24To12Hour(target.scheduledTimes[0] ?? '08:00'));
+      setScheduleStartDate(target.startDateYmd);
+    } else {
+      setEditingScheduleId(null);
+      setDoseAmount(`1 ${inferSingleDoseUnitFromStockUnit(medication.stockUnit)}`);
+      setScheduleFrequency('Once daily');
+      setScheduledTime('08:00 AM');
+      setScheduleStartDate(getTodayLocalYmd());
+    }
+    setCreateDoseOpen(true);
+  };
+
   return (
     <ScreenContainer
       title={medication.name}
@@ -204,7 +253,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           compact
           fullWidth={layout.stackTwoCol}
           label="Create Dose"
-          onPress={() => setCreateDoseOpen(true)}
+          onPress={() => openDoseScheduleModal()}
           style={layout.stackTwoCol ? undefined : styles.halfBtn}
         />
         <SecondaryButton
@@ -244,6 +293,14 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           <Text style={styles.infoLabel}>Form</Text>
           <Text style={styles.infoValue}>{medication.dosageForm}</Text>
         </View>
+        {isSolidDosageForm(medication.dosageForm) && medication.stripUnits ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>{getStripUnitsLabel(medication.dosageForm)}</Text>
+            <Text style={styles.infoValue}>
+              {formatStripUnitsValue(medication.stripUnits, medication.dosageForm)}
+            </Text>
+          </View>
+        ) : null}
         <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>Instructions</Text>
           <Text style={styles.infoValue}>{medication.instructions}</Text>
@@ -264,13 +321,27 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Current stock</Text>
           <Text style={styles.infoValue}>
-            {formatStockQuantity(medication.stockRemaining)} {medication.stockUnit}
+            {formatStockWithUnit(medication.stockRemaining, medication.stockUnit)}
+            {medication.stripUnits && medication.stockRemaining > 0 && medication.stripUnits > 1
+              ? ` (${(medication.stockRemaining / medication.stripUnits).toFixed(1).replace(/\.0$/, '')} strips)`
+              : ''}
           </Text>
         </View>
         <View style={[styles.infoRow, styles.lastRow]}>
-          <Text style={styles.infoLabel}>Low-stock alert at</Text>
+          <View>
+            <Text style={styles.infoLabel}>Low-stock alert at</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setErrors({});
+                setEditOpen(true);
+              }}
+            >
+              <Text style={styles.linkText}>Edit alert</Text>
+            </Pressable>
+          </View>
           <Text style={styles.infoValue}>
-            {formatStockQuantity(medication.lowStockThreshold)} {medication.stockUnit}
+            {formatStockWithUnit(medication.lowStockThreshold, medication.stockUnit)}
           </Text>
         </View>
       </View>
@@ -278,8 +349,16 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       {/* Price Information Card */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Price information</Text>
+        {medication.totalStockPrice != null ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Recorded stock value</Text>
+            <Text style={styles.infoValue}>
+              ৳{formatBdtCurrency(medication.totalStockPrice)}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Unit price</Text>
+          <Text style={styles.infoLabel}>Price &amp; unit rate</Text>
           <Text style={styles.infoValue}>{medication.unitPriceText}</Text>
         </View>
         <View style={[styles.infoRow, styles.lastRow]}>
@@ -313,18 +392,42 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           <Text style={styles.sectionTitle}>Schedule</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setCreateDoseOpen(true)}
+            onPress={() => openDoseScheduleModal(medSchedules[0])}
           >
-            <Text style={styles.linkText}>Edit</Text>
+            <Text style={styles.linkText}>
+              {medSchedules.length > 0 ? 'Edit' : 'Add'}
+            </Text>
           </Pressable>
         </View>
-        <View style={[styles.infoRow, styles.lastRow]}>
-          <View style={styles.scheduleTextCol}>
-            <Text style={styles.scheduleTimeText}>8:00 AM</Text>
-            <Text style={styles.infoLabel}>{medication.instructions}</Text>
+        {medSchedules.length === 0 ? (
+          <View style={[styles.infoRow, styles.lastRow]}>
+            <Text style={styles.infoLabel}>No active schedule saved yet.</Text>
           </View>
-          <StatusBadge variant="active" />
-        </View>
+        ) : (
+          medSchedules.map((sched, idx) => (
+            <View
+              key={sched.id}
+              style={[
+                styles.infoRow,
+                idx === medSchedules.length - 1 ? styles.lastRow : null,
+              ]}
+            >
+              <View style={styles.scheduleTextCol}>
+                <Text style={styles.scheduleTimeText}>
+                  {sched.scheduledTimes.map(format24To12Hour).join(' · ')}
+                </Text>
+                <Text style={styles.infoLabel}>
+                  {formatFrequencyLabel(sched.frequency)} · {sched.doseAmount}{' '}
+                  {sched.doseUnit}
+                </Text>
+              </View>
+              <StatusBadge
+                variant={sched.status === 'ACTIVE' ? 'active' : 'archived'}
+                label={sched.status === 'ACTIVE' ? 'Active' : 'Paused'}
+              />
+            </View>
+          ))
+        )}
       </View>
 
       {/* Recent Dose History */}
@@ -333,19 +436,32 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           <Text style={styles.sectionTitle}>Recent dose history</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/history')}
+            onPress={() => router.push(`/history?medicationId=${medication.id}`)}
           >
             <Text style={styles.linkText}>See all</Text>
           </Pressable>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>18 Nov 2026 · 8:00 AM</Text>
-          <StatusBadge variant="taken" />
-        </View>
-        <View style={[styles.infoRow, styles.lastRow]}>
-          <Text style={styles.infoLabel}>17 Nov 2026 · 8:00 AM</Text>
-          <StatusBadge variant="taken" />
-        </View>
+        {recentMedHistory.length === 0 ? (
+          <View style={[styles.infoRow, styles.lastRow]}>
+            <Text style={styles.infoLabel}>No recorded doses for this medicine yet.</Text>
+          </View>
+        ) : (
+          recentMedHistory.map((ev, idx) => (
+            <View
+              key={ev.id}
+              style={[
+                styles.infoRow,
+                idx === recentMedHistory.length - 1 ? styles.lastRow : null,
+              ]}
+            >
+              <Text style={styles.infoLabel}>
+                {formatHistoryDateLabel(ev.scheduledDateYmd)} ·{' '}
+                {format24To12Hour(ev.scheduledTime24)}
+              </Text>
+              <StatusBadge variant={ev.status} />
+            </View>
+          ))
+        )}
       </View>
 
       {/* Alternative Brands Comparison Preview */}
@@ -415,16 +531,46 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         />
       </View>
 
-      {/* Create Dose Modal */}
+      {/* Create / Edit Dose Modal */}
       <BottomSheet
         visible={createDoseOpen}
-        title="Create Dose / Schedule"
+        title={editingScheduleId ? 'Edit Dose / Schedule' : 'Create Dose / Schedule'}
         subtitle={medication.name}
         iconName="clock"
         onClose={() => setCreateDoseOpen(false)}
         onSubmit={() => {
-          setCreateDoseOpen(false);
-          setToast('Schedule saved.');
+          const parsedDose = parseDoseAmountInput(
+            doseAmount,
+            inferSingleDoseUnitFromStockUnit(medication.stockUnit),
+          );
+          if (!parsedDose) {
+            setErrors({ doseAmount: 'Enter a valid positive dose amount.' });
+            return;
+          }
+          const times = buildScheduledTimesForFrequency(scheduledTime, scheduleFrequency);
+          const savePromise = editingScheduleId
+            ? updateScheduleById(editingScheduleId, {
+                doseAmount: parsedDose.amount,
+                doseUnit: parsedDose.unit,
+                frequency: scheduleFrequency,
+                scheduledTimes: times,
+                startDateYmd: scheduleStartDate,
+              })
+            : createSchedule({
+                patientMedicationId: medication.id,
+                doseAmount: parsedDose.amount,
+                doseUnit: parsedDose.unit,
+                frequency: scheduleFrequency,
+                scheduledTimes: times,
+                startDateYmd: scheduleStartDate,
+                instructions: medication.instructions,
+                remindersEnabled: true,
+              });
+          void savePromise.then(() => {
+            setCreateDoseOpen(false);
+            setErrors({});
+            setToast('Schedule saved.');
+          });
         }}
         submitLabel="Save schedule"
       >
@@ -435,6 +581,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
               value={doseAmount}
               onChangeText={setDoseAmount}
               required
+              errorMessage={errors.doseAmount}
             />
           </FormCol>
           <FormCol>
@@ -446,6 +593,24 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
             />
           </FormCol>
         </FormRow>
+        <SelectField
+          label="Frequency"
+          value={scheduleFrequency}
+          options={[
+            { label: 'Once daily', value: 'Once daily' },
+            { label: 'Twice daily', value: 'Twice daily' },
+            { label: 'Every 8 hours', value: 'Every 8 hours' },
+            { label: 'Alternate days', value: 'Alternate days' },
+          ]}
+          onSelect={setScheduleFrequency}
+          required
+        />
+        <DateField
+          label="Start date"
+          value={scheduleStartDate}
+          onChangeDate={setScheduleStartDate}
+          required
+        />
       </BottomSheet>
 
       {/* Record Purchase Modal */}

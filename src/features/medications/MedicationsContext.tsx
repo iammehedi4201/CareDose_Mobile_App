@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { readSavedAuthSession } from '../../api/config';
 import {
   archivePatientMedication,
   createPatientMedication,
@@ -14,8 +15,8 @@ import {
   PersonalMedicationRecord,
 } from './medication-helpers';
 
-const STORAGE_KEY = 'caredose:personal-meds:v1';
-const AUTH_SESSION_KEY = 'caredose:auth-session:v1';
+const STORAGE_KEY = 'caredose:personal-meds:v2';
+const LEGACY_STORAGE_KEYS = ['caredose:personal-meds:v1'];
 
 export interface AddPersonalMedicationInput {
   catalogueBrandId?: string | null;
@@ -28,8 +29,11 @@ export interface AddPersonalMedicationInput {
   personalInstructions: string;
   startingStock: number;
   stockUnit?: string;
+  stripUnits?: number | null;
   lowStockThreshold: number;
   unitPriceText?: string;
+  totalStockPrice?: number | null;
+  priceScopeLabel?: string | null;
   referencePackText?: string | null;
 }
 
@@ -65,23 +69,6 @@ interface MedicationsContextValue {
 }
 
 const MedicationsContext = createContext<MedicationsContextValue | null>(null);
-
-async function readSavedAuthSession(): Promise<{
-  token: string;
-  activePatientId: string;
-} | null> {
-  try {
-    const raw = await AsyncStorage.getItem(AUTH_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { token?: string; activePatientId?: string };
-    if (parsed.token && parsed.activePatientId) {
-      return { token: parsed.token, activePatientId: parsed.activePatientId };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 export function MedicationsProvider({
   children,
@@ -123,9 +110,13 @@ export function MedicationsProvider({
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as PersonalMedicationRecord[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setMedications(parsed);
         }
+      } else {
+        await AsyncStorage.multiRemove(LEGACY_STORAGE_KEYS);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+        setMedications([]);
       }
     } catch {
       // Retain default records on storage read failure
@@ -168,12 +159,20 @@ export function MedicationsProvider({
             },
           );
           const mapped = mapApiMedicationToRecord(created);
+          const merged: PersonalMedicationRecord = {
+            ...mapped,
+            unitPriceText: input.unitPriceText ?? mapped.unitPriceText,
+            totalStockPrice: input.totalStockPrice ?? null,
+            priceScopeLabel: input.priceScopeLabel ?? null,
+            referencePackText: input.referencePackText ?? mapped.referencePackText,
+            stripUnits: input.stripUnits ?? mapped.stripUnits ?? null,
+          };
           setMedications((prev) => {
-            const next = [mapped, ...prev];
+            const next = [merged, ...prev];
             void persistLocal(next);
             return next;
           });
-          return mapped;
+          return merged;
         } catch {
           // Proceed with local save when offline
         }
@@ -191,7 +190,10 @@ export function MedicationsProvider({
         instructions: input.personalInstructions.trim(),
         stockRemaining: Math.max(0, input.startingStock),
         stockUnit,
+        stripUnits: input.stripUnits ?? null,
         unitPriceText: input.unitPriceText ?? 'Not listed',
+        totalStockPrice: input.totalStockPrice ?? null,
+        priceScopeLabel: input.priceScopeLabel ?? null,
         referencePackText: input.referencePackText ?? null,
         lowStockThreshold: Math.max(0, input.lowStockThreshold),
         archived: false,

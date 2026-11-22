@@ -1,105 +1,214 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   DateField,
   EmptyState,
   FilterChips,
+  LoadingSkeleton,
   ScreenContainer,
+  SecondaryButton,
   StatusBadge,
   StatusVariant,
 } from '../src/components';
+import type { DoseHistoryItemDto } from '../src/api/schedules';
+import { useMedications } from '../src/features/medications/MedicationsContext';
+import {
+  addDaysYmd,
+  formatHistoryDateLabel,
+  getTodayLocalYmd,
+} from '../src/features/schedule/dose-rules';
+import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 type HistoryFilter = 'all' | 'taken' | 'skipped';
 
-interface HistoryEventItem {
-  id: string;
-  dateLabel: string;
-  medicineName: string;
-  time: string;
-  status: 'taken' | 'skipped';
-}
-
-const HISTORY_EVENTS: HistoryEventItem[] = [
-  { id: 'h1', dateLabel: 'Wednesday, Nov 18', medicineName: 'Corvalen 5 mg', time: '08:00 AM', status: 'taken' },
-  { id: 'h2', dateLabel: 'Wednesday, Nov 18', medicineName: 'Glymexa 500 mg', time: '08:30 AM', status: 'taken' },
-  { id: 'h3', dateLabel: 'Wednesday, Nov 18', medicineName: 'Vitamin D3 1000 IU', time: '01:30 PM', status: 'taken' },
-  { id: 'h4', dateLabel: 'Tuesday, Nov 17', medicineName: 'Serenil 10 mg', time: '10:00 PM', status: 'taken' },
-  { id: 'h5', dateLabel: 'Tuesday, Nov 17', medicineName: 'Lumigan Drops 0.01%', time: '08:00 PM', status: 'skipped' },
-];
-
 export default function DoseHistoryScreen(): React.JSX.Element {
   const router = useRouter();
+  const { medicationId } = useLocalSearchParams<{ medicationId?: string }>();
   const layout = useResponsiveLayout();
-  const [fromDate, setFromDate] = useState('2026-11-15');
-  const [toDate, setToDate] = useState('2026-11-21');
-  const [filter, setFilter] = useState<HistoryFilter>('all');
+  const { getMedicationById } = useMedications();
+  const { doseEvents, queryDoseHistory } = useSchedules();
 
-  const filtered = HISTORY_EVENTS.filter((ev) => {
-    if (filter !== 'all' && ev.status !== filter) return false;
-    return true;
-  });
+  const today = getTodayLocalYmd();
+  const [fromDate, setFromDate] = useState(addDaysYmd(today, -14));
+  const [toDate, setToDate] = useState(today);
+  const [filter, setFilter] = useState<HistoryFilter>('all');
+  const [activeMedFilter, setActiveMedFilter] = useState<string | null>(
+    medicationId ?? null,
+  );
+
+  const [items, setItems] = useState<DoseHistoryItemDto[]>([]);
+  const [counts, setCounts] = useState({ all: 0, taken: 0, skipped: 0 });
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setActiveMedFilter(medicationId ?? null);
+  }, [medicationId]);
+
+  const loadHistory = useCallback(
+    async (opts: { reset: boolean; cursor?: string | null }) => {
+      if (opts.reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      try {
+        const res = await queryDoseHistory({
+          fromDate: fromDate.trim() || undefined,
+          toDate: toDate.trim() || undefined,
+          status: filter,
+          medicationId: activeMedFilter,
+          cursor: opts.reset ? undefined : opts.cursor,
+          limit: 20,
+        });
+        setCounts(res.counts);
+        setHasMore(res.hasMore);
+        setNextCursor(res.nextCursor);
+        setItems((prev) => (opts.reset ? res.items : [...prev, ...res.items]));
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [activeMedFilter, filter, fromDate, queryDoseHistory, toDate],
+  );
+
+  useEffect(() => {
+    void loadHistory({ reset: true });
+  }, [loadHistory, doseEvents]);
+
+  const filteredMed = activeMedFilter ? getMedicationById(activeMedFilter) : undefined;
 
   return (
     <ScreenContainer
       title="Dose History"
-      onBack={() => router.push('/profile')}
+      onBack={() =>
+        activeMedFilter
+          ? router.push(`/medicines/${activeMedFilter}`)
+          : router.push('/profile')
+      }
     >
+      {activeMedFilter ? (
+        <View style={styles.medFilterBanner}>
+          <Text style={styles.medFilterText} numberOfLines={1}>
+            Filtered to: {filteredMed?.name ?? 'Selected medicine'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setActiveMedFilter(null)}
+            style={styles.clearFilterBtn}
+          >
+            <Text style={styles.clearFilterText}>Show all</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={layout.stackTwoCol ? styles.dateRangeStacked : styles.dateRangeRow}>
         <View style={layout.stackTwoCol ? styles.dateColFull : styles.dateCol}>
-          <DateField label="From" value={fromDate} onChangeDate={setFromDate} />
+          <DateField label="From" value={fromDate} onChangeDate={setFromDate} allowClear />
         </View>
         <View style={layout.stackTwoCol ? styles.dateColFull : styles.dateCol}>
-          <DateField label="To" value={toDate} onChangeDate={setToDate} />
+          <DateField label="To" value={toDate} onChangeDate={setToDate} allowClear />
         </View>
       </View>
 
       <FilterChips
         options={[
-          { key: 'all', label: 'All', count: HISTORY_EVENTS.length },
-          {
-            key: 'taken',
-            label: 'Taken',
-            count: HISTORY_EVENTS.filter((e) => e.status === 'taken').length,
-          },
-          {
-            key: 'skipped',
-            label: 'Skipped',
-            count: HISTORY_EVENTS.filter((e) => e.status === 'skipped').length,
-          },
+          { key: 'all', label: 'All', count: counts.all },
+          { key: 'taken', label: 'Taken', count: counts.taken },
+          { key: 'skipped', label: 'Skipped', count: counts.skipped },
         ]}
         selectedKey={filter}
         onSelect={setFilter}
       />
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <LoadingSkeleton rows={3} />
+      ) : items.length === 0 ? (
         <EmptyState
           title="No dose history for this filter"
-          description="Select another status filter or widen the date range."
+          description="Confirmed Taken or Skipped doses appear here. Try widening the date range or switching filters."
           actionLabel="Show all"
-          onAction={() => setFilter('all')}
+          onAction={() => {
+            setFilter('all');
+            setActiveMedFilter(null);
+            setFromDate('');
+            setToDate('');
+          }}
         />
       ) : (
-        filtered.map((item) => (
-          <View key={item.id} style={styles.rowCard}>
-            <View style={styles.rowTextCol}>
-              <Text style={styles.medName}>{item.medicineName}</Text>
-              <Text style={styles.metaText}>
-                {item.dateLabel} · {item.time}
-              </Text>
+        <>
+          {items.map((item) => {
+            const labelName =
+              item.strength && item.strength.trim().length > 0
+                ? `${item.medicineName} ${item.strength}`
+                : item.medicineName;
+            return (
+              <View key={item.id} style={styles.rowCard}>
+                <View style={styles.rowTextCol}>
+                  <Text style={styles.medName}>{labelName}</Text>
+                  <Text style={styles.metaText}>
+                    {formatHistoryDateLabel(item.scheduledDateYmd)} · {item.scheduledTime12}
+                  </Text>
+                </View>
+                <StatusBadge variant={item.status as StatusVariant} />
+              </View>
+            );
+          })}
+
+          {hasMore && nextCursor ? (
+            <View style={styles.loadMoreWrap}>
+              <SecondaryButton
+                fullWidth
+                loading={loadingMore}
+                label="Load More History"
+                onPress={() => void loadHistory({ reset: false, cursor: nextCursor })}
+              />
             </View>
-            <StatusBadge variant={item.status as StatusVariant} />
-          </View>
-        ))
+          ) : null}
+        </>
       )}
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  medFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
+    borderRadius: CAREDOSE_RADIUS.field,
+    borderWidth: 1,
+    borderColor: '#C5E8D8',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  medFilterText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
+  },
+  clearFilterBtn: {
+    flexShrink: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  clearFilterText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: CAREDOSE_EXTENDED_COLORS.primary,
+  },
   dateRangeRow: {
     flexDirection: 'row',
     gap: 10,
@@ -139,5 +248,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  loadMoreWrap: {
+    marginTop: 12,
   },
 });

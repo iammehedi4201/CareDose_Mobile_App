@@ -3,10 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  BottomSheet,
+  AddMedicineModal,
   EmptyState,
   ErrorState,
-  FormField,
   LoadingSkeleton,
   MedicineCard,
   MedicineFormThumbnail,
@@ -15,7 +14,6 @@ import {
   SecondaryButton,
   StatusBadge,
   SuccessToast,
-  validateRequiredFields,
 } from '../../../../src/components';
 import {
   AlternativeGroupWithCandidatesDto,
@@ -28,15 +26,13 @@ import {
   formatMissingCatalogueValue,
   formatPackSummary,
   formatPackWarningReason,
+  formatStripUnitsValue,
   formatUnitOrPackPrice,
+  getStripUnitsLabel,
+  isSolidDosageForm,
   OFFLINE_FALLBACK_CATALOGUE_BRANDS,
   resolveBrandBadge,
 } from '../../../../src/features/catalogue/catalogue-helpers';
-import {
-  inferStockUnit,
-  parseNonNegativeNumberInput,
-} from '../../../../src/features/medications/medication-helpers';
-import { useMedications } from '../../../../src/features/medications/MedicationsContext';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../../src/theme/tokens';
 
 const INITIAL_ALTERNATIVES_LIMIT = 3;
@@ -44,7 +40,6 @@ const INITIAL_ALTERNATIVES_LIMIT = 3;
 export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { addMedication } = useMedications();
 
   const [brand, setBrand] = useState<CatalogueBrandDetailDto | null>(null);
   const [altGroups, setAltGroups] = useState<AlternativeGroupWithCandidatesDto[]>([]);
@@ -57,10 +52,6 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [personalInstructions, setPersonalInstructions] = useState('');
-  const [startingStock, setStartingStock] = useState('10');
-  const [threshold, setThreshold] = useState('5');
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<string | null>(null);
 
   const loadAlternatives = useCallback(
@@ -122,67 +113,6 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     void loadBrand();
   }, [loadBrand]);
 
-  const handleAddToMyMedicines = async (): Promise<void> => {
-    const errs = validateRequiredFields(
-      { personalInstructions, startingStock, threshold },
-      {
-        personalInstructions: 'Personal instructions',
-        startingStock: 'Starting stock',
-        threshold: 'Low-stock threshold',
-      },
-    );
-    const parsedStock = parseNonNegativeNumberInput(startingStock);
-    if (parsedStock === null && !errs.startingStock) {
-      errs.startingStock = 'Enter a valid non-negative number.';
-    }
-    const parsedThreshold = parseNonNegativeNumberInput(threshold);
-    if (parsedThreshold === null && !errs.threshold) {
-      errs.threshold = 'Enter a valid non-negative number.';
-    }
-
-    setErrors(errs);
-    if (
-      Object.keys(errs).length > 0 ||
-      !brand ||
-      parsedStock === null ||
-      parsedThreshold === null
-    ) {
-      return;
-    }
-
-    const pack = brand.packs[0] ?? brand.primaryPack;
-    const unitPriceText = pack?.unitPrice
-      ? `৳${pack.unitPrice}/unit`
-      : pack?.packPrice
-        ? `৳${pack.packPrice}/pack`
-        : 'Not listed';
-    const referencePackText =
-      pack?.packQuantity && pack?.packPrice
-        ? `${pack.packQuantity} · ৳${pack.packPrice}`
-        : null;
-
-    await addMedication({
-      catalogueBrandId: brand.sourceId,
-      genericSourceId: brand.generic?.sourceId ?? null,
-      name: brand.name,
-      genericName: brand.generic?.name ?? null,
-      strength: brand.strength,
-      dosageForm: brand.dosageForm ?? 'Tablet',
-      manufacturer: brand.manufacturer,
-      personalInstructions: personalInstructions.trim(),
-      startingStock: parsedStock,
-      stockUnit: inferStockUnit(brand.dosageForm),
-      lowStockThreshold: parsedThreshold,
-      unitPriceText,
-      referencePackText,
-    });
-
-    setAddOpen(false);
-    setPersonalInstructions('');
-    setErrors({});
-    setToast(`${brand.name} added to My Medicines.`);
-  };
-
   if (loading) {
     return (
       <ScreenContainer
@@ -215,6 +145,9 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const initialMatchingBrands = allCandidateBrands.slice(0, INITIAL_ALTERNATIVES_LIMIT);
   const remainingMatchingCount = Math.max(0, allCandidateBrands.length - INITIAL_ALTERNATIVES_LIMIT);
   const isCombination = altGroups.some((g) => g.isCombination);
+  const primaryStripUnits =
+    brand.packs.find((p) => typeof p.stripUnits === 'number' && p.stripUnits > 0)?.stripUnits ??
+    null;
 
   return (
     <ScreenContainer
@@ -287,6 +220,14 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
           <Text style={styles.infoLabel}>Dosage form</Text>
           <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.dosageForm)}</Text>
         </View>
+        {isSolidDosageForm(brand.dosageForm) || primaryStripUnits !== null ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>{getStripUnitsLabel(brand.dosageForm)}</Text>
+            <Text style={styles.infoValue}>
+              {formatStripUnitsValue(primaryStripUnits, brand.dosageForm)}
+            </Text>
+          </View>
+        ) : null}
         <View style={[styles.infoRow, brand.releaseMarker ? null : styles.lastRow]}>
           <Text style={styles.infoLabel}>Manufacturer</Text>
           <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.manufacturer)}</Text>
@@ -326,6 +267,14 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
                 <Text style={styles.infoLabel}>Pack size</Text>
                 <Text style={styles.infoValue}>{formatPackSummary(pack)}</Text>
               </View>
+              {isSolidDosageForm(brand.dosageForm) || pack.stripUnits ? (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>{getStripUnitsLabel(brand.dosageForm)}</Text>
+                  <Text style={styles.infoValue}>
+                    {formatStripUnitsValue(pack.stripUnits, brand.dosageForm, pack.packUnits)}
+                  </Text>
+                </View>
+              ) : null}
               <View
                 style={[
                   styles.infoRow,
@@ -454,40 +403,12 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         <Text style={styles.warningText}>{warningNotice}</Text>
       </View>
 
-      <BottomSheet
+      <AddMedicineModal
         visible={addOpen}
-        title="Add to My Medicines"
-        subtitle={`${brand.name} · ${brand.dosageForm ?? 'Medicine'}`}
+        initialBrand={brand}
         onClose={() => setAddOpen(false)}
-        onSubmit={() => void handleAddToMyMedicines()}
-        submitLabel="Add medicine"
-      >
-        <FormField
-          label="Personal instructions"
-          value={personalInstructions}
-          onChangeText={setPersonalInstructions}
-          placeholder="Enter as prescribed"
-          required
-          errorMessage={errors.personalInstructions}
-          helperText="Does not auto-create a schedule."
-        />
-        <FormField
-          label="Starting stock"
-          value={startingStock}
-          onChangeText={setStartingStock}
-          keyboardType="numeric"
-          required
-          errorMessage={errors.startingStock}
-        />
-        <FormField
-          label="Low-stock threshold"
-          value={threshold}
-          onChangeText={setThreshold}
-          keyboardType="numeric"
-          required
-          errorMessage={errors.threshold}
-        />
-      </BottomSheet>
+        onSaved={(created) => setToast(`${created.name} added to My Medicines.`)}
+      />
     </ScreenContainer>
   );
 }

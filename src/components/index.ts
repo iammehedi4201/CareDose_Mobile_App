@@ -1,3 +1,4 @@
+export * from './AddMedicineModal';
 export * from './AppHeader';
 export * from './BottomNavigation';
 export * from './Buttons';

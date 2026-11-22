@@ -1,166 +1,189 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import {
   BottomSheet,
   DateField,
   DoseCard,
+  EmptyState,
   FilterChips,
   FormCol,
   FormField,
   FormRow,
   ScreenContainer,
   SelectField,
-  StatusVariant,
+  StatusBadge,
   SuccessToast,
   TimeField,
   ToggleField,
   validateRequiredFields,
 } from '../src/components';
+import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
+import { useMedications } from '../src/features/medications/MedicationsContext';
+import {
+  addDaysYmd,
+  buildScheduledTimesForFrequency,
+  format24To12Hour,
+  formatDayHeadingLabel,
+  formatDoseActionFeedback,
+  formatFrequencyLabel,
+  formatWeekRangeLabel,
+  getMondayOfWeekYmd,
+  getTodayLocalYmd,
+  inferSingleDoseUnitFromStockUnit,
+  parseDoseAmountInput,
+  parseYmdToLocalDate,
+} from '../src/features/schedule/dose-rules';
+import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 type ViewMode = 'day' | 'week';
 
-interface ScheduledDoseItem {
-  id: string;
-  group: 'Morning' | 'Afternoon' | 'Evening' | 'Bedtime';
-  medicineName: string;
-  strength: string;
-  instruction: string;
-  time: string;
-  status: StatusVariant;
-}
-
-const INITIAL_SCHEDULE: ScheduledDoseItem[] = [
-  {
-    id: 's1',
-    group: 'Morning',
-    medicineName: 'Corvalen',
-    strength: '5 mg',
-    instruction: '1 tablet · After breakfast',
-    time: '8:00 AM',
-    status: 'missed',
-  },
-  {
-    id: 's2',
-    group: 'Morning',
-    medicineName: 'Glymexa',
-    strength: '500 mg',
-    instruction: '1 tablet · With morning meal',
-    time: '8:30 AM',
-    status: 'missed',
-  },
-  {
-    id: 's3',
-    group: 'Afternoon',
-    medicineName: 'Vitamin D3',
-    strength: '1000 IU',
-    instruction: '1 capsule · After lunch',
-    time: '1:30 PM',
-    status: 'upcoming',
-  },
-  {
-    id: 's4',
-    group: 'Afternoon',
-    medicineName: 'Serenil',
-    strength: '10 mg',
-    instruction: '1 tablet · Afternoon',
-    time: '4:00 PM',
-    status: 'upcoming',
-  },
-  {
-    id: 's5',
-    group: 'Evening',
-    medicineName: 'Lumigan Drops',
-    strength: '0.01%',
-    instruction: '1 drop · Affected eye',
-    time: '8:00 PM',
-    status: 'upcoming',
-  },
-];
-
-const WEEK_DAYS = [
-  { day: 'Mon', date: '16', fullLabel: 'Mon, November 16', count: 5 },
-  { day: 'Tue', date: '17', fullLabel: 'Tue, November 17', count: 5 },
-  { day: 'Wed', date: '18', fullLabel: 'Wed, November 18', count: 5 },
-  { day: 'Thu', date: '19', fullLabel: 'Thu, November 19', count: 5 },
-  { day: 'Fri', date: '20', fullLabel: 'Fri, November 20', count: 4 },
-  { day: 'Sat', date: '21', fullLabel: 'Sat, November 21', count: 4 },
-  { day: 'Sun', date: '22', fullLabel: 'Sun, November 22', count: 4 },
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const PERIOD_GROUPS: SchedulePeriodGroupDto[] = [
+  'Morning',
+  'Afternoon',
+  'Evening',
+  'Bedtime',
 ];
 
 export default function ScheduleScreen(): React.JSX.Element {
+  const router = useRouter();
   const layout = useResponsiveLayout();
+  const { medications } = useMedications();
+  const {
+    schedules,
+    pendingOccurrenceKeys,
+    getLocalRangeDoses,
+    createSchedule,
+    updateScheduleById,
+    recordDoseAction,
+  } = useSchedules();
+
+  const todayYmd = getTodayLocalYmd();
   const [viewMode, setViewMode] = useState<ViewMode>('day');
-  const [selectedDayIdx, setSelectedDayIdx] = useState(3);
-  const [doses, setDoses] = useState<ScheduledDoseItem[]>(INITIAL_SCHEDULE);
+  const [selectedYmd, setSelectedYmd] = useState(todayYmd);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Create Dose modal state
+  const activeMeds = useMemo(
+    () => medications.filter((m) => !m.archived),
+    [medications],
+  );
+
+  // Create Dose / Schedule modal state
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedMedicine, setSelectedMedicine] = useState('Corvalen 5 mg');
-  const [doseAmount, setDoseAmount] = useState('1 tablet');
+  const [selectedMedId, setSelectedMedId] = useState<string>(activeMeds[0]?.id ?? '');
+  const [doseAmountInput, setDoseAmountInput] = useState('1');
   const [frequency, setFrequency] = useState('Once daily');
-  const [scheduledTime, setScheduledTime] = useState('09:00 AM');
-  const [startDate, setStartDate] = useState('2026-11-21');
+  const [scheduledTime, setScheduledTime] = useState('08:00 AM');
+  const [secondTime, setSecondTime] = useState('08:00 PM');
+  const [startDate, setStartDate] = useState(todayYmd);
   const [endDate, setEndDate] = useState('');
   const [instructions, setInstructions] = useState('');
   const [remindersOn, setRemindersOn] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const currentDay = WEEK_DAYS[selectedDayIdx] ?? WEEK_DAYS[3];
+  useEffect(() => {
+    if (activeMeds.length > 0 && !activeMeds.some((m) => m.id === selectedMedId)) {
+      setSelectedMedId(activeMeds[0].id);
+    }
+  }, [activeMeds, selectedMedId]);
 
-  const handleUpdateDose = (id: string, nextStatus: 'taken' | 'skipped'): void => {
-    setDoses((prev) => prev.map((d) => (d.id === id ? { ...d, status: nextStatus } : d)));
-    setToast(
-      nextStatus === 'taken'
-        ? 'Dose confirmed as taken.'
-        : 'Dose marked as skipped (no stock deducted).',
+  const weekStartYmd = useMemo(
+    () => getMondayOfWeekYmd(selectedYmd),
+    [selectedYmd],
+  );
+
+  const weekData = useMemo(
+    () => getLocalRangeDoses(weekStartYmd, 7),
+    [getLocalRangeDoses, weekStartYmd],
+  );
+
+  const selectedDayBucket = useMemo(() => {
+    return (
+      weekData.days.find((d) => d.date === selectedYmd) ??
+      getLocalRangeDoses(selectedYmd, 1).days[0]
     );
+  }, [getLocalRangeDoses, selectedYmd, weekData]);
+
+  const dayDoses = selectedDayBucket?.items ?? [];
+
+  const handleUpdateDose = async (
+    item: ScheduledDoseItemDto,
+    action: 'TAKEN' | 'SKIPPED',
+  ): Promise<void> => {
+    const outcome = await recordDoseAction(item, action);
+    setToast(formatDoseActionFeedback(outcome));
   };
 
-  const handleCreateSchedule = (): void => {
+  const handleCreateSchedule = async (): Promise<void> => {
     const errs = validateRequiredFields(
-      { selectedMedicine, doseAmount, scheduledTime, startDate },
+      { selectedMedId, doseAmountInput, scheduledTime, startDate },
       {
-        selectedMedicine: 'Medicine',
-        doseAmount: 'Dose amount',
+        selectedMedId: 'Medicine',
+        doseAmountInput: 'Dose amount',
         scheduledTime: 'Scheduled time',
         startDate: 'Start date',
       },
     );
+
+    const med = activeMeds.find((m) => m.id === selectedMedId);
+    const fallbackUnit = inferSingleDoseUnitFromStockUnit(med?.stockUnit);
+    const parsedDose = parseDoseAmountInput(doseAmountInput, fallbackUnit);
+    if (!parsedDose && !errs.doseAmountInput) {
+      errs.doseAmountInput = 'Enter a positive dose amount (e.g. 1 or 1 tablet).';
+    }
+
     if (endDate.trim().length > 0 && endDate.trim() < startDate.trim()) {
-      setErrors({ ...errs, endDate: 'End date cannot be earlier than start date' });
-      return;
+      errs.endDate = 'End date cannot be earlier than start date.';
     }
+
     setErrors(errs);
-    if (Object.keys(errs).length > 0) {
+    if (Object.keys(errs).length > 0 || !parsedDose || !med) {
       return;
     }
-    setDoses((prev) => [
-      ...prev,
-      {
-        id: `s-${Date.now()}`,
-        group: 'Morning',
-        medicineName: selectedMedicine,
-        strength: '',
-        instruction: instructions.trim() || `${doseAmount} · ${frequency}`,
-        time: scheduledTime,
-        status: 'upcoming',
-      },
-    ]);
-    setCreateOpen(false);
-    setInstructions('');
-    setToast('Schedule saved from clinician instructions.');
+
+    setSaving(true);
+    try {
+      const scheduledTimes = buildScheduledTimesForFrequency(
+        scheduledTime,
+        frequency,
+        secondTime,
+      );
+      await createSchedule({
+        patientMedicationId: med.id,
+        doseAmount: parsedDose.amount,
+        doseUnit: parsedDose.unit,
+        frequency,
+        scheduledTimes,
+        startDateYmd: startDate.trim(),
+        endDateYmd: endDate.trim() || null,
+        instructions: instructions.trim() || med.instructions,
+        remindersEnabled: remindersOn,
+      });
+
+      setCreateOpen(false);
+      setInstructions('');
+      setEndDate('');
+      setErrors({});
+      setToast(`Schedule saved for ${med.name}.`);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const groups: Array<'Morning' | 'Afternoon' | 'Evening' | 'Bedtime'> = [
-    'Morning',
-    'Afternoon',
-    'Evening',
-    'Bedtime',
-  ];
+  const handleOpenCreateModal = (): void => {
+    if (activeMeds.length === 0) {
+      setToast('Add an active medicine in My Medicines before creating a schedule.');
+      router.push('/medicines');
+      return;
+    }
+    setErrors({});
+    setCreateOpen(true);
+  };
 
   return (
     <ScreenContainer
@@ -168,7 +191,7 @@ export default function ScheduleScreen(): React.JSX.Element {
       primaryAction={{
         label: 'Add Dose',
         iconName: 'plus',
-        onPress: () => setCreateOpen(true),
+        onPress: handleOpenCreateModal,
       }}
     >
       <SuccessToast message={toast} />
@@ -187,16 +210,25 @@ export default function ScheduleScreen(): React.JSX.Element {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Previous day"
-            onPress={() => setSelectedDayIdx((idx) => Math.max(0, idx - 1))}
+            onPress={() => setSelectedYmd((d) => addDaysYmd(d, -1))}
             style={styles.dateArrowBtn}
           >
             <Feather name="chevron-left" size={18} color={CAREDOSE_EXTENDED_COLORS.mainText} />
           </Pressable>
-          <Text style={styles.dateNavTitle}>{currentDay.fullLabel}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Jump to today"
+            onPress={() => setSelectedYmd(todayYmd)}
+            style={styles.dateTitlePress}
+          >
+            <Text style={styles.dateNavTitle}>
+              {formatDayHeadingLabel(selectedYmd, todayYmd)}
+            </Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Next day"
-            onPress={() => setSelectedDayIdx((idx) => Math.min(WEEK_DAYS.length - 1, idx + 1))}
+            onPress={() => setSelectedYmd((d) => addDaysYmd(d, 1))}
             style={styles.dateArrowBtn}
           >
             <Feather name="chevron-right" size={18} color={CAREDOSE_EXTENDED_COLORS.mainText} />
@@ -204,27 +236,53 @@ export default function ScheduleScreen(): React.JSX.Element {
         </View>
       ) : (
         <View style={[styles.weekCard, layout.isCompact ? styles.weekCardCompact : null]}>
-          <Text style={styles.weekHeader}>Nov 16 – 22, 2026</Text>
+          <View style={styles.weekHeaderRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Previous week"
+              onPress={() => setSelectedYmd((d) => addDaysYmd(d, -7))}
+              style={styles.weekArrowBtn}
+            >
+              <Feather name="chevron-left" size={16} color={CAREDOSE_EXTENDED_COLORS.mainText} />
+            </Pressable>
+            <Text style={styles.weekHeader}>{formatWeekRangeLabel(weekStartYmd)}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Next week"
+              onPress={() => setSelectedYmd((d) => addDaysYmd(d, 7))}
+              style={styles.weekArrowBtn}
+            >
+              <Feather name="chevron-right" size={16} color={CAREDOSE_EXTENDED_COLORS.mainText} />
+            </Pressable>
+          </View>
           <View style={[styles.weekRow, layout.isCompact ? styles.weekRowCompact : null]}>
-            {WEEK_DAYS.map((d, idx) => {
-              const active = idx === selectedDayIdx;
-              const dayLabel = layout.useShortWeekdayLabels ? d.day.slice(0, 2) : d.day;
+            {weekData.days.map((bucket) => {
+              const dt = parseYmdToLocalDate(bucket.date);
+              const shortDay = SHORT_WEEKDAYS[dt.getDay()];
+              const dayLabel = layout.useShortWeekdayLabels ? shortDay.slice(0, 2) : shortDay;
+              const active = bucket.date === selectedYmd;
               return (
                 <Pressable
-                  key={d.date}
+                  key={bucket.date}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.day} Nov ${d.date}, ${d.count} doses`}
-                  onPress={() => setSelectedDayIdx(idx)}
+                  accessibilityLabel={`${shortDay} ${dt.getDate()}, ${bucket.totalCount} doses`}
+                  onPress={() => setSelectedYmd(bucket.date)}
                   style={[styles.dayTile, active ? styles.dayTileActive : null]}
                 >
-                  <Text style={[styles.dayName, active ? styles.dayTextActive : null]} numberOfLines={1}>
+                  <Text
+                    style={[styles.dayName, active ? styles.dayTextActive : null]}
+                    numberOfLines={1}
+                  >
                     {dayLabel}
                   </Text>
                   <Text style={[styles.dayDate, active ? styles.dayTextActive : null]}>
-                    {d.date}
+                    {dt.getDate()}
                   </Text>
-                  <Text style={[styles.dayCount, active ? styles.dayTextActive : null]} numberOfLines={1}>
-                    {d.count}d
+                  <Text
+                    style={[styles.dayCount, active ? styles.dayTextActive : null]}
+                    numberOfLines={1}
+                  >
+                    {bucket.totalCount}d
                   </Text>
                 </Pressable>
               );
@@ -233,71 +291,140 @@ export default function ScheduleScreen(): React.JSX.Element {
         </View>
       )}
 
-      {groups.map((group) => {
-        const items = doses.filter((d) => d.group === group);
-        if (items.length === 0) {
-          return null;
-        }
-        return (
-          <View key={group} style={styles.groupBlock}>
-            <View style={styles.groupTitleRow}>
-              <Text style={styles.groupTitle}>{group}</Text>
-              <View style={styles.countChip}>
-                <Text style={styles.groupCount}>
-                  {items.length} {items.length === 1 ? 'dose' : 'doses'}
-                </Text>
+      {dayDoses.length === 0 ? (
+        <EmptyState
+          title="No scheduled doses for this day"
+          description="Add a recurring or timed schedule based on your prescription instructions."
+          actionLabel="Add Dose"
+          onAction={handleOpenCreateModal}
+          iconName="calendar"
+        />
+      ) : (
+        PERIOD_GROUPS.map((group) => {
+          const items = dayDoses.filter((d) => d.period === group);
+          if (items.length === 0) {
+            return null;
+          }
+          return (
+            <View key={group} style={styles.groupBlock}>
+              <View style={styles.groupTitleRow}>
+                <Text style={styles.groupTitle}>{group}</Text>
+                <View style={styles.countChip}>
+                  <Text style={styles.groupCount}>
+                    {items.length} {items.length === 1 ? 'dose' : 'doses'}
+                  </Text>
+                </View>
               </View>
+              {items.map((item) => (
+                <DoseCard
+                  key={item.occurrenceKey}
+                  medicineName={item.medicineName}
+                  strength={item.strength}
+                  doseInstruction={item.doseInstruction}
+                  scheduledTime={item.scheduledTime12}
+                  status={item.status}
+                  actionLoading={Boolean(pendingOccurrenceKeys[item.occurrenceKey])}
+                  onMarkTaken={() => void handleUpdateDose(item, 'TAKEN')}
+                  onSkip={() => void handleUpdateDose(item, 'SKIPPED')}
+                />
+              ))}
             </View>
-            {items.map((item) => (
-              <DoseCard
-                key={item.id}
-                medicineName={item.medicineName}
-                strength={item.strength}
-                doseInstruction={item.instruction}
-                scheduledTime={item.time}
-                status={item.status}
-                onMarkTaken={() => handleUpdateDose(item.id, 'taken')}
-                onSkip={() => handleUpdateDose(item.id, 'skipped')}
-              />
-            ))}
+          );
+        })
+      )}
+
+      {/* Saved Schedule Plans Summary (pause / resume) */}
+      {schedules.length > 0 ? (
+        <View style={styles.plansSection}>
+          <View style={styles.plansHeader}>
+            <Text style={styles.plansTitle}>Saved schedules ({schedules.length})</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/history')}
+            >
+              <Text style={styles.linkText}>Dose history</Text>
+            </Pressable>
           </View>
-        );
-      })}
+          {schedules.map((s) => {
+            const med = medications.find((m) => m.id === s.patientMedicationId);
+            if (!med) return null;
+            const paused = s.status !== 'ACTIVE';
+            return (
+              <View key={s.id} style={styles.planRow}>
+                <View style={styles.planInfoCol}>
+                  <Text style={styles.planMedName} numberOfLines={1}>
+                    {med.name}
+                  </Text>
+                  <Text style={styles.planMeta} numberOfLines={2}>
+                    {formatFrequencyLabel(s.frequency)} ·{' '}
+                    {s.scheduledTimes.map(format24To12Hour).join(', ')}
+                  </Text>
+                </View>
+                <View style={styles.planRightCol}>
+                  <StatusBadge
+                    variant={paused ? 'archived' : 'active'}
+                    label={paused ? 'Paused' : 'Active'}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      void updateScheduleById(s.id, {
+                        status: paused ? 'ACTIVE' : 'PAUSED',
+                      }).then(() =>
+                        setToast(
+                          paused
+                            ? `${med.name} schedule resumed.`
+                            : `${med.name} schedule paused.`,
+                        ),
+                      )
+                    }
+                    style={styles.togglePlanBtn}
+                  >
+                    <Text style={styles.togglePlanText}>
+                      {paused ? 'Resume' : 'Pause'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       <BottomSheet
         visible={createOpen}
         title="Create Dose / Schedule"
         iconName="clock"
         onClose={() => setCreateOpen(false)}
-        onSubmit={handleCreateSchedule}
+        onSubmit={() => void handleCreateSchedule()}
         submitLabel="Save schedule"
+        submitLoading={saving}
       >
         <SelectField
           label="Medicine"
-          value={selectedMedicine}
-          options={[
-            { label: 'Corvalen 5 mg (Tablet)', value: 'Corvalen 5 mg' },
-            { label: 'Glymexa 500 mg (Tablet)', value: 'Glymexa 500 mg' },
-            { label: 'Vitamin D3 1000 IU (Capsule)', value: 'Vitamin D3 1000 IU' },
-          ]}
-          onSelect={setSelectedMedicine}
+          value={selectedMedId}
+          options={activeMeds.map((m) => ({
+            label: m.strength ? `${m.name} (${m.strength} · ${m.dosageForm})` : `${m.name} (${m.dosageForm})`,
+            value: m.id,
+          }))}
+          onSelect={setSelectedMedId}
           required
-          errorMessage={errors.selectedMedicine}
+          errorMessage={errors.selectedMedId}
         />
         <FormRow>
           <FormCol>
             <FormField
               label="Dose amount"
-              value={doseAmount}
-              onChangeText={setDoseAmount}
-              placeholder="e.g. 1 tablet"
+              value={doseAmountInput}
+              onChangeText={setDoseAmountInput}
+              placeholder="e.g. 1 or 1 tablet"
               required
-              errorMessage={errors.doseAmount}
+              errorMessage={errors.doseAmountInput}
             />
           </FormCol>
           <FormCol>
             <TimeField
-              label="Time"
+              label={frequency === 'Twice daily' ? 'First dose time' : 'Time'}
               value={scheduledTime}
               onChangeTime={setScheduledTime}
               required
@@ -305,6 +432,14 @@ export default function ScheduleScreen(): React.JSX.Element {
             />
           </FormCol>
         </FormRow>
+        {frequency === 'Twice daily' ? (
+          <TimeField
+            label="Second dose time"
+            value={secondTime}
+            onChangeTime={setSecondTime}
+            required
+          />
+        ) : null}
         <SelectField
           label="Frequency"
           value={frequency}
@@ -312,6 +447,8 @@ export default function ScheduleScreen(): React.JSX.Element {
             { label: 'Once daily', value: 'Once daily' },
             { label: 'Twice daily', value: 'Twice daily' },
             { label: 'Every 8 hours', value: 'Every 8 hours' },
+            { label: 'Alternate days', value: 'Alternate days' },
+            { label: 'Weekly', value: 'Weekly' },
           ]}
           onSelect={setFrequency}
           required
@@ -373,8 +510,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateNavTitle: {
+  dateTitlePress: {
     flex: 1,
+    alignItems: 'center',
+  },
+  dateNavTitle: {
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '700',
@@ -393,11 +533,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 12,
   },
+  weekHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  weekArrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   weekHeader: {
     fontSize: 13,
     fontWeight: '700',
     color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 10,
   },
   weekRow: {
     flexDirection: 'row',
@@ -468,5 +620,66 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  plansSection: {
+    marginTop: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: CAREDOSE_RADIUS.card,
+    borderWidth: 1,
+    borderColor: CAREDOSE_EXTENDED_COLORS.border,
+    padding: 14,
+  },
+  plansHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  plansTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
+  },
+  linkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.primary,
+  },
+  planRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
+  },
+  planInfoCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  planMedName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
+  },
+  planMeta: {
+    marginTop: 2,
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  planRightCol: {
+    alignItems: 'flex-end',
+    gap: 4,
+    flexShrink: 0,
+  },
+  togglePlanBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  togglePlanText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.primary,
   },
 });

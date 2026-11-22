@@ -23,6 +23,7 @@ export interface CataloguePackDto {
   id: string;
   packQuantity: string | null;
   packUnits: number | null;
+  stripUnits?: number | null;
   unitPrice: string | null;
   packPrice: string | null;
   currency: string;
