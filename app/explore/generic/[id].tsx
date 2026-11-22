@@ -151,10 +151,12 @@ export default function GenericDetailsScreen(): React.JSX.Element {
                 strength={b.strength}
                 dosageForm={b.dosageForm}
                 manufacturer={b.manufacturer ?? 'Not available'}
+                imageUrl={b.primaryImageUrl}
                 stockText={formatUnitOrPackPrice(b.primaryPack)}
                 priceText={formatPackSummary(b.primaryPack)}
                 statusVariant={badge.variant}
                 statusLabel={badge.label}
+                showStatusBadge={badge.showBadge}
                 onPress={() => router.push(`/explore/brand/${b.sourceId}`)}
               />
             );

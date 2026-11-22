@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../theme/tokens';
+import { MedicineFormThumbnail } from './MedicineFormThumbnail';
 import { StatusBadge, StatusVariant } from './StatusBadge';
 
 export interface MedicineCardProps {
@@ -11,10 +12,12 @@ export interface MedicineCardProps {
   strength?: string | null;
   dosageForm?: string | null;
   manufacturer?: string | null;
+  imageUrl?: string | null;
   stockText?: string;
   priceText?: string;
   statusVariant: StatusVariant;
   statusLabel?: string;
+  showStatusBadge?: boolean;
   onPress?: () => void;
   secondaryNote?: string;
   rightSubtext?: string;
@@ -56,17 +59,18 @@ export function MedicineCard({
   strength,
   dosageForm,
   manufacturer,
+  imageUrl,
   stockText,
   priceText,
   statusVariant,
   statusLabel,
+  showStatusBadge = true,
   onPress,
   secondaryNote,
   rightSubtext,
 }: MedicineCardProps): React.JSX.Element {
   const layout = useResponsiveLayout();
   const metaLine = formatMedicineMeta(strength, dosageForm, genericName);
-  const iconName = resolveDosageFormIcon(dosageForm);
 
   return (
     <Pressable
@@ -77,8 +81,13 @@ export function MedicineCard({
       style={[styles.card, { padding: layout.cardPadding }]}
     >
       <View style={styles.topRow}>
-        <View style={styles.iconCircle}>
-          <Feather name={iconName} size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
+        <View style={styles.thumbCol}>
+          <MedicineFormThumbnail
+            size="card"
+            dosageForm={dosageForm}
+            imageUrl={imageUrl}
+            accessibilityLabel={`${name} ${dosageForm ?? 'medicine'}`}
+          />
         </View>
 
         <View style={styles.mainCol}>
@@ -108,10 +117,16 @@ export function MedicineCard({
             </Text>
           ) : null}
 
-          <View style={styles.bottomRow}>
-            <StatusBadge variant={statusVariant} label={statusLabel} />
-            {priceText ? <Text style={styles.priceText}>{priceText}</Text> : null}
-          </View>
+          {showStatusBadge || priceText ? (
+            <View style={styles.bottomRow}>
+              {showStatusBadge ? (
+                <StatusBadge variant={statusVariant} label={statusLabel} />
+              ) : (
+                <View />
+              )}
+              {priceText ? <Text style={styles.priceText}>{priceText}</Text> : null}
+            </View>
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -131,15 +146,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
+  thumbCol: {
     marginRight: 12,
-    marginTop: 2,
+    flexShrink: 0,
   },
   mainCol: {
     flex: 1,
@@ -186,9 +195,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   manufacturerText: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
+    marginTop: 3,
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
   },
   noteText: {
     marginTop: 4,

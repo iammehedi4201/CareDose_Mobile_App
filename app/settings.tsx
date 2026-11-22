@@ -11,10 +11,12 @@ import {
   SuccessToast,
   ToggleField,
 } from '../src/components';
+import { useMedications } from '../src/features/medications/MedicationsContext';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 export default function SettingsScreen(): React.JSX.Element {
   const router = useRouter();
+  const { resetDemoMedications } = useMedications();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [leadTime, setLeadTime] = useState('10');
@@ -28,13 +30,14 @@ export default function SettingsScreen(): React.JSX.Element {
     setToast('Care preferences saved.');
   };
 
-  const handleConfirmResetDemo = (): void => {
+  const handleConfirmResetDemo = async (): Promise<void> => {
     setNotificationsEnabled(true);
     setSoundEnabled(true);
     setLeadTime('10');
     setGlucoseUnit('mg/dL');
     setMonthlyBudget('2500');
     setDisplayName('Karim');
+    await resetDemoMedications();
     setResetConfirmOpen(false);
     setToast('Fictional demo data restored to defaults.');
   };
@@ -129,7 +132,7 @@ export default function SettingsScreen(): React.JSX.Element {
         warningNote="This action cannot be undone for the current demo session."
         confirmLabel="Reset demo data"
         destructive
-        onConfirm={handleConfirmResetDemo}
+        onConfirm={() => void handleConfirmResetDemo()}
         onCancel={() => setResetConfirmOpen(false)}
       />
     </ScreenContainer>

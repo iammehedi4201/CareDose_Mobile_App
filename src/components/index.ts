@@ -6,6 +6,7 @@ export * from './FeedbackStates';
 export * from './FilterChips';
 export * from './FormFields';
 export * from './MedicineCard';
+export * from './MedicineFormThumbnail';
 export * from './Overlays';
 export * from './ScreenContainer';
 export * from './SearchInput';

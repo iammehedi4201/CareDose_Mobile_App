@@ -52,17 +52,17 @@ export function formatUnitOrPackPrice(pack: CataloguePackDto | null | undefined)
 
 export function resolveBrandBadge(
   brand: Pick<CatalogueBrandSummaryDto, 'verification' | 'hasPriceWarning'>,
-): { variant: StatusVariant; label: string } {
+): { variant: StatusVariant; label: string; showBadge: boolean } {
   if (brand.hasPriceWarning) {
-    return { variant: 'low_stock', label: 'Unverified · Price warning' };
+    return { variant: 'low_stock', label: 'Price warning', showBadge: true };
   }
   if (brand.verification === 'NEEDS_REVIEW') {
-    return { variant: 'low_stock', label: 'Needs review' };
+    return { variant: 'low_stock', label: 'Needs review', showBadge: true };
   }
   if (brand.verification === 'VERIFIED') {
-    return { variant: 'verified', label: 'Verified' };
+    return { variant: 'verified', label: 'Verified', showBadge: true };
   }
-  return { variant: 'unverified', label: 'Unverified' };
+  return { variant: 'unverified', label: 'Unverified', showBadge: false };
 }
 
 export function formatPackWarningReason(code: string): string {

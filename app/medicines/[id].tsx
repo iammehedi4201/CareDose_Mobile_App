@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   BottomSheet,
   ConfirmDialog,
   DateField,
+  EmptyState,
   FormCol,
   FormField,
   FormRow,
@@ -18,25 +19,49 @@ import {
   TimeField,
   validateRequiredFields,
 } from '../../src/components';
+import {
+  formatStockQuantity,
+  parseNonNegativeNumberInput,
+  resolveMedicationStatusVariant,
+} from '../../src/features/medications/medication-helpers';
+import { useMedications } from '../../src/features/medications/MedicationsContext';
 import { useResponsiveLayout } from '../../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../src/theme/tokens';
-import { INITIAL_PERSONAL_MEDS } from '../medicines';
 
 export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const layout = useResponsiveLayout();
-  const baseMed =
-    INITIAL_PERSONAL_MEDS.find((m) => m.id === id) ?? INITIAL_PERSONAL_MEDS[0];
+  const {
+    getMedicationById,
+    updateMedication,
+    archiveMedication,
+    restoreMedication,
+    adjustMedicationStock,
+  } = useMedications();
 
-  const [medName, setMedName] = useState(baseMed.name);
-  const [medStrength, setMedStrength] = useState(baseMed.strength ?? '5 mg');
-  const [medForm, setMedForm] = useState(baseMed.dosageForm);
-  const [instructions, setInstructions] = useState(baseMed.instructions);
-  const [stock, setStock] = useState(baseMed.stockRemaining);
-  const [threshold, setThreshold] = useState(String(baseMed.lowStockThreshold));
-  const [archived, setArchived] = useState(baseMed.archived);
+  const medication = id ? getMedicationById(id) : undefined;
+
+  // Edit modal controlled draft states synced from persisted record
+  const [medName, setMedName] = useState(medication?.name ?? '');
+  const [medGeneric, setMedGeneric] = useState(medication?.genericName ?? '');
+  const [medStrength, setMedStrength] = useState(medication?.strength ?? '');
+  const [medForm, setMedForm] = useState(medication?.dosageForm ?? 'Tablet');
+  const [instructions, setInstructions] = useState(medication?.instructions ?? '');
+  const [thresholdInput, setThresholdInput] = useState(
+    medication ? String(medication.lowStockThreshold) : '5',
+  );
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!medication) return;
+    setMedName(medication.name);
+    setMedGeneric(medication.genericName ?? '');
+    setMedStrength(medication.strength ?? '');
+    setMedForm(medication.dosageForm);
+    setInstructions(medication.instructions);
+    setThresholdInput(String(medication.lowStockThreshold));
+  }, [medication]);
 
   // Modals
   const [createDoseOpen, setCreateDoseOpen] = useState(false);
@@ -45,7 +70,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const [updateStockOpen, setUpdateStockOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
-  // Form states
+  // Secondary modal form states
   const [doseAmount, setDoseAmount] = useState('1 tablet');
   const [scheduledTime, setScheduledTime] = useState('08:00 AM');
   const [purchaseDate, setPurchaseDate] = useState('2026-11-21');
@@ -57,9 +82,58 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const [stockReason, setStockReason] = useState('Physical count');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const isLow = !archived && stock <= Number(threshold);
+  if (!medication) {
+    return (
+      <ScreenContainer
+        title="Medicine Details"
+        onBack={() => router.push('/medicines')}
+      >
+        <EmptyState
+          title="Medicine record not found"
+          description="This medicine may have been removed or is not in your active patient list."
+          actionLabel="Back to My Medicines"
+          onAction={() => router.push('/medicines')}
+        />
+      </ScreenContainer>
+    );
+  }
 
-  const handleSavePurchase = (): void => {
+  const statusVariant = resolveMedicationStatusVariant(medication);
+
+  const handleSaveEdit = async (): Promise<void> => {
+    const errs = validateRequiredFields(
+      { medName, instructions, thresholdInput },
+      {
+        medName: 'Medicine name',
+        instructions: 'Personal instructions',
+        thresholdInput: 'Low-stock threshold',
+      },
+    );
+    const parsedThreshold = parseNonNegativeNumberInput(thresholdInput);
+    if (parsedThreshold === null && !errs.thresholdInput) {
+      errs.thresholdInput = 'Enter a valid non-negative number.';
+    }
+
+    setErrors(errs);
+    if (Object.keys(errs).length > 0 || parsedThreshold === null) {
+      return;
+    }
+
+    await updateMedication(medication.id, {
+      name: medName.trim(),
+      genericName: medGeneric.trim() || null,
+      strength: medStrength.trim() || null,
+      dosageForm: medForm.trim() || 'Tablet',
+      instructions: instructions.trim(),
+      lowStockThreshold: parsedThreshold,
+    });
+
+    setEditOpen(false);
+    setErrors({});
+    setToast('Medicine details updated.');
+  };
+
+  const handleSavePurchase = async (): Promise<void> => {
     const errs = validateRequiredFields(
       { purchaseDate, packCount, unitsPerPack, amountPaid },
       {
@@ -72,31 +146,48 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    const added = (Number(packCount) || 1) * (Number(unitsPerPack) || 0);
-    setStock((prev) => prev + added);
+    const added = Math.max(0, (Number(packCount) || 1) * (Number(unitsPerPack) || 0));
+    await adjustMedicationStock(medication.id, 'add', added);
     setPurchaseOpen(false);
-    setToast(`Purchase saved (+${added} ${baseMed.stockUnit} added to stock).`);
+    setErrors({});
+    setToast(`Purchase saved (+${added} ${medication.stockUnit} added to stock).`);
   };
 
-  const handleUpdateStock = (): void => {
-    const qty = Number(stockDelta) || 0;
-    if (stockAction === 'Set balance') {
-      setStock(Math.max(0, qty));
-    } else {
-      setStock((prev) => Math.max(0, prev + qty));
+  const handleUpdateStock = async (): Promise<void> => {
+    const qty = parseNonNegativeNumberInput(stockDelta);
+    if (qty === null) {
+      setErrors({ stockDelta: 'Enter a valid non-negative number.' });
+      return;
     }
+    await adjustMedicationStock(
+      medication.id,
+      stockAction === 'Set balance' ? 'set' : 'add',
+      qty,
+    );
     setUpdateStockOpen(false);
+    setErrors({});
     setToast(`Stock updated (${stockReason}).`);
+  };
+
+  const handleOpenGeneric = (): void => {
+    if (medication.genericSourceId) {
+      router.push(`/explore/generic/${medication.genericSourceId}`);
+    } else {
+      router.push('/explore');
+    }
   };
 
   return (
     <ScreenContainer
-      title={medName}
-      subtitle={`${medStrength} · ${medForm}`}
+      title={medication.name}
+      subtitle={`${medication.strength ?? 'Strength: Not available'} · ${medication.dosageForm}`}
       onBack={() => router.push('/medicines')}
       primaryAction={{
         label: 'Edit',
-        onPress: () => setEditOpen(true),
+        onPress: () => {
+          setErrors({});
+          setEditOpen(true);
+        },
       }}
     >
       <SuccessToast message={toast} />
@@ -129,34 +220,33 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       <View style={styles.sectionCard}>
         <View style={styles.cardHeader}>
           <Text style={styles.sectionTitle}>Medicine information</Text>
-          <StatusBadge
-            variant={archived ? 'archived' : isLow ? 'low_stock' : 'in_stock'}
-          />
+          <StatusBadge variant={statusVariant} />
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Brand name</Text>
-          <Text style={styles.infoValue}>{medName}</Text>
+          <Text style={styles.infoValue}>{medication.name}</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Generic name</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/explore/generic/g-cardizen')}
-          >
-            <Text style={styles.linkText}>{baseMed.genericName ?? 'Cardizen'}</Text>
-          </Pressable>
+          {medication.genericName ? (
+            <Pressable accessibilityRole="button" onPress={handleOpenGeneric}>
+              <Text style={styles.linkText}>{medication.genericName}</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.infoValue}>Not available</Text>
+          )}
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Strength</Text>
-          <Text style={styles.infoValue}>{medStrength || 'Not available'}</Text>
+          <Text style={styles.infoValue}>{medication.strength || 'Not available'}</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Form</Text>
-          <Text style={styles.infoValue}>{medForm}</Text>
+          <Text style={styles.infoValue}>{medication.dosageForm}</Text>
         </View>
         <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>Instructions</Text>
-          <Text style={styles.infoValue}>{instructions}</Text>
+          <Text style={styles.infoValue}>{medication.instructions}</Text>
         </View>
       </View>
 
@@ -174,13 +264,13 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Current stock</Text>
           <Text style={styles.infoValue}>
-            {stock} {baseMed.stockUnit}
+            {formatStockQuantity(medication.stockRemaining)} {medication.stockUnit}
           </Text>
         </View>
         <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>Low-stock alert at</Text>
           <Text style={styles.infoValue}>
-            {threshold} {baseMed.stockUnit}
+            {formatStockQuantity(medication.lowStockThreshold)} {medication.stockUnit}
           </Text>
         </View>
       </View>
@@ -190,15 +280,17 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         <Text style={styles.sectionTitle}>Price information</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Unit price</Text>
-          <Text style={styles.infoValue}>{baseMed.unitPriceText}</Text>
+          <Text style={styles.infoValue}>{medication.unitPriceText}</Text>
         </View>
         <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>Reference pack</Text>
-          <Text style={styles.infoValue}>30 tablets · ৳555.00</Text>
+          <Text style={styles.infoValue}>
+            {medication.referencePackText ?? 'Not available'}
+          </Text>
         </View>
       </View>
 
-      {/* Previous Purchases Section (Scroll continuation) */}
+      {/* Previous Purchases Section */}
       <View style={styles.sectionCard}>
         <View style={styles.cardHeader}>
           <Text style={styles.sectionTitle}>Previous purchases</Text>
@@ -209,7 +301,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
             <Text style={styles.linkText}>See all</Text>
           </Pressable>
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>25 Oct 2026 · 30 tablets</Text>
           <Text style={styles.infoValue}>৳555</Text>
         </View>
@@ -226,10 +318,10 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
             <Text style={styles.linkText}>Edit</Text>
           </Pressable>
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, styles.lastRow]}>
           <View style={styles.scheduleTextCol}>
             <Text style={styles.scheduleTimeText}>8:00 AM</Text>
-            <Text style={styles.infoLabel}>{instructions}</Text>
+            <Text style={styles.infoLabel}>{medication.instructions}</Text>
           </View>
           <StatusBadge variant="active" />
         </View>
@@ -250,7 +342,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           <Text style={styles.infoLabel}>18 Nov 2026 · 8:00 AM</Text>
           <StatusBadge variant="taken" />
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>17 Nov 2026 · 8:00 AM</Text>
           <StatusBadge variant="taken" />
         </View>
@@ -261,7 +353,11 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         <Text style={styles.sectionTitle}>Alternative brands</Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/alternatives')}
+          onPress={() =>
+            medication.catalogueBrandId
+              ? router.push(`/explore/brand/${medication.catalogueBrandId}`)
+              : router.push('/alternatives')
+          }
         >
           <Text style={styles.linkText}>Compare all</Text>
         </Pressable>
@@ -271,32 +367,47 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           Possible matches only. Ask a doctor or pharmacist before changing brands.
         </Text>
       </View>
-      {baseMed.genericName === 'Ivabradine' || baseMed.genericName === 'Cardizen' ? (
+      {medication.genericName === 'Ivabradine' || medication.genericName === 'Cardizen' ? (
         <MedicineCard
           name="Cardil 5 mg"
-          genericName={baseMed.genericName}
-          strength={medStrength}
-          dosageForm={medForm}
+          genericName={medication.genericName}
+          strength={medication.strength}
+          dosageForm={medication.dosageForm}
           stockText="৳15/unit"
           statusVariant="unverified"
+          showStatusBadge={false}
           onPress={() => router.push('/explore/brand/103')}
         />
       ) : (
         <View style={styles.sectionCard}>
           <Text style={styles.infoLabel}>
-            Open Compare all to review matching brands by generic, strength, and form.
+            {medication.catalogueBrandId
+              ? 'View potential matching brands sharing the same generic, strength, and dosage form.'
+              : 'Open Compare all to review matching brands by generic, strength, and form.'}
           </Text>
+          {medication.catalogueBrandId ? (
+            <View style={styles.loadMoreWrap}>
+              <SecondaryButton
+                fullWidth
+                label="Load More matching brands"
+                onPress={() =>
+                  router.push(`/explore/brand/${medication.catalogueBrandId}/alternatives`)
+                }
+              />
+            </View>
+          ) : null}
         </View>
       )}
 
       <View style={styles.archiveWrap}>
         <SecondaryButton
           fullWidth
-          label={archived ? 'Restore Medicine to Active' : 'Archive Medicine'}
+          label={medication.archived ? 'Restore Medicine to Active' : 'Archive Medicine'}
           onPress={() => {
-            if (archived) {
-              setArchived(false);
-              setToast('Medicine restored to active list.');
+            if (medication.archived) {
+              void restoreMedication(medication.id).then(() => {
+                setToast(`${medication.name} restored to active list.`);
+              });
             } else {
               setArchiveConfirmOpen(true);
             }
@@ -308,7 +419,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       <BottomSheet
         visible={createDoseOpen}
         title="Create Dose / Schedule"
-        subtitle={medName}
+        subtitle={medication.name}
         iconName="clock"
         onClose={() => setCreateDoseOpen(false)}
         onSubmit={() => {
@@ -341,9 +452,9 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       <BottomSheet
         visible={purchaseOpen}
         title="Record Purchase"
-        subtitle={`Record a pack purchase for ${medName}`}
+        subtitle={`Record a pack purchase for ${medication.name}`}
         onClose={() => setPurchaseOpen(false)}
-        onSubmit={handleSavePurchase}
+        onSubmit={() => void handleSavePurchase()}
         submitLabel="Save purchase"
       >
         <DateField
@@ -385,13 +496,21 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         title="Edit Medicine"
         warningNote="Changing product details does not change your saved dose schedule."
         onClose={() => setEditOpen(false)}
-        onSubmit={() => {
-          setEditOpen(false);
-          setToast('Medicine details updated.');
-        }}
+        onSubmit={() => void handleSaveEdit()}
         submitLabel="Save changes"
       >
-        <FormField label="Medicine name" value={medName} onChangeText={setMedName} required />
+        <FormField
+          label="Medicine name"
+          value={medName}
+          onChangeText={setMedName}
+          required
+          errorMessage={errors.medName}
+        />
+        <FormField
+          label="Generic / active ingredient"
+          value={medGeneric}
+          onChangeText={setMedGeneric}
+        />
         <FormField label="Strength" value={medStrength} onChangeText={setMedStrength} />
         <FormField label="Form" value={medForm} onChangeText={setMedForm} />
         <FormField
@@ -399,13 +518,15 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           value={instructions}
           onChangeText={setInstructions}
           required
+          errorMessage={errors.instructions}
         />
         <FormField
           label="Low-stock threshold"
-          value={threshold}
-          onChangeText={setThreshold}
+          value={thresholdInput}
+          onChangeText={setThresholdInput}
           keyboardType="numeric"
           required
+          errorMessage={errors.thresholdInput}
         />
       </BottomSheet>
 
@@ -415,7 +536,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         title="Update Stock"
         warningNote="Creates an auditable stock adjustment transaction."
         onClose={() => setUpdateStockOpen(false)}
-        onSubmit={handleUpdateStock}
+        onSubmit={() => void handleUpdateStock()}
         submitLabel="Update stock"
       >
         <SelectField
@@ -434,6 +555,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           onChangeText={setStockDelta}
           keyboardType="numeric"
           required
+          errorMessage={errors.stockDelta}
         />
         <SelectField
           label="Reason"
@@ -452,12 +574,13 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       <ConfirmDialog
         visible={archiveConfirmOpen}
         title="Archive Medicine?"
-        description={`Archive ${medName}? It will move to Archived while keeping all past dose and purchase history.`}
+        description={`Archive ${medication.name}? It will move to Archived while keeping all past dose and purchase history.`}
         confirmLabel="Archive"
         onConfirm={() => {
-          setArchived(true);
-          setArchiveConfirmOpen(false);
-          setToast('Medicine archived.');
+          void archiveMedication(medication.id).then(() => {
+            setArchiveConfirmOpen(false);
+            setToast(`${medication.name} archived. Dose & purchase history preserved.`);
+          });
         }}
         onCancel={() => setArchiveConfirmOpen(false)}
       />
@@ -538,6 +661,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
     flexShrink: 0,
+    maxWidth: '46%',
   },
   infoValue: {
     flex: 1,
@@ -568,5 +692,9 @@ const styles = StyleSheet.create({
   },
   archiveWrap: {
     marginVertical: 10,
+  },
+  loadMoreWrap: {
+    marginTop: 4,
+    marginBottom: 10,
   },
 });

@@ -22,7 +22,7 @@ export function BottomNavigation({ activeTabOverride }: BottomNavigationProps): 
   const activeKey = activeTabOverride ?? resolveActiveBottomTab(pathname);
 
   return (
-    <View accessibilityRole="tablist" style={styles.bar}>
+    <View accessibilityRole="tablist" collapsable={false} style={styles.bar}>
       <View
         style={[
           styles.barInner,
@@ -39,9 +39,14 @@ export function BottomNavigation({ activeTabOverride }: BottomNavigationProps): 
               accessibilityRole="tab"
               accessibilityLabel={tab.label}
               accessibilityState={{ selected: isActive }}
+              hitSlop={4}
               onPress={() => {
                 if (!isActive || pathname !== tab.route) {
-                  router.push(tab.route);
+                  if (typeof router.navigate === 'function') {
+                    router.navigate(tab.route);
+                  } else {
+                    router.push(tab.route);
+                  }
                 }
               }}
               style={styles.tabItem}
@@ -88,6 +93,7 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 10,
     paddingHorizontal: 4,
+    zIndex: 10,
   },
   barInner: {
     flexDirection: 'row',

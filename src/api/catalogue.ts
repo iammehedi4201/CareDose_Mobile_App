@@ -86,6 +86,7 @@ export interface CatalogueBrandDetailDto extends CatalogueBrandSummaryDto {
   collectedAt: string | null;
   packs: CataloguePackDto[];
   images: CatalogueImageDto[];
+  sameGenericBrandsCount?: number;
   safetyNotice: string;
 }
 
@@ -179,8 +180,64 @@ function buildQueryString(params: Record<string, string | number | undefined>): 
   return `?${search}`;
 }
 
-export function getCatalogueSummary(): Promise<CatalogueSummaryResponse> {
-  return apiRequest<CatalogueSummaryResponse>('/catalogue/summary');
+interface ClientCacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+
+const CLIENT_CACHE_MAX = 120;
+const clientCatalogueCache = new Map<string, ClientCacheEntry<unknown>>();
+
+function readClientCache<T>(key: string): T | undefined {
+  const hit = clientCatalogueCache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() > hit.expiresAt) {
+    clientCatalogueCache.delete(key);
+    return undefined;
+  }
+  return hit.value as T;
+}
+
+function writeClientCache<T>(key: string, value: T, ttlMs = 3 * 60 * 1000): T {
+  if (clientCatalogueCache.has(key)) {
+    clientCatalogueCache.delete(key);
+  } else if (clientCatalogueCache.size >= CLIENT_CACHE_MAX) {
+    const oldest = clientCatalogueCache.keys().next().value;
+    if (oldest !== undefined) {
+      clientCatalogueCache.delete(oldest);
+    }
+  }
+  clientCatalogueCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  return value;
+}
+
+export function clearCatalogueClientCache(): void {
+  clientCatalogueCache.clear();
+}
+
+async function cachedCatalogueGet<T>(
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  options?: { forceRefresh?: boolean; ttlMs?: number },
+): Promise<T> {
+  if (!options?.forceRefresh) {
+    const cached = readClientCache<T>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+  const fresh = await fetcher();
+  return writeClientCache(cacheKey, fresh, options?.ttlMs);
+}
+
+export function getCatalogueSummary(options?: {
+  forceRefresh?: boolean;
+}): Promise<CatalogueSummaryResponse> {
+  return cachedCatalogueGet(
+    'summary',
+    () => apiRequest<CatalogueSummaryResponse>('/catalogue/summary'),
+    { forceRefresh: options?.forceRefresh, ttlMs: 5 * 60 * 1000 },
+  );
 }
 
 export function searchCatalogueBrands(params: {
@@ -190,24 +247,42 @@ export function searchCatalogueBrands(params: {
   genericId?: string;
   cursor?: string;
   limit?: number;
+  forceRefresh?: boolean;
 }): Promise<PaginatedCatalogueResponse<CatalogueBrandSummaryDto>> {
-  const qs = buildQueryString(params);
-  return apiRequest<PaginatedCatalogueResponse<CatalogueBrandSummaryDto>>(
-    `/catalogue/search${qs}`,
+  const { forceRefresh, ...query } = params;
+  const qs = buildQueryString(query);
+  return cachedCatalogueGet(
+    `search:${qs}`,
+    () => apiRequest<PaginatedCatalogueResponse<CatalogueBrandSummaryDto>>(`/catalogue/search${qs}`),
+    { forceRefresh, ttlMs: 2 * 60 * 1000 },
   );
 }
 
-export function getCatalogueBrandDetail(brandId: string): Promise<CatalogueBrandDetailDto> {
-  return apiRequest<CatalogueBrandDetailDto>(
-    `/catalogue/brands/${encodeURIComponent(brandId)}`,
+export function getCatalogueBrandDetail(
+  brandId: string,
+  options?: { forceRefresh?: boolean },
+): Promise<CatalogueBrandDetailDto> {
+  const key = `brand:${brandId}`;
+  return cachedCatalogueGet(
+    key,
+    () =>
+      apiRequest<CatalogueBrandDetailDto>(`/catalogue/brands/${encodeURIComponent(brandId)}`),
+    { forceRefresh: options?.forceRefresh, ttlMs: 5 * 60 * 1000 },
   );
 }
 
 export function getCatalogueBrandAlternatives(
   brandId: string,
+  options?: { forceRefresh?: boolean },
 ): Promise<CatalogueBrandAlternativesResponse> {
-  return apiRequest<CatalogueBrandAlternativesResponse>(
-    `/catalogue/brands/${encodeURIComponent(brandId)}/alternatives`,
+  const key = `brand-alts:${brandId}`;
+  return cachedCatalogueGet(
+    key,
+    () =>
+      apiRequest<CatalogueBrandAlternativesResponse>(
+        `/catalogue/brands/${encodeURIComponent(brandId)}/alternatives`,
+      ),
+    { forceRefresh: options?.forceRefresh, ttlMs: 5 * 60 * 1000 },
   );
 }
 
@@ -217,8 +292,13 @@ export function searchCatalogueGenerics(params: {
   limit?: number;
 }): Promise<PaginatedCatalogueResponse<CatalogueGenericListItemDto>> {
   const qs = buildQueryString(params);
-  return apiRequest<PaginatedCatalogueResponse<CatalogueGenericListItemDto>>(
-    `/catalogue/generics${qs}`,
+  return cachedCatalogueGet(
+    `generics:${qs}`,
+    () =>
+      apiRequest<PaginatedCatalogueResponse<CatalogueGenericListItemDto>>(
+        `/catalogue/generics${qs}`,
+      ),
+    { ttlMs: 3 * 60 * 1000 },
   );
 }
 
@@ -227,8 +307,13 @@ export function getCatalogueGenericDetail(
   params: { cursor?: string; limit?: number } = {},
 ): Promise<CatalogueGenericDetailResponse> {
   const qs = buildQueryString(params);
-  return apiRequest<CatalogueGenericDetailResponse>(
-    `/catalogue/generics/${encodeURIComponent(genericId)}${qs}`,
+  return cachedCatalogueGet(
+    `generic:${genericId}:${qs}`,
+    () =>
+      apiRequest<CatalogueGenericDetailResponse>(
+        `/catalogue/generics/${encodeURIComponent(genericId)}${qs}`,
+      ),
+    { ttlMs: 5 * 60 * 1000 },
   );
 }
 
@@ -238,5 +323,9 @@ export function searchAlternativeGroups(params: {
   limit?: number;
 }): Promise<AlternativeGroupsSearchResponse> {
   const qs = buildQueryString(params);
-  return apiRequest<AlternativeGroupsSearchResponse>(`/catalogue/alternatives${qs}`);
+  return cachedCatalogueGet(
+    `alt-groups:${qs}`,
+    () => apiRequest<AlternativeGroupsSearchResponse>(`/catalogue/alternatives${qs}`),
+    { ttlMs: 3 * 60 * 1000 },
+  );
 }

@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   MIN_TOUCH_TARGET,
@@ -133,5 +136,56 @@ describe('Phase 2 — Mobile UI Foundation & Design System Component Logic', () 
     expect(formatTimeString(evening)).toBe('09:15 PM');
     const noon = parseTimeString('12:00 PM');
     expect(formatTimeString(noon)).toBe('12:00 PM');
+  });
+
+  it('registers conflict-free Expo Router paths for all tabs and nested screens', () => {
+    const req = createRequire(import.meta.url);
+    const { getRoutes } = req('expo-router/build/getRoutes');
+    const { getLinkingConfig } = req('expo-router/build/getLinkingConfig');
+    const navCore = req('expo-router/build/react-navigation/core/index.js');
+
+    const appDir = path.resolve(__dirname, '../../../app');
+    const walkAppFiles = (dir: string, prefix = '.'): string[] => {
+      let out: string[] = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const rel = `${prefix}/${entry.name}`;
+        if (entry.isDirectory()) {
+          out = out.concat(walkAppFiles(path.join(dir, entry.name), rel));
+        } else {
+          out.push(rel);
+        }
+      }
+      return out;
+    };
+
+    const files = walkAppFiles(appDir);
+    const ctx = Object.assign(() => ({}), { keys: () => files });
+    const routes = getRoutes(ctx, { skipGenerated: true });
+    const linking = getLinkingConfig(routes, ctx, { metaOnly: false });
+
+    expect(() => navCore.validatePathConfig(linking.config)).not.toThrow();
+
+    const expectedPaths = [
+      '/',
+      '/schedule',
+      '/medicines',
+      '/medicines/med-1',
+      '/explore',
+      '/explore/brand/10452',
+      '/explore/brand/10452/alternatives',
+      '/explore/generic/3',
+      '/profile',
+      '/health',
+      '/expenses',
+      '/purchases',
+      '/alternatives',
+      '/history',
+      '/settings',
+    ];
+    for (const targetPath of expectedPaths) {
+      const state = navCore.getStateFromPath(targetPath, linking.config);
+      expect(state).toBeDefined();
+      expect(navCore.getPathFromState(state, linking.config)).toBe(targetPath);
+    }
   });
 });

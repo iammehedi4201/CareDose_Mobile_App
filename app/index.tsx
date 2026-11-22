@@ -14,6 +14,12 @@ import {
   SuccessToast,
   validateRequiredFields,
 } from '../src/components';
+import {
+  formatStockQuantity,
+  isPersonalMedicationLowStock,
+  resolveMedicationStatusVariant,
+} from '../src/features/medications/medication-helpers';
+import { useMedications } from '../src/features/medications/MedicationsContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
@@ -69,6 +75,7 @@ const INITIAL_HOME_DOSES: HomeDoseItem[] = [
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const layout = useResponsiveLayout();
+  const { medications } = useMedications();
   const [doses, setDoses] = useState<HomeDoseItem[]>(INITIAL_HOME_DOSES);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [quickReadingOpen, setQuickReadingOpen] = useState(false);
@@ -107,6 +114,9 @@ export default function HomeScreen(): React.JSX.Element {
 
   const morningDoses = doses.filter((d) => d.period === 'Morning');
   const afternoonDoses = doses.filter((d) => d.period === 'Afternoon');
+  const activeMeds = medications.filter((m) => !m.archived);
+  const lowStockMeds = activeMeds.filter(isPersonalMedicationLowStock);
+  const supplyHighlight = lowStockMeds[0] ?? activeMeds[0] ?? null;
 
   return (
     <ScreenContainer
@@ -233,7 +243,7 @@ export default function HomeScreen(): React.JSX.Element {
       {/* Low stock & medicine supplies snapshot */}
       <View style={styles.sectionHeaderRow}>
         <Text style={[styles.sectionTitle, styles.headerTitleFlex]}>
-          Medicine supplies (1 low stock)
+          Medicine supplies ({lowStockMeds.length} low stock)
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -244,17 +254,19 @@ export default function HomeScreen(): React.JSX.Element {
         </Pressable>
       </View>
 
-      <MedicineCard
-        name="Glymexa 500 mg"
-        genericName="Metformin"
-        strength="500 mg"
-        dosageForm="Tablet"
-        stockText="5 tablets"
-        rightSubtext="৳9/unit"
-        priceText="Refill threshold: 7"
-        statusVariant="low_stock"
-        onPress={() => router.push('/medicines/m2')}
-      />
+      {supplyHighlight ? (
+        <MedicineCard
+          name={supplyHighlight.name}
+          genericName={supplyHighlight.genericName}
+          strength={supplyHighlight.strength}
+          dosageForm={supplyHighlight.dosageForm}
+          stockText={`${formatStockQuantity(supplyHighlight.stockRemaining)} ${supplyHighlight.stockUnit}`}
+          rightSubtext={supplyHighlight.unitPriceText}
+          priceText={`Refill threshold: ${formatStockQuantity(supplyHighlight.lowStockThreshold)}`}
+          statusVariant={resolveMedicationStatusVariant(supplyHighlight)}
+          onPress={() => router.push(`/medicines/${supplyHighlight.id}`)}
+        />
+      ) : null}
 
       {/* Latest health reading & expenses shortcuts */}
       <View

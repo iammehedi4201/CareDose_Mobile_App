@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -9,19 +9,20 @@ import {
   FormField,
   LoadingSkeleton,
   MedicineCard,
+  MedicineFormThumbnail,
   PrimaryButton,
   ScreenContainer,
+  SecondaryButton,
   StatusBadge,
   SuccessToast,
   validateRequiredFields,
-} from '../../../src/components';
-import { resolveDosageFormIcon } from '../../../src/components/MedicineCard';
+} from '../../../../src/components';
 import {
   AlternativeGroupWithCandidatesDto,
   CatalogueBrandDetailDto,
   getCatalogueBrandAlternatives,
   getCatalogueBrandDetail,
-} from '../../../src/api/catalogue';
+} from '../../../../src/api/catalogue';
 import {
   formatCurrencyAmount,
   formatMissingCatalogueValue,
@@ -30,19 +31,29 @@ import {
   formatUnitOrPackPrice,
   OFFLINE_FALLBACK_CATALOGUE_BRANDS,
   resolveBrandBadge,
-} from '../../../src/features/catalogue/catalogue-helpers';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../src/theme/tokens';
+} from '../../../../src/features/catalogue/catalogue-helpers';
+import {
+  inferStockUnit,
+  parseNonNegativeNumberInput,
+} from '../../../../src/features/medications/medication-helpers';
+import { useMedications } from '../../../../src/features/medications/MedicationsContext';
+import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../../src/theme/tokens';
+
+const INITIAL_ALTERNATIVES_LIMIT = 3;
 
 export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { addMedication } = useMedications();
 
   const [brand, setBrand] = useState<CatalogueBrandDetailDto | null>(null);
   const [altGroups, setAltGroups] = useState<AlternativeGroupWithCandidatesDto[]>([]);
   const [warningNotice, setWarningNotice] = useState(
-    'Possible matches only. Always ask a doctor or pharmacist before changing brands.',
+    'Potential matching brands only. Sharing the same generic, strength, and dosage form does not make brands automatically interchangeable. Always consult a qualified doctor or pharmacist before changing medicine brands.',
   );
   const [loading, setLoading] = useState(true);
+  const [altLoading, setAltLoading] = useState(true);
+  const [altError, setAltError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -52,46 +63,66 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<string | null>(null);
 
-  const loadBrand = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const [detailRes, altRes] = await Promise.all([
-        getCatalogueBrandDetail(id),
-        getCatalogueBrandAlternatives(id),
-      ]);
-      setBrand(detailRes);
-      setAltGroups(altRes.groups);
-      setWarningNotice(altRes.warningNotice);
-    } catch (err) {
-      const fallback = OFFLINE_FALLBACK_CATALOGUE_BRANDS.find(
-        (b) => b.sourceId === id || b.id === id,
-      );
-      if (fallback) {
-        setBrand({
-          ...fallback,
-          productUrl: null,
-          collectedAt: null,
-          packs: fallback.primaryPack ? [fallback.primaryPack] : [],
-          images: [],
-          safetyNotice: 'Offline preview data. Start the CareDose backend to view live records.',
-        });
+  const loadAlternatives = useCallback(
+    async (brandRef: string, forceRefresh = false) => {
+      setAltLoading(true);
+      setAltError(null);
+      try {
+        const altRes = await getCatalogueBrandAlternatives(brandRef, { forceRefresh });
+        setAltGroups(altRes.groups);
+        setWarningNotice(altRes.warningNotice);
+      } catch (err) {
         setAltGroups([]);
-      } else {
-        setErrorMessage(err instanceof Error ? err.message : 'Unable to load medicine details.');
+        setAltError(
+          err instanceof Error ? err.message : 'Unable to load matching brand candidates.',
+        );
+      } finally {
+        setAltLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+    },
+    [],
+  );
+
+  const loadBrand = useCallback(
+    async (forceRefresh = false) => {
+      if (!id) return;
+      setLoading(true);
+      setErrorMessage(null);
+
+      // Start alternatives fetch independently so it never blocks Brand Details rendering
+      void loadAlternatives(id, forceRefresh);
+
+      try {
+        const detailRes = await getCatalogueBrandDetail(id, { forceRefresh });
+        setBrand(detailRes);
+      } catch (err) {
+        const fallback = OFFLINE_FALLBACK_CATALOGUE_BRANDS.find(
+          (b) => b.sourceId === id || b.id === id,
+        );
+        if (fallback) {
+          setBrand({
+            ...fallback,
+            productUrl: null,
+            collectedAt: null,
+            packs: fallback.primaryPack ? [fallback.primaryPack] : [],
+            images: [],
+            safetyNotice: 'Offline preview data. Start the CareDose backend to view live records.',
+          });
+        } else {
+          setErrorMessage(err instanceof Error ? err.message : 'Unable to load medicine details.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [id, loadAlternatives],
+  );
 
   useEffect(() => {
     void loadBrand();
   }, [loadBrand]);
 
-  const handleAddToMyMedicines = (): void => {
+  const handleAddToMyMedicines = async (): Promise<void> => {
     const errs = validateRequiredFields(
       { personalInstructions, startingStock, threshold },
       {
@@ -100,12 +131,56 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         threshold: 'Low-stock threshold',
       },
     );
+    const parsedStock = parseNonNegativeNumberInput(startingStock);
+    if (parsedStock === null && !errs.startingStock) {
+      errs.startingStock = 'Enter a valid non-negative number.';
+    }
+    const parsedThreshold = parseNonNegativeNumberInput(threshold);
+    if (parsedThreshold === null && !errs.threshold) {
+      errs.threshold = 'Enter a valid non-negative number.';
+    }
+
     setErrors(errs);
-    if (Object.keys(errs).length > 0 || !brand) return;
+    if (
+      Object.keys(errs).length > 0 ||
+      !brand ||
+      parsedStock === null ||
+      parsedThreshold === null
+    ) {
+      return;
+    }
+
+    const pack = brand.packs[0] ?? brand.primaryPack;
+    const unitPriceText = pack?.unitPrice
+      ? `৳${pack.unitPrice}/unit`
+      : pack?.packPrice
+        ? `৳${pack.packPrice}/pack`
+        : 'Not listed';
+    const referencePackText =
+      pack?.packQuantity && pack?.packPrice
+        ? `${pack.packQuantity} · ৳${pack.packPrice}`
+        : null;
+
+    await addMedication({
+      catalogueBrandId: brand.sourceId,
+      genericSourceId: brand.generic?.sourceId ?? null,
+      name: brand.name,
+      genericName: brand.generic?.name ?? null,
+      strength: brand.strength,
+      dosageForm: brand.dosageForm ?? 'Tablet',
+      manufacturer: brand.manufacturer,
+      personalInstructions: personalInstructions.trim(),
+      startingStock: parsedStock,
+      stockUnit: inferStockUnit(brand.dosageForm),
+      lowStockThreshold: parsedThreshold,
+      unitPriceText,
+      referencePackText,
+    });
 
     setAddOpen(false);
     setPersonalInstructions('');
-    setToast(`${brand.name} saved with personal instructions.`);
+    setErrors({});
+    setToast(`${brand.name} added to My Medicines.`);
   };
 
   if (loading) {
@@ -129,14 +204,17 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         <ErrorState
           title="Could not load brand details"
           message={errorMessage ?? 'Brand record not found.'}
-          onRetry={() => void loadBrand()}
+          onRetry={() => void loadBrand(true)}
         />
       </ScreenContainer>
     );
   }
 
-  const badge = resolveBrandBadge(brand);
   const primaryImage = brand.images[0] ?? null;
+  const allCandidateBrands = altGroups.flatMap((g) => g.candidateBrands);
+  const initialMatchingBrands = allCandidateBrands.slice(0, INITIAL_ALTERNATIVES_LIMIT);
+  const remainingMatchingCount = Math.max(0, allCandidateBrands.length - INITIAL_ALTERNATIVES_LIMIT);
+  const isCombination = altGroups.some((g) => g.isCombination);
 
   return (
     <ScreenContainer
@@ -146,30 +224,27 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     >
       <SuccessToast message={toast} />
 
-      {/* Top Hero + Packaging Photo (only when real image exists) + Primary CTA */}
+      {/* Top Hero + Dosage Form Thumbnail / Packaging Photo + Primary CTA */}
       <View style={styles.heroCard}>
         <View style={styles.heroTopRow}>
-          {primaryImage ? (
-            <Image
-              source={{ uri: primaryImage.imageUrl }}
-              accessibilityLabel={`${brand.name} packaging`}
-              style={styles.heroPhoto}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.heroIcon}>
-              <Feather
-                name={resolveDosageFormIcon(brand.dosageForm)}
-                size={22}
-                color={CAREDOSE_EXTENDED_COLORS.primary}
-              />
-            </View>
-          )}
+          <MedicineFormThumbnail
+            size="hero"
+            dosageForm={brand.dosageForm}
+            imageUrl={primaryImage?.imageUrl}
+            accessibilityLabel={`${brand.name} ${brand.dosageForm ?? 'medicine'}`}
+          />
           <View style={styles.heroTextCol}>
             <Text style={styles.heroName}>{brand.name}</Text>
+            {brand.generic ? (
+              <Text style={styles.heroGeneric} numberOfLines={1}>
+                {brand.generic.name}
+              </Text>
+            ) : null}
             <Text style={styles.heroMeta}>{formatMissingCatalogueValue(brand.manufacturer)}</Text>
+            <Text style={styles.sourceCaption}>
+              MedEx reference data (unverified)
+            </Text>
           </View>
-          <StatusBadge variant={badge.variant} label={badge.label} />
         </View>
 
         {primaryImage ? (
@@ -212,24 +287,28 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
           <Text style={styles.infoLabel}>Dosage form</Text>
           <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.dosageForm)}</Text>
         </View>
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, brand.releaseMarker ? null : styles.lastRow]}>
           <Text style={styles.infoLabel}>Manufacturer</Text>
           <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.manufacturer)}</Text>
         </View>
-        <View style={[styles.infoRow, styles.lastRow]}>
-          <Text style={styles.infoLabel}>Release marker</Text>
-          <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.releaseMarker)}</Text>
-        </View>
+        {brand.releaseMarker ? (
+          <View style={[styles.infoRow, styles.lastRow]}>
+            <Text style={styles.infoLabel}>Release marker</Text>
+            <Text style={styles.infoValue}>{brand.releaseMarker}</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Pack & Pricing Details */}
       <View style={styles.sectionCard}>
         <View style={styles.cardHeader}>
-          <Text style={styles.sectionTitle}>Pack &amp; price ({brand.packs.length})</Text>
-          <StatusBadge
-            variant={brand.hasPriceWarning ? 'low_stock' : 'unverified'}
-            label={brand.hasPriceWarning ? 'Price warning' : 'Unverified'}
-          />
+          <View style={styles.packTitleCol}>
+            <Text style={styles.sectionTitle}>Pack &amp; price ({brand.packs.length})</Text>
+            <Text style={styles.packSourceHint}>MedEx reference price (unverified)</Text>
+          </View>
+          {brand.hasPriceWarning ? (
+            <StatusBadge variant="low_stock" label="Price warning" />
+          ) : null}
         </View>
 
         {brand.packs.length === 0 ? (
@@ -247,18 +326,25 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
                 <Text style={styles.infoLabel}>Pack size</Text>
                 <Text style={styles.infoValue}>{formatPackSummary(pack)}</Text>
               </View>
-              <View style={styles.infoRow}>
+              <View
+                style={[
+                  styles.infoRow,
+                  !pack.unitPrice && pack.warnings.length === 0 ? styles.lastRow : null,
+                ]}
+              >
                 <Text style={styles.infoLabel}>Pack price</Text>
                 <Text style={styles.infoValue}>
                   {formatCurrencyAmount(pack.packPrice, pack.currency)}
                 </Text>
               </View>
-              <View style={[styles.infoRow, pack.warnings.length === 0 ? styles.lastRow : null]}>
-                <Text style={styles.infoLabel}>Unit price</Text>
-                <Text style={styles.infoValue}>
-                  {pack.unitPrice ? formatCurrencyAmount(pack.unitPrice, pack.currency) : 'Not available'}
-                </Text>
-              </View>
+              {pack.unitPrice ? (
+                <View style={[styles.infoRow, pack.warnings.length === 0 ? styles.lastRow : null]}>
+                  <Text style={styles.infoLabel}>Unit price</Text>
+                  <Text style={styles.infoValue}>
+                    {formatCurrencyAmount(pack.unitPrice, pack.currency)}
+                  </Text>
+                </View>
+              ) : null}
               {pack.warnings.length > 0 ? (
                 <View style={styles.packWarningRow}>
                   <Feather name="alert-triangle" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
@@ -272,51 +358,97 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         )}
       </View>
 
-      {/* Potential Matching Brands */}
+      {/* Potential Matching Brands — Initially 3 + "Load More" to Searchable Alternatives Screen */}
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Potential matching brands</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/alternatives')}
-        >
-          <Text style={styles.linkText}>Compare all</Text>
-        </Pressable>
+        <View style={styles.matchingTitleCol}>
+          <Text style={styles.sectionTitle}>
+            Potential matching brands{!altLoading ? ` (${allCandidateBrands.length})` : ''}
+          </Text>
+          <Text style={styles.matchingSubtitle}>
+            Same generic, {brand.strength ?? 'strength'} · {brand.dosageForm ?? 'form'}
+          </Text>
+        </View>
+        {allCandidateBrands.length > INITIAL_ALTERNATIVES_LIMIT ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`/explore/brand/${brand.sourceId}/alternatives`)}
+          >
+            <Text style={styles.linkText}>See all</Text>
+          </Pressable>
+        ) : brand.generic && brand.sameGenericBrandsCount ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
+          >
+            <Text style={styles.linkText}>All {brand.sameGenericBrandsCount} generic brands</Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      {altGroups.length === 0 || altGroups.every((g) => g.candidateBrands.length === 0) ? (
+      {altLoading ? (
+        <LoadingSkeleton rows={2} />
+      ) : altError ? (
+        <ErrorState
+          title="Unable to load matching brands"
+          message={altError}
+          onRetry={() => id && void loadAlternatives(id, true)}
+        />
+      ) : initialMatchingBrands.length === 0 ? (
         <EmptyState
           title="No matching brands listed"
-          description="No other imported catalogue brands share the same generic, strength, and dosage form."
+          description="No other imported catalogue brands share this exact generic, strength, and dosage form."
         />
       ) : (
-        altGroups.map((group) => (
-          <View key={group.id} style={styles.altGroupWrap}>
-            {group.isCombination ? (
-              <Text style={styles.comboNote}>
-                Combination product · {group.strengthNorm} · {group.dosageFormNorm}
-              </Text>
-            ) : null}
-            {group.candidateBrands.map((alt) => {
-              const altBadge = resolveBrandBadge(alt);
-              return (
-                <MedicineCard
-                  key={alt.id}
-                  name={alt.name}
-                  genericName={alt.generic?.name}
-                  strength={alt.strength}
-                  dosageForm={alt.dosageForm}
-                  manufacturer={alt.manufacturer ?? 'Not available'}
-                  stockText={formatUnitOrPackPrice(alt.primaryPack)}
-                  priceText={formatPackSummary(alt.primaryPack)}
-                  statusVariant={altBadge.variant}
-                  statusLabel={altBadge.label}
-                  onPress={() => router.push(`/explore/brand/${alt.sourceId}`)}
-                />
-              );
-            })}
-          </View>
-        ))
+        <View style={styles.altGroupWrap}>
+          {isCombination ? (
+            <Text style={styles.comboNote}>
+              Combination product · {brand.strength ?? 'Multiple ingredients'} · {brand.dosageForm}
+            </Text>
+          ) : null}
+          {initialMatchingBrands.map((alt) => {
+            const altBadge = resolveBrandBadge(alt);
+            return (
+              <MedicineCard
+                key={alt.id}
+                name={alt.name}
+                genericName={alt.generic?.name}
+                strength={alt.strength}
+                dosageForm={alt.dosageForm}
+                manufacturer={alt.manufacturer ?? 'Not available'}
+                imageUrl={alt.primaryImageUrl}
+                stockText={formatUnitOrPackPrice(alt.primaryPack)}
+                priceText={formatPackSummary(alt.primaryPack)}
+                statusVariant={altBadge.variant}
+                statusLabel={altBadge.label}
+                showStatusBadge={altBadge.showBadge}
+                onPress={() => router.push(`/explore/brand/${alt.sourceId}`)}
+              />
+            );
+          })}
+
+          {remainingMatchingCount > 0 ? (
+            <View style={styles.loadMoreAltWrap}>
+              <SecondaryButton
+                fullWidth
+                label={`Load More (${remainingMatchingCount} remaining)`}
+                onPress={() => router.push(`/explore/brand/${brand.sourceId}/alternatives`)}
+              />
+            </View>
+          ) : null}
+        </View>
       )}
+
+      {brand.generic &&
+      typeof brand.sameGenericBrandsCount === 'number' &&
+      brand.sameGenericBrandsCount > allCandidateBrands.length + 1 ? (
+        <View style={styles.viewGenericWrap}>
+          <SecondaryButton
+            fullWidth
+            label={`View all ${brand.sameGenericBrandsCount.toLocaleString()} ${brand.generic.name} brands (all strengths & forms)`}
+            onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
+          />
+        </View>
+      ) : null}
 
       <View style={styles.warningBox}>
         <Text style={styles.warningText}>{warningNotice}</Text>
@@ -327,7 +459,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         title="Add to My Medicines"
         subtitle={`${brand.name} · ${brand.dosageForm ?? 'Medicine'}`}
         onClose={() => setAddOpen(false)}
-        onSubmit={handleAddToMyMedicines}
+        onSubmit={() => void handleAddToMyMedicines()}
         submitLabel="Add medicine"
       >
         <FormField
@@ -372,40 +504,32 @@ const styles = StyleSheet.create({
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  heroIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-  },
-  heroPhoto: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
+    gap: 12,
   },
   heroTextCol: {
     flex: 1,
     minWidth: 0,
-    paddingRight: 8,
   },
   heroName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     color: CAREDOSE_EXTENDED_COLORS.mainText,
+  },
+  heroGeneric: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
   },
   heroMeta: {
     marginTop: 2,
     fontSize: 12,
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  sourceCaption: {
+    marginTop: 4,
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.mutedText,
   },
   imageNotice: {
     marginTop: 8,
@@ -431,6 +555,14 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 8,
   },
+  packTitleCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  packSourceHint: {
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.mutedText,
+  },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -438,11 +570,20 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 8,
   },
+  matchingTitleCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  matchingSubtitle: {
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+    marginTop: 1,
+  },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   supportingEmpty: {
     fontSize: 12,
@@ -507,6 +648,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.primary,
+    flexShrink: 0,
   },
   altGroupWrap: {
     marginBottom: 4,
@@ -516,6 +658,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
     marginBottom: 6,
+  },
+  loadMoreAltWrap: {
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  viewGenericWrap: {
+    marginTop: 4,
+    marginBottom: 10,
   },
   warningBox: {
     backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,

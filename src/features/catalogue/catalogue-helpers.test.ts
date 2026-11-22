@@ -60,11 +60,13 @@ describe('Phase 4 — Mobile Catalogue Formatting & Safety Helpers', () => {
     expect(resolveBrandBadge(base)).toEqual({
       variant: 'unverified',
       label: 'Unverified',
+      showBadge: false,
     });
 
     expect(resolveBrandBadge({ verification: 'UNVERIFIED', hasPriceWarning: true })).toEqual({
       variant: 'low_stock',
-      label: 'Unverified · Price warning',
+      label: 'Price warning',
+      showBadge: true,
     });
 
     expect(formatPackWarningReason('pack_price_inconsistent_with_unit_price')).toMatch(

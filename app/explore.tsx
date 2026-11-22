@@ -52,6 +52,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [offlineFallback, setOfflineFallback] = useState<string | null>(null);
 
@@ -62,6 +63,8 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
   const [genericsLoading, setGenericsLoading] = useState(false);
 
   const activeRequestRef = useRef(0);
+  const didInitialMountRef = useRef(false);
+  const hasItemsRef = useRef(false);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -76,7 +79,11 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
     async (opts: { reset: boolean; cursor?: string | null }) => {
       const reqId = ++activeRequestRef.current;
       if (opts.reset) {
-        setLoading(true);
+        if (!hasItemsRef.current) {
+          setLoading(true);
+        } else {
+          setRefreshing(true);
+        }
       } else {
         setLoadingMore(true);
       }
@@ -96,6 +103,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         setTotalCount(res.totalCount);
         setNextCursor(res.nextCursor);
         setHasMore(res.hasMore);
+        hasItemsRef.current = opts.reset ? res.items.length > 0 : hasItemsRef.current || res.items.length > 0;
         setItems((prev) => (opts.reset ? res.items : [...prev, ...res.items]));
       } catch (err) {
         if (reqId !== activeRequestRef.current) return;
@@ -118,6 +126,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
 
         const msg = err instanceof Error ? err.message : 'Unable to connect to CareDose server';
         setOfflineFallback(msg);
+        hasItemsRef.current = filteredFallback.length > 0;
         setItems(filteredFallback);
         setTotalCount(filteredFallback.length);
         setHasMore(false);
@@ -125,6 +134,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
       } finally {
         if (reqId === activeRequestRef.current) {
           setLoading(false);
+          setRefreshing(false);
           setLoadingMore(false);
         }
       }
@@ -137,9 +147,14 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
   }, [loadSummary]);
 
   useEffect(() => {
+    if (!didInitialMountRef.current) {
+      didInitialMountRef.current = true;
+      void fetchBrands({ reset: true });
+      return;
+    }
     const timer = setTimeout(() => {
       void fetchBrands({ reset: true });
-    }, 240);
+    }, 180);
     return () => clearTimeout(timer);
   }, [fetchBrands]);
 
@@ -236,7 +251,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         </View>
         <View style={styles.infoTextCol}>
           <Text style={styles.infoTitle}>Bangladesh Medicine Directory</Text>
-          <Text style={styles.infoBody}>{brandsCountLabel}</Text>
+          <Text style={styles.infoBody}>{brandsCountLabel} · Reference (unverified)</Text>
         </View>
         <View style={styles.infoBadge}>
           <Text style={styles.infoBadgeText}>i</Text>
@@ -347,8 +362,8 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
       <View style={styles.resultsHeader}>
         <Text style={styles.resultsTitle}>
           {isFiltered
-            ? `Results (${totalCount.toLocaleString()})`
-            : `Catalogue Directory (${totalCount.toLocaleString()})`}
+            ? `Results (${totalCount.toLocaleString()})${refreshing ? ' · Updating...' : ''}`
+            : `Catalogue Directory (${totalCount.toLocaleString()})${refreshing ? ' · Updating...' : ''}`}
         </Text>
         {isFiltered ? (
           <Pressable
@@ -382,10 +397,12 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
                 strength={item.strength}
                 dosageForm={item.dosageForm}
                 manufacturer={item.manufacturer ?? 'Manufacturer: Not available'}
+                imageUrl={item.primaryImageUrl}
                 stockText={formatUnitOrPackPrice(item.primaryPack)}
                 priceText={formatPackSummary(item.primaryPack)}
                 statusVariant={badge.variant}
                 statusLabel={badge.label}
+                showStatusBadge={badge.showBadge}
                 onPress={() => router.push(`/explore/brand/${item.sourceId}`)}
               />
             );
