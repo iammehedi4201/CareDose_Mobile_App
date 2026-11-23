@@ -971,3 +971,23 @@ export function createFixtureDemoDoseEvents(todayYmd = getTodayLocalYmd()): Loca
     makeEv('ev-5', 'sched-m4', 'm4', twoDaysAgo, '22:00', 'taken'),
   ];
 }
+
+/**
+ * Resolves the initial medicine for ScheduleModal.
+ * Never auto-selects activeMeds[0] when creating a new schedule without an explicit target.
+ */
+export function resolveInitialScheduleMedication(
+  activeMedications: PersonalMedicationRecord[],
+  initialMedicationId?: string | null,
+  editingSchedule?: LocalScheduleRecord | null,
+): PersonalMedicationRecord | null {
+  if (editingSchedule) {
+    return (
+      activeMedications.find((m) => m.id === editingSchedule.patientMedicationId) ?? null
+    );
+  }
+  if (initialMedicationId) {
+    return activeMedications.find((m) => m.id === initialMedicationId) ?? null;
+  }
+  return null;
+}

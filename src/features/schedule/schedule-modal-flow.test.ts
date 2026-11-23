@@ -16,6 +16,7 @@ import {
   LocalScheduleRecord,
   mapApiScheduleToLocal,
   parseDoseAmountInput,
+  resolveInitialScheduleMedication,
 } from './dose-rules';
 
 const MEDS: PersonalMedicationRecord[] = [
@@ -351,6 +352,7 @@ describe('CareDose Simplified Create Dose / Schedule Modal — Domain & UI Rules
     );
 
     expect(modalSource).toContain('Which medicine?');
+    expect(modalSource).toContain('Select a medicine');
     expect(modalSource).toContain('How much each time?');
     expect(modalSource).toContain('When should it be taken?');
     expect(modalSource).toContain('More options');
@@ -378,5 +380,22 @@ describe('CareDose Simplified Create Dose / Schedule Modal — Domain & UI Rules
     // Notification safety: reminders never auto-mark Taken
     expect(notifSource).toContain('autoMarkTaken: false');
     expect(modalSource).toContain('Alerts never mark doses Taken automatically.');
+  });
+
+  it('never auto-selects a medicine when opening a new schedule without an explicit target', () => {
+    expect(resolveInitialScheduleMedication(MEDS, null, null)).toBeNull();
+    expect(resolveInitialScheduleMedication(MEDS, undefined, null)).toBeNull();
+
+    // Explicit medicine context (from Medicine Details screen) pre-selects that exact medicine
+    expect(resolveInitialScheduleMedication(MEDS, 'med-syrup', null)?.id).toBe('med-syrup');
+
+    // Editing an existing schedule pre-selects its linked medicine
+    expect(
+      resolveInitialScheduleMedication(
+        MEDS,
+        null,
+        makeSched({ patientMedicationId: 'med-cap' }),
+      )?.id,
+    ).toBe('med-cap');
   });
 });

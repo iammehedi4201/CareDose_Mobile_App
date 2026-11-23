@@ -15,6 +15,7 @@ import {
   LocalScheduleRecord,
   normalizeScheduleFrequencyCode,
   normalizeTimeTo24Hour,
+  resolveInitialScheduleMedication,
   WEEKDAY_OPTIONS,
 } from '../features/schedule/dose-rules';
 import {
@@ -243,15 +244,14 @@ export function ScheduleModal({
         isAdvancedCode(mappedCode) || Boolean(editingSchedule.instructions?.trim()),
       );
     } else {
-      const preferredMed =
-        (initialMedicationId
-          ? currentActiveMeds.find((m) => m.id === initialMedicationId)
-          : null) ??
-        currentActiveMeds[0] ??
-        null;
+      const preferredMed = resolveInitialScheduleMedication(
+        currentActiveMeds,
+        initialMedicationId,
+        null,
+      );
 
       setSelectedMedId(preferredMed?.id ?? '');
-      setSelectingMed(!preferredMed && currentActiveMeds.length > 0);
+      setSelectingMed(false);
       setDoseAmountInput('');
       setDoseUnit(
         preferredMed
@@ -564,7 +564,6 @@ export function ScheduleModal({
     <BottomSheet
       visible={visible}
       title={editingSchedule ? 'Edit Dose Schedule' : 'Create Dose Schedule'}
-      subtitle="Select a medicine, enter each dose, and choose your reminder times."
       iconName="clock"
       onClose={onClose}
       onSubmit={activeMeds.length === 0 ? undefined : () => void handleSave()}
@@ -638,8 +637,42 @@ export function ScheduleModal({
                   </Text>
                 </View>
               </View>
+            ) : !selectingMed ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Select a medicine"
+                onPress={() => setSelectingMed(true)}
+                className="min-h-[52px] flex-row items-center justify-between gap-2.5 rounded-field border border-[#D6E3DC] bg-background px-3.5 py-2.5"
+              >
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[13px] font-semibold text-[#5A706B]">
+                    Select a medicine
+                  </Text>
+                  <Text className="mt-0.5 text-[11px] text-[#7D928D]">
+                    Search and choose from My Medicines
+                  </Text>
+                </View>
+                <View className="h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-mint">
+                  <Feather name="chevron-down" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                </View>
+              </Pressable>
             ) : (
               <View>
+                <View className="mb-2 flex-row items-center justify-between gap-2">
+                  <Text className="text-xs font-semibold text-[#5A706B]">
+                    Select a medicine
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setSelectingMed(false);
+                      setMedSearchQuery('');
+                    }}
+                    className="rounded-full border border-border bg-background px-2.5 py-1"
+                  >
+                    <Text className="text-[11px] font-semibold text-[#5A706B]">Close</Text>
+                  </Pressable>
+                </View>
                 <SearchInput
                   value={medSearchQuery}
                   onChangeText={setMedSearchQuery}
@@ -693,6 +726,16 @@ export function ScheduleModal({
               </Text>
             ) : null}
           </View>
+
+          {!selectedMed ? (
+            <View className="mb-2.5 flex-row items-center gap-2.5 rounded-card border border-[#C5E8D8] bg-mint p-3.5">
+              <Feather name="info" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+              <Text className="flex-1 text-xs leading-[18px] text-primary-dark font-medium">
+                Select a medicine above to set the dose amount, schedule times, and reminders.
+              </Text>
+            </View>
+          ) : (
+            <>
 
           {/* Section 2 — How much each time? */}
           <View className="mb-2.5 rounded-card border border-border bg-white p-3">
@@ -1082,6 +1125,8 @@ export function ScheduleModal({
               </View>
             ) : null}
           </View>
+            </>
+          )}
 
           {apiError ? (
             <View className="mb-2 flex-row items-center gap-2 rounded-lg border border-[#F2C6C6] bg-[#FDECEC] p-2.5">

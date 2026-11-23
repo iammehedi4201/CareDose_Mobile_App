@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   KeyboardTypeOptions,
   Modal,
@@ -16,6 +16,7 @@ import DateTimePicker, {
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
+import { SheetViewRef, useBottomSheetScroll } from './BottomSheetContext';
 
 export function validateRequiredFields(
   values: Record<string, string | number | undefined | null>,
@@ -158,6 +159,8 @@ export function FormField({
   editable = true,
 }: FormFieldProps): React.JSX.Element {
   const [focused, setFocused] = useState(false);
+  const wrapperRef = useRef<SheetViewRef | null>(null);
+  const notifySheetScroll = useBottomSheetScroll();
 
   const borderClass = errorMessage
     ? focused
@@ -171,7 +174,7 @@ export function FormField({
     : 'bg-[#EEF2F0] text-[#5A706B]';
 
   return (
-    <View className="mb-3">
+    <View ref={wrapperRef} className="mb-3">
       <Text className="text-[12px] font-semibold text-[#5A706B] mb-[5px]">
         {label}
         {required ? <Text className="text-error"> *</Text> : null}
@@ -186,7 +189,10 @@ export function FormField({
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : undefined}
         editable={editable}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setFocused(true);
+          notifySheetScroll(wrapperRef.current);
+        }}
         onBlur={() => setFocused(false)}
         className={[
           'min-h-[42px] rounded-field px-3 py-2 text-[13px]',

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
+import { SheetViewRef, useBottomSheetScroll } from './BottomSheetContext';
 
 export interface SearchInputProps {
   value: string;
@@ -16,13 +17,19 @@ export function SearchInput({
   placeholder = 'Search by brand, generic or strength...',
   onClear,
 }: SearchInputProps): React.JSX.Element {
+  const wrapperRef = useRef<SheetViewRef | null>(null);
+  const notifySheetScroll = useBottomSheetScroll();
+
   const handleClear = (): void => {
     onChangeText('');
     onClear?.();
   };
 
   return (
-    <View className="min-h-[44px] flex-row items-center rounded-field border border-border bg-white pr-1 pl-3">
+    <View
+      ref={wrapperRef}
+      className="min-h-[44px] flex-row items-center rounded-field border border-border bg-white pr-1 pl-3"
+    >
       <Feather
         name="search"
         size={16}
@@ -35,6 +42,7 @@ export function SearchInput({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={CAREDOSE_EXTENDED_COLORS.mutedText}
+        onFocus={() => notifySheetScroll(wrapperRef.current)}
         className="flex-1 py-2 text-[13px] text-main"
         autoCapitalize="none"
         autoCorrect={false}

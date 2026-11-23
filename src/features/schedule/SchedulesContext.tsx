@@ -670,13 +670,20 @@ export function SchedulesProvider({
       cursor?: string | null;
       limit?: number;
     }): Promise<DoseHistoryResponseDto> => {
+      const localRes = filterLocalDoseHistory(doseEvents, schedules, medications, {
+        fromDate: query.fromDate,
+        toDate: query.toDate,
+        status: query.status ?? 'all',
+        medicationId: query.medicationId,
+      });
+
       const session = await readSavedAuthSession();
       if (
         session &&
         (!query.medicationId || UUID_PREFIX_RE.test(query.medicationId))
       ) {
         try {
-          return await listPatientDoseHistory(
+          const remoteRes = await listPatientDoseHistory(
             session.activePatientId,
             session.token,
             {
@@ -693,17 +700,51 @@ export function SchedulesProvider({
               limit: query.limit ?? 20,
             },
           );
+          if (query.cursor) {
+            return remoteRes;
+          }
+          // Merge any local-only dose events not yet present in the remote response
+          const remoteKeys = new Set(
+            remoteRes.items.map((it) => `${it.scheduleId}:${it.scheduledFor}`),
+          );
+          const localOnly = localRes.items.filter(
+            (it) =>
+              !remoteKeys.has(`${it.scheduleId}:${it.scheduledFor}`) &&
+              !UUID_PREFIX_RE.test(it.scheduleId),
+          );
+          if (localOnly.length === 0) {
+            return remoteRes;
+          }
+          const mergedItems = [...localOnly, ...remoteRes.items].sort((a, b) =>
+            b.scheduledFor.localeCompare(a.scheduledFor),
+          );
+          const localOnlyTaken = filterLocalDoseHistory(
+            doseEvents.filter((ev) => !UUID_PREFIX_RE.test(ev.scheduleId)),
+            schedules,
+            medications,
+            {
+              fromDate: query.fromDate,
+              toDate: query.toDate,
+              status: 'all',
+              medicationId: query.medicationId,
+            },
+          ).counts;
+          return {
+            items: mergedItems,
+            counts: {
+              all: remoteRes.counts.all + localOnlyTaken.all,
+              taken: remoteRes.counts.taken + localOnlyTaken.taken,
+              skipped: remoteRes.counts.skipped + localOnlyTaken.skipped,
+            },
+            hasMore: remoteRes.hasMore,
+            nextCursor: remoteRes.nextCursor,
+          };
         } catch {
           // Fall through to local filtered events
         }
       }
 
-      return filterLocalDoseHistory(doseEvents, schedules, medications, {
-        fromDate: query.fromDate,
-        toDate: query.toDate,
-        status: query.status ?? 'all',
-        medicationId: query.medicationId,
-      });
+      return localRes;
     },
     [doseEvents, medications, schedules],
   );

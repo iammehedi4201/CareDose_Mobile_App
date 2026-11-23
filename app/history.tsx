@@ -15,6 +15,7 @@ import type { DoseHistoryItemDto } from '../src/api/schedules';
 import { useMedications } from '../src/features/medications/MedicationsContext';
 import {
   addDaysYmd,
+  formatDoseAmountDisplay,
   formatHistoryDateLabel,
   getTodayLocalYmd,
 } from '../src/features/schedule/dose-rules';
@@ -25,7 +26,10 @@ type HistoryFilter = 'all' | 'taken' | 'skipped';
 
 export default function DoseHistoryScreen(): React.JSX.Element {
   const router = useRouter();
-  const { medicationId } = useLocalSearchParams<{ medicationId?: string }>();
+  const { medicationId, from } = useLocalSearchParams<{
+    medicationId?: string;
+    from?: string;
+  }>();
   const layout = useResponsiveLayout();
   const { getMedicationById } = useMedications();
   const { doseEvents, queryDoseHistory } = useSchedules();
@@ -87,11 +91,21 @@ export default function DoseHistoryScreen(): React.JSX.Element {
   return (
     <ScreenContainer
       title="Dose History"
-      onBack={() =>
-        activeMedFilter
-          ? router.push(`/medicines/${activeMedFilter}`)
-          : router.push('/profile')
-      }
+      onBack={() => {
+        if (activeMedFilter) {
+          router.push(`/medicines/${activeMedFilter}`);
+          return;
+        }
+        if (from === 'schedule') {
+          if (typeof router.navigate === 'function') {
+            router.navigate('/schedule');
+          } else {
+            router.push('/schedule');
+          }
+          return;
+        }
+        router.push('/profile');
+      }}
     >
       {activeMedFilter ? (
         <View className="flex-row items-center justify-between gap-2.5 bg-mint rounded-field border border-[#C5E8D8] px-3 py-2 mb-2.5">
@@ -156,7 +170,8 @@ export default function DoseHistoryScreen(): React.JSX.Element {
                 <View className="flex-1 min-w-0">
                   <Text className="text-[14px] font-semibold text-main">{labelName}</Text>
                   <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-                    {formatHistoryDateLabel(item.scheduledDateYmd)} · {item.scheduledTime12}
+                    {formatHistoryDateLabel(item.scheduledDateYmd)} · {item.scheduledTime12} ·{' '}
+                    {formatDoseAmountDisplay(item.doseAmount, item.doseUnit)}
                   </Text>
                 </View>
                 <StatusBadge variant={item.status as StatusVariant} />

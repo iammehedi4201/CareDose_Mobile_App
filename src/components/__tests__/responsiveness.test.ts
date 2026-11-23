@@ -2,20 +2,111 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { __setMockWindowWidth } from '../../test/mocks/react-native';
 import { getResponsiveMetrics, VIEWPORT_BREAKPOINTS } from '../../theme/responsive';
+import { computeKeyboardModalMetrics } from '../BottomSheetContext';
 import { PrimaryButton, SecondaryButton } from '../Buttons';
 import { DoseCard } from '../DoseCard';
 import { EmptyState, ErrorState, LoadingSkeleton, SuccessToast } from '../FeedbackStates';
 import { FormCol, FormRow } from '../FormFields';
 import { MedicineCard } from '../MedicineCard';
 import { BottomSheet, ConfirmDialog } from '../Overlays';
+import { ScheduleModal } from '../ScheduleModal';
 import { StatusBadge } from '../StatusBadge';
 import { AppHeader } from '../AppHeader';
 import { BottomNavigation } from '../BottomNavigation';
 import { ScreenContainer } from '../ScreenContainer';
+import ScheduleScreen from '../../../app/schedule';
+
+const mockRouterPush = vi.fn();
+const mockRouterNavigate = vi.fn();
+const mockRouterBack = vi.fn();
+const mockUpdateScheduleById = vi.fn(() => Promise.resolve(null));
+
+vi.mock('react', async () => {
+  const actual = await vi.importActual<typeof import('react')>('react');
+  const mockReact = {
+    ...actual,
+    useState: <T,>(init: T | (() => T)) =>
+      [typeof init === 'function' ? (init as () => T)() : init, vi.fn()] as const,
+    useRef: <T,>(init: T) => ({ current: init }),
+    useEffect: vi.fn(),
+    useCallback: <T,>(fn: T) => fn,
+    useMemo: <T,>(fn: () => T) => fn(),
+  };
+  return {
+    ...mockReact,
+    default: mockReact,
+  };
+});
 
 vi.mock('expo-router', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({
+    push: mockRouterPush,
+    navigate: mockRouterNavigate,
+    back: mockRouterBack,
+  }),
   usePathname: () => '/',
+}));
+
+vi.mock('../../features/medications/MedicationsContext', () => ({
+  useMedications: () => ({
+    medications: [
+      {
+        id: 'med-1',
+        name: 'Napa',
+        genericName: 'Paracetamol',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        instructions: 'After breakfast',
+        stockRemaining: 30,
+        stockUnit: 'tablets',
+        unitPriceText: '৳1.20/tablet',
+        lowStockThreshold: 5,
+        archived: false,
+      },
+    ],
+    loading: false,
+  }),
+}));
+
+vi.mock('../../features/schedule/SchedulesContext', () => ({
+  useSchedules: () => ({
+    schedules: [
+      {
+        id: 'sched-1',
+        patientMedicationId: 'med-1',
+        doseAmount: 1,
+        doseUnit: 'tablets',
+        frequency: 'THREE_TIMES_DAILY',
+        intervalHours: null,
+        weekdays: [],
+        scheduledTimes: ['08:00', '14:00', '22:00'],
+        startDateYmd: '2026-11-23',
+        endDateYmd: null,
+        instructions: 'After breakfast',
+        remindersEnabled: false,
+        status: 'ACTIVE',
+      },
+    ],
+    pendingOccurrenceKeys: {},
+    getLocalRangeDoses: (startYmd: string, daysCount = 1) => ({
+      startDate: startYmd,
+      daysCount,
+      timezone: 'Local',
+      days: Array.from({ length: daysCount }, (_, idx) => ({
+        date: idx === 0 ? startYmd : `2026-11-${23 + idx}`,
+        totalCount: 1,
+        takenCount: 0,
+        skippedCount: 0,
+        pendingCount: 1,
+        items: [],
+      })),
+      summary: { total: 0, taken: 0, skipped: 0, remaining: 0 },
+      nextDose: null,
+    }),
+    createSchedule: vi.fn(),
+    updateScheduleById: mockUpdateScheduleById,
+    recordDoseAction: vi.fn(),
+  }),
 }));
 
 vi.mock('react-native-safe-area-context', () => ({
@@ -312,5 +403,88 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(errorEls[0].style.padding).toBe(16);
     expect(skeletonEls.some((e) => e.style.padding === 12)).toBe(true);
     expect(skeletonEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
+  });
+
+  it('computes keyboard-aware BottomSheet backdrop padding and maxHeight without overlap', () => {
+    const closed = computeKeyboardModalMetrics({
+      windowHeight: 800,
+      safeTop: 28,
+      safeBottom: 16,
+      keyboardInset: 0,
+    });
+    expect(closed.backdropPaddingBottom).toBe(0);
+    expect(closed.sheetPaddingBottom).toBe(28);
+    expect(closed.sheetMaxHeight).toBe(704);
+
+    const keyboardOpen = computeKeyboardModalMetrics({
+      windowHeight: 800,
+      safeTop: 28,
+      safeBottom: 16,
+      keyboardInset: 320,
+    });
+    expect(keyboardOpen.backdropPaddingBottom).toBe(320);
+    expect(keyboardOpen.sheetPaddingBottom).toBe(12);
+    expect(keyboardOpen.sheetMaxHeight).toBe(800 - 320 - 36);
+    expect(keyboardOpen.backdropPaddingBottom + keyboardOpen.sheetMaxHeight).toBeLessThanOrEqual(800);
+  });
+
+  it('keeps ScheduleScreen Saved Schedules responsive across 320px-768px, wires Dose History navigation, and prevents automatic medicine selection in ScheduleModal', () => {
+    mockRouterPush.mockClear();
+
+    for (const width of [320, 360, 390, 768]) {
+      __setMockWindowWidth(width);
+      const metrics = getResponsiveMetrics(width);
+      const screenEls = collectElements(ScheduleScreen());
+
+      const doseHistoryBtn = screenEls.find(
+        (e) => e.props.accessibilityLabel === 'Open Dose History',
+      );
+      expect(doseHistoryBtn).toBeDefined();
+      expect(hasClass(doseHistoryBtn!, 'min-h-[38px]')).toBe(true);
+      expect(doseHistoryBtn!.props.hitSlop).toBe(8);
+
+      const editBtn = screenEls.find(
+        (e) => e.props.accessibilityLabel === 'Edit Napa 500 mg schedule',
+      );
+      const pauseBtn = screenEls.find(
+        (e) => e.props.accessibilityLabel === 'Pause Napa 500 mg schedule',
+      );
+      expect(editBtn).toBeDefined();
+      expect(pauseBtn).toBeDefined();
+      expect(hasClass(editBtn!, 'min-h-[40px]')).toBe(true);
+      expect(hasClass(pauseBtn!, 'min-h-[40px]')).toBe(true);
+      if (metrics.stackTwoCol) {
+        expect(hasClass(editBtn!, 'w-full')).toBe(true);
+      } else {
+        expect(hasClass(editBtn!, 'flex-1')).toBe(true);
+        expect(hasClass(editBtn!, 'min-w-0')).toBe(true);
+      }
+    }
+
+    // Clicking Dose History navigates cleanly to /history?from=schedule
+    const defaultEls = collectElements(ScheduleScreen());
+    const historyBtn = defaultEls.find((e) => e.props.accessibilityLabel === 'Open Dose History');
+    (historyBtn!.props.onPress as () => void)();
+    expect(mockRouterPush).toHaveBeenCalledWith('/history?from=schedule');
+
+    // ScheduleModal opened normally does not auto-select any medicine and gates Save
+    const schedModalEls = collectElements(
+      ScheduleModal({
+        visible: true,
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+      }),
+    );
+    const selectPlaceholderBtn = schedModalEls.find(
+      (e) => e.props.accessibilityLabel === 'Select a medicine',
+    );
+    expect(selectPlaceholderBtn).toBeDefined();
+    expect(
+      schedModalEls.some((e) => e.props.accessibilityLabel === 'Change medicine'),
+    ).toBe(false);
+    const saveScheduleBtn = schedModalEls.find(
+      (e) => e.props.accessibilityLabel === 'Save Schedule',
+    );
+    expect(saveScheduleBtn?.props.disabled).toBe(true);
   });
 });

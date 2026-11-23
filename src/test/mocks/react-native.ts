@@ -16,6 +16,11 @@ export const __setMockWindowWidth = (width: number, height = 812, fontScale = 1)
 
 export const useWindowDimensions = () => mockWindowDimensions;
 
+export const Keyboard = {
+  addListener: () => ({ remove: () => {} }),
+  dismiss: () => {},
+};
+
 export const View = 'View';
 export const Text = 'Text';
 export const Pressable = 'Pressable';
