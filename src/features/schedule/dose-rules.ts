@@ -973,6 +973,24 @@ export function createFixtureDemoDoseEvents(todayYmd = getTodayLocalYmd()): Loca
 }
 
 /**
+ * Returns active (non-archived) medicines that do not currently have a booked
+ * (non-completed) dose schedule.
+ */
+export function getUnscheduledActiveMedications(
+  activeMedications: PersonalMedicationRecord[],
+  schedules: LocalScheduleRecord[],
+): PersonalMedicationRecord[] {
+  const bookedMedicationIds = new Set(
+    schedules
+      .filter((s) => s.status !== 'COMPLETED')
+      .map((s) => s.patientMedicationId),
+  );
+  return activeMedications.filter(
+    (m) => !m.archived && !bookedMedicationIds.has(m.id),
+  );
+}
+
+/**
  * Resolves the initial medicine for ScheduleModal.
  * Never auto-selects activeMeds[0] when creating a new schedule without an explicit target.
  */

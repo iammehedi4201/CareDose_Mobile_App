@@ -12,6 +12,7 @@ import {
   formatRecurrenceSummary,
   getDoseUnitOptions,
   getLocalScheduleTimesForDate,
+  getUnscheduledActiveMedications,
   isDuplicateScheduleDefinition,
   LocalScheduleRecord,
   mapApiScheduleToLocal,
@@ -397,5 +398,29 @@ describe('CareDose Simplified Create Dose / Schedule Modal — Domain & UI Rules
         makeSched({ patientMedicationId: 'med-cap' }),
       )?.id,
     ).toBe('med-cap');
+  });
+
+  it('hides medicines already booked for a dose schedule from new schedule selection', () => {
+    const existingSchedules: LocalScheduleRecord[] = [
+      makeSched({ id: 's-active', patientMedicationId: 'med-tab', status: 'ACTIVE' }),
+      makeSched({ id: 's-paused', patientMedicationId: 'med-cap', status: 'PAUSED' }),
+      makeSched({ id: 's-done', patientMedicationId: 'med-syrup', status: 'COMPLETED' }),
+    ];
+
+    const available = getUnscheduledActiveMedications(MEDS, existingSchedules);
+    const availableIds = available.map((m) => m.id);
+
+    // Booked medicines (ACTIVE or PAUSED) are hidden from the new schedule picker
+    expect(availableIds).not.toContain('med-tab');
+    expect(availableIds).not.toContain('med-cap');
+
+    // Completed or unbooked active medicines remain selectable
+    expect(availableIds).toContain('med-syrup');
+    expect(availableIds).toContain('med-drops');
+    expect(availableIds).toContain('med-supp');
+    expect(availableIds).toContain('med-inj');
+
+    // Explicitly passing an already-booked medicationId does not select it for creation
+    expect(resolveInitialScheduleMedication(available, 'med-tab', null)).toBeNull();
   });
 });

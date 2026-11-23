@@ -12,6 +12,7 @@ import {
   formatRecurrenceSummary,
   getDoseUnitOptions,
   getTodayLocalYmd,
+  getUnscheduledActiveMedications,
   LocalScheduleRecord,
   normalizeScheduleFrequencyCode,
   normalizeTimeTo24Hour,
@@ -120,14 +121,18 @@ export function ScheduleModal({
 }: ScheduleModalProps): React.JSX.Element {
   const router = useRouter();
   const { medications, loading: medsLoading } = useMedications();
-  const { createSchedule, updateScheduleById } = useSchedules();
+  const { schedules, createSchedule, updateScheduleById } = useSchedules();
 
   const activeMeds = useMemo(
     () => medications.filter((m) => !m.archived),
     [medications],
   );
-  const activeMedsRef = useRef(activeMeds);
-  activeMedsRef.current = activeMeds;
+  const availableMeds = useMemo(
+    () => getUnscheduledActiveMedications(activeMeds, schedules),
+    [activeMeds, schedules],
+  );
+  const availableMedsRef = useRef(availableMeds);
+  availableMedsRef.current = availableMeds;
   const medicationsRef = useRef(medications);
   medicationsRef.current = medications;
 
@@ -193,7 +198,7 @@ export function ScheduleModal({
     void initNotifs();
 
     const currentMeds = medicationsRef.current;
-    const currentActiveMeds = activeMedsRef.current;
+    const currentAvailableMeds = availableMedsRef.current;
 
     if (editingSchedule) {
       const targetMed = currentMeds.find((m) => m.id === editingSchedule.patientMedicationId);
@@ -245,7 +250,7 @@ export function ScheduleModal({
       );
     } else {
       const preferredMed = resolveInitialScheduleMedication(
-        currentActiveMeds,
+        currentAvailableMeds,
         initialMedicationId,
         null,
       );
@@ -284,12 +289,12 @@ export function ScheduleModal({
 
   const filteredMeds = useMemo(() => {
     const q = medSearchQuery.trim().toLowerCase();
-    if (!q) return activeMeds;
-    return activeMeds.filter((m) => {
+    if (!q) return availableMeds;
+    return availableMeds.filter((m) => {
       const hay = `${m.name} ${m.genericName ?? ''} ${m.strength ?? ''} ${m.dosageForm}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [activeMeds, medSearchQuery]);
+  }, [availableMeds, medSearchQuery]);
 
   const doseUnitOptions = useMemo(
     () => getDoseUnitOptions(selectedMed?.dosageForm, selectedMed?.stockUnit),
@@ -305,7 +310,7 @@ export function ScheduleModal({
   }, [doseAmountInput]);
 
   const handleSelectMedicine = (medId: string): void => {
-    const med = activeMeds.find((m) => m.id === medId);
+    const med = availableMeds.find((m) => m.id === medId);
     if (!med) return;
     setSelectedMedId(med.id);
     setSelectingMed(false);
@@ -523,11 +528,12 @@ export function ScheduleModal({
     }
   };
 
-  const canModifyMedicine = !lockMedicineSelection && !editingSchedule && activeMeds.length > 0;
+  const hasSelectableMeds = Boolean(editingSchedule) || availableMeds.length > 0 || Boolean(selectedMed);
+  const canModifyMedicine = !lockMedicineSelection && !editingSchedule && availableMeds.length > 0;
   const isSaveDisabled =
     saving ||
     medsLoading ||
-    activeMeds.length === 0 ||
+    !hasSelectableMeds ||
     !selectedMed ||
     parsedDoseNumber === null ||
     timeSlots.some((t) => t.trim().length === 0);
@@ -566,12 +572,12 @@ export function ScheduleModal({
       title={editingSchedule ? 'Edit Dose Schedule' : 'Create Dose Schedule'}
       iconName="clock"
       onClose={onClose}
-      onSubmit={activeMeds.length === 0 ? undefined : () => void handleSave()}
+      onSubmit={!hasSelectableMeds ? undefined : () => void handleSave()}
       submitLabel={editingSchedule ? 'Save Changes' : 'Save Schedule'}
       cancelLabel="Cancel"
       submitDisabled={isSaveDisabled}
       submitLoading={saving}
-      hideFooter={activeMeds.length === 0 && !medsLoading}
+      hideFooter={!hasSelectableMeds && !medsLoading}
     >
       {medsLoading ? (
         <View className="items-center rounded-card border border-border bg-background p-[18px]">
@@ -587,6 +593,26 @@ export function ScheduleModal({
           </Text>
           <Text className="mt-1 text-center text-xs leading-[17px] text-[#5A706B]">
             Add a medicine to your personal care list before creating a dose schedule.
+          </Text>
+          <View className="mt-3.5 w-full">
+            <PrimaryButton
+              fullWidth
+              label="Go to My Medicines"
+              onPress={() => {
+                onClose();
+                router.push('/medicines');
+              }}
+            />
+          </View>
+        </View>
+      ) : !hasSelectableMeds ? (
+        <View className="items-center rounded-card border border-border bg-background p-[18px]">
+          <Feather name="check-circle" size={26} color={CAREDOSE_EXTENDED_COLORS.primary} />
+          <Text className="mt-2 text-center text-[15px] font-bold text-main">
+            All active medicines are already scheduled
+          </Text>
+          <Text className="mt-1 text-center text-xs leading-[17px] text-[#5A706B]">
+            Every medicine in My Medicines already has a booked dose schedule. Edit an existing schedule or add a new medicine first.
           </Text>
           <View className="mt-3.5 w-full">
             <PrimaryButton

@@ -247,8 +247,8 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         <PrimaryButton
           compact
           fullWidth={layout.stackTwoCol}
-          label="Create Dose"
-          onPress={() => openDoseScheduleModal()}
+          label={medSchedules.length > 0 ? 'Edit Schedule' : 'Create Dose'}
+          onPress={() => openDoseScheduleModal(medSchedules[0])}
           className={layout.stackTwoCol ? '' : 'flex-1 min-w-0'}
         />
         <SecondaryButton

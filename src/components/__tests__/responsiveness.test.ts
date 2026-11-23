@@ -63,6 +63,19 @@ vi.mock('../../features/medications/MedicationsContext', () => ({
         lowStockThreshold: 5,
         archived: false,
       },
+      {
+        id: 'med-2',
+        name: 'Seclo',
+        genericName: 'Omeprazole',
+        strength: '20 mg',
+        dosageForm: 'Capsule',
+        instructions: 'Before breakfast',
+        stockRemaining: 14,
+        stockUnit: 'capsules',
+        unitPriceText: '৳7.00/capsule',
+        lowStockThreshold: 5,
+        archived: false,
+      },
     ],
     loading: false,
   }),
@@ -486,5 +499,41 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       (e) => e.props.accessibilityLabel === 'Save Schedule',
     );
     expect(saveScheduleBtn?.props.disabled).toBe(true);
+
+    // Clicking "Select a medicine" lists only unscheduled medicines (Seclo), never booked Napa
+    const openedListEls = collectElements(
+      ScheduleModal({
+        visible: true,
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+      }),
+    );
+    expect(
+      openedListEls.some((e) => e.props.accessibilityLabel === 'Select Napa'),
+    ).toBe(false);
+    // Editing the booked Napa schedule still renders Napa cleanly
+    const editNapaEls = collectElements(
+      ScheduleModal({
+        visible: true,
+        editingSchedule: {
+          id: 'sched-1',
+          patientMedicationId: 'med-1',
+          doseAmount: 1,
+          doseUnit: 'tablets',
+          frequency: 'THREE_TIMES_DAILY',
+          intervalHours: null,
+          weekdays: [],
+          scheduledTimes: ['08:00', '14:00', '22:00'],
+          startDateYmd: '2026-11-23',
+          endDateYmd: null,
+          instructions: 'After breakfast',
+          remindersEnabled: false,
+          status: 'ACTIVE',
+        },
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+      }),
+    );
+    expect(editNapaEls.some((e) => e.props.children === 'Napa')).toBe(true);
   });
 });
