@@ -133,3 +133,26 @@ export function resolveActiveBottomTab(pathname: string): PrimaryTabKey {
   }
   return 'home';
 }
+
+export const SCHEDULE_PERIOD_META = {
+  Morning: {
+    icon: 'sun',
+    bgClass: 'bg-[#FFF3DC]',
+    color: '#D98A1B',
+  },
+  Afternoon: {
+    icon: 'sun',
+    bgClass: 'bg-mint',
+    color: '#087E67',
+  },
+  Evening: {
+    icon: 'sunset',
+    bgClass: 'bg-[#FCEFE6]',
+    color: '#C96A2E',
+  },
+  Bedtime: {
+    icon: 'moon',
+    bgClass: 'bg-[#EBF2FC]',
+    color: '#4B7FD1',
+  },
+} as const;

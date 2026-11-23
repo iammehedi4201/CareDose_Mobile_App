@@ -378,6 +378,10 @@ describe('CareDose Simplified Create Dose / Schedule Modal — Domain & UI Rules
     expect(modalSource).not.toContain('StyleSheet.create');
     expect(modalSource).toContain('className=');
 
+    // Booked medicines are excluded from new schedule selection
+    expect(modalSource).toContain('getUnscheduledActiveMedications');
+    expect(modalSource).toContain('All active medicines are already scheduled');
+
     // Notification safety: reminders never auto-mark Taken
     expect(notifSource).toContain('autoMarkTaken: false');
     expect(modalSource).toContain('Alerts never mark doses Taken automatically.');

@@ -481,8 +481,15 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
                 </Text>
               </View>
               <StatusBadge
-                variant={sched.status === 'ACTIVE' ? 'active' : 'archived'}
-                label={sched.status === 'ACTIVE' ? 'Active' : 'Paused'}
+                variant={
+                  sched.status === 'ACTIVE'
+                    ? 'active'
+                    : sched.status === 'PAUSED'
+                      ? 'paused'
+                      : sched.status === 'COMPLETED'
+                        ? 'completed'
+                        : 'archived'
+                }
               />
             </View>
           ))

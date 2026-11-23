@@ -96,6 +96,7 @@ export default function MyMedicinesScreen(): React.JSX.Element {
               genericName={med.genericName}
               strength={med.strength}
               dosageForm={med.dosageForm}
+              imageUrl={med.imageUrl}
               stockText={formatStockWithUnit(med.stockRemaining, med.stockUnit)}
               rightSubtext={med.unitPriceText !== 'Not listed' ? med.unitPriceText : undefined}
               priceText={

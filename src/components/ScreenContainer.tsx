@@ -10,6 +10,7 @@ export interface ScreenContainerProps extends AppHeaderProps {
   children: React.ReactNode;
   activeTabOverride?: PrimaryTabKey;
   scrollable?: boolean;
+  hideHeader?: boolean;
 }
 
 export function ScreenContainer({
@@ -18,23 +19,28 @@ export function ScreenContainer({
   subtitle,
   onBack,
   primaryAction,
+  overflowAction,
   rightBadgeText,
   activeTabOverride,
   scrollable = true,
+  hideHeader = false,
   children,
 }: ScreenContainerProps): React.JSX.Element {
   const layout = useResponsiveLayout();
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom', 'left', 'right']}>
-      <AppHeader
-        title={title}
-        eyebrow={eyebrow}
-        subtitle={subtitle}
-        onBack={onBack}
-        primaryAction={primaryAction}
-        rightBadgeText={rightBadgeText}
-      />
+      {!hideHeader ? (
+        <AppHeader
+          title={title}
+          eyebrow={eyebrow}
+          subtitle={subtitle}
+          onBack={onBack}
+          primaryAction={primaryAction}
+          overflowAction={overflowAction}
+          rightBadgeText={rightBadgeText}
+        />
+      ) : null}
 
       {scrollable ? (
         <ScrollView

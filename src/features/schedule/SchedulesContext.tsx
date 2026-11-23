@@ -9,9 +9,11 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiRequestError, readSavedAuthSession } from '../../api/config';
 import {
+  archiveSchedule,
   createMedicationSchedule,
   DailyDosesResponseDto,
   deleteSchedule,
+  DoseHistoryItemDto,
   DoseHistoryResponseDto,
   getPatientDoses,
   listPatientDoseHistory,
@@ -38,6 +40,7 @@ import {
 } from './dose-rules';
 import {
   cancelScheduleNotifications,
+  reconcileScheduleNotifications,
   syncScheduleNotifications,
 } from './notifications';
 
@@ -101,6 +104,7 @@ interface SchedulesContextValue {
     scheduleId: string,
     updates: UpdateScheduleInput,
   ) => Promise<LocalScheduleRecord | null>;
+  archiveScheduleById: (scheduleId: string) => Promise<LocalScheduleRecord | null>;
   deleteScheduleById: (scheduleId: string) => Promise<void>;
   recordDoseAction: (
     item: ScheduledDoseItemDto,
@@ -110,7 +114,7 @@ interface SchedulesContextValue {
   queryDoseHistory: (query: {
     fromDate?: string;
     toDate?: string;
-    status?: 'all' | 'taken' | 'skipped';
+    status?: 'all' | 'taken' | 'skipped' | 'missed';
     medicationId?: string | null;
     cursor?: string | null;
     limit?: number;
@@ -170,8 +174,12 @@ export function SchedulesProvider({
             }),
           ]);
           const mappedScheds = remoteSchedules.map(mapApiScheduleToLocal);
-          const mappedEvents: LocalDoseEventRecord[] = remoteHistory.items.map(
-            (ev) => ({
+          const mappedEvents: LocalDoseEventRecord[] = remoteHistory.items
+            .filter(
+              (ev): ev is DoseHistoryItemDto & { status: 'taken' | 'skipped' } =>
+                ev.status === 'taken' || ev.status === 'skipped',
+            )
+            .map((ev) => ({
               id: ev.id,
               occurrenceKey: `${ev.scheduleId}:${ev.scheduledFor}`,
               scheduleId: ev.scheduleId,
@@ -182,10 +190,13 @@ export function SchedulesProvider({
               status: ev.status,
               recordedAt: ev.recordedAt ?? ev.scheduledFor,
               note: ev.note,
-            }),
-          );
+            }));
           setSchedules(mappedScheds);
           setDoseEvents(mappedEvents);
+          void reconcileScheduleNotifications(
+            mappedScheds,
+            (medId) => getMedicationById(medId)?.name ?? 'Medicine',
+          );
           await Promise.all([
             persistSchedules(mappedScheds),
             persistEvents(mappedEvents),
@@ -459,6 +470,44 @@ export function SchedulesProvider({
     [getMedicationById, persistSchedules],
   );
 
+  const archiveScheduleById = useCallback(
+    async (scheduleId: string): Promise<LocalScheduleRecord | null> => {
+      const session = await readSavedAuthSession();
+      if (session && UUID_PREFIX_RE.test(scheduleId)) {
+        try {
+          const archivedRemote = await archiveSchedule(scheduleId, session.token);
+          const mapped = mapApiScheduleToLocal(archivedRemote);
+          setSchedules((prev) => {
+            const next = prev.map((s) => (s.id === scheduleId ? mapped : s));
+            void persistSchedules(next);
+            return next;
+          });
+          void cancelScheduleNotifications(scheduleId);
+          return mapped;
+        } catch (err) {
+          if (err instanceof ApiRequestError && !err.isNetworkError) {
+            throw err;
+          }
+          // Fall back cleanly to local archive state
+        }
+      }
+
+      let archivedItem: LocalScheduleRecord | null = null;
+      setSchedules((prev) => {
+        const next = prev.map((s) => {
+          if (s.id !== scheduleId) return s;
+          archivedItem = { ...s, status: 'ARCHIVED' };
+          return archivedItem;
+        });
+        void persistSchedules(next);
+        return next;
+      });
+      void cancelScheduleNotifications(scheduleId);
+      return archivedItem;
+    },
+    [persistSchedules],
+  );
+
   const deleteScheduleById = useCallback(
     async (scheduleId: string): Promise<void> => {
       const session = await readSavedAuthSession();
@@ -665,7 +714,7 @@ export function SchedulesProvider({
     async (query: {
       fromDate?: string;
       toDate?: string;
-      status?: 'all' | 'taken' | 'skipped';
+      status?: 'all' | 'taken' | 'skipped' | 'missed';
       medicationId?: string | null;
       cursor?: string | null;
       limit?: number;
@@ -694,7 +743,9 @@ export function SchedulesProvider({
                   ? 'TAKEN'
                   : query.status === 'skipped'
                     ? 'SKIPPED'
-                    : 'ALL',
+                    : query.status === 'missed'
+                      ? 'MISSED'
+                      : 'ALL',
               medicationId: query.medicationId ?? undefined,
               cursor: query.cursor ?? undefined,
               limit: query.limit ?? 20,
@@ -703,7 +754,7 @@ export function SchedulesProvider({
           if (query.cursor) {
             return remoteRes;
           }
-          // Merge any local-only dose events not yet present in the remote response
+          // Merge any local-only dose events or local-only schedule missed items not present in remote response
           const remoteKeys = new Set(
             remoteRes.items.map((it) => `${it.scheduleId}:${it.scheduledFor}`),
           );
@@ -718,9 +769,9 @@ export function SchedulesProvider({
           const mergedItems = [...localOnly, ...remoteRes.items].sort((a, b) =>
             b.scheduledFor.localeCompare(a.scheduledFor),
           );
-          const localOnlyTaken = filterLocalDoseHistory(
+          const localOnlyCounts = filterLocalDoseHistory(
             doseEvents.filter((ev) => !UUID_PREFIX_RE.test(ev.scheduleId)),
-            schedules,
+            schedules.filter((s) => !UUID_PREFIX_RE.test(s.id)),
             medications,
             {
               fromDate: query.fromDate,
@@ -732,9 +783,10 @@ export function SchedulesProvider({
           return {
             items: mergedItems,
             counts: {
-              all: remoteRes.counts.all + localOnlyTaken.all,
-              taken: remoteRes.counts.taken + localOnlyTaken.taken,
-              skipped: remoteRes.counts.skipped + localOnlyTaken.skipped,
+              all: remoteRes.counts.all + localOnlyCounts.all,
+              taken: remoteRes.counts.taken + localOnlyCounts.taken,
+              skipped: remoteRes.counts.skipped + localOnlyCounts.skipped,
+              missed: remoteRes.counts.missed + localOnlyCounts.missed,
             },
             hasMore: remoteRes.hasMore,
             nextCursor: remoteRes.nextCursor,
@@ -771,6 +823,7 @@ export function SchedulesProvider({
         fetchRemoteRangeDoses,
         createSchedule,
         updateScheduleById,
+        archiveScheduleById,
         deleteScheduleById,
         recordDoseAction,
         queryDoseHistory,

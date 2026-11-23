@@ -3,6 +3,7 @@ export * from './AppHeader';
 export * from './BottomNavigation';
 export * from './Buttons';
 export * from './DoseCard';
+export * from './DoseProgressCard';
 export * from './FeedbackStates';
 export * from './FilterChips';
 export * from './FormFields';

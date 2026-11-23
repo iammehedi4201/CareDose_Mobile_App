@@ -140,18 +140,64 @@ describe('Phase 6 — Mobile Schedule & Dose History Rules', () => {
     expect(week.days.map((d) => d.totalCount)).toEqual([1, 0, 1, 0, 1, 0, 0]);
 
     const today = '2026-11-22';
+    const graceBoundaryNow = buildLocalOccurrenceDate(today, '08:45');
     const history = filterLocalDoseHistory(
       createFixtureDemoDoseEvents(today),
-      createFixtureDemoSchedules(today),
+      [],
       DEMO_FIXTURE_MEDS,
       {
         fromDate: addDaysYmd(today, -2),
         toDate: today,
         status: 'skipped',
       },
+      graceBoundaryNow,
     );
-    expect(history.counts).toEqual({ all: 5, taken: 4, skipped: 1 });
+    expect(history.counts).toEqual({ all: 5, taken: 4, skipped: 1, missed: 0 });
     expect(history.items).toHaveLength(1);
     expect(history.items[0].medicineName).toBe('Lumigan Drops 0.01%');
+
+    // Missed history only includes ACTIVE occurrences strictly past grace period
+    const activeSched = [
+      {
+        id: 'sched-missed-check',
+        patientMedicationId: 'm1',
+        doseAmount: 1,
+        doseUnit: 'tablet',
+        frequency: 'DAILY',
+        scheduledTimes: ['08:00', '20:00'],
+        startDateYmd: today,
+        endDateYmd: null,
+        instructions: null,
+        remindersEnabled: true,
+        status: 'ACTIVE' as const,
+      },
+    ];
+    const withinGrace = filterLocalDoseHistory(
+      [],
+      activeSched,
+      DEMO_FIXTURE_MEDS,
+      { fromDate: today, toDate: today, status: 'all' },
+      buildLocalOccurrenceDate(today, '08:45'),
+    );
+    expect(withinGrace.counts).toEqual({ all: 0, taken: 0, skipped: 0, missed: 0 });
+
+    const pastGrace = filterLocalDoseHistory(
+      [],
+      activeSched,
+      DEMO_FIXTURE_MEDS,
+      { fromDate: today, toDate: today, status: 'missed' },
+      buildLocalOccurrenceDate(today, '09:15'),
+    );
+    expect(pastGrace.counts).toEqual({ all: 1, taken: 0, skipped: 0, missed: 1 });
+    expect(pastGrace.items[0].scheduledTime12).toBe('08:00 AM');
+
+    const pausedNotMissed = filterLocalDoseHistory(
+      [],
+      [{ ...activeSched[0], status: 'PAUSED' as const }],
+      DEMO_FIXTURE_MEDS,
+      { fromDate: today, toDate: today, status: 'missed' },
+      buildLocalOccurrenceDate(today, '09:15'),
+    );
+    expect(pausedNotMissed.counts.missed).toBe(0);
   });
 });

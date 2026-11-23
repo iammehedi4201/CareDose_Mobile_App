@@ -437,6 +437,15 @@ export function format24To12Hour(time24: string): string {
   return `${String(h12).padStart(2, '0')}:${mStr} ${mer}`;
 }
 
+export function formatIsoTimestampTo12Hour(iso?: string | null): string | null {
+  if (!iso) return null;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const hh = String(parsed.getHours()).padStart(2, '0');
+  const mm = String(parsed.getMinutes()).padStart(2, '0');
+  return format24To12Hour(`${hh}:${mm}`);
+}
+
 export function classifyDayPeriod(time24Or12: string): SchedulePeriodGroupDto {
   const norm = normalizeTimeTo24Hour(time24Or12);
   const h = Number(norm.slice(0, 2));
@@ -572,6 +581,11 @@ export function formatDayHeadingLabel(ymd: string, todayYmd = getTodayLocalYmd()
           ? 'Tomorrow · '
           : '';
   return `${prefix}${WEEKDAY_SHORT[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
+export function formatScheduleBarDateLabel(ymd: string): string {
+  const d = parseYmdToLocalDate(ymd);
+  return `${WEEKDAY_SHORT[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
 export function formatHistoryDateLabel(ymd: string): string {
@@ -741,6 +755,7 @@ export function expandLocalScheduleOccurrencesForRange(
           medicineName: med.name,
           strength: med.strength ?? null,
           dosageForm: med.dosageForm,
+          imageUrl: med.imageUrl ?? null,
           doseAmount: Number(sched.doseAmount).toFixed(2),
           doseUnit: sched.doseUnit,
           doseInstruction: note
@@ -789,6 +804,97 @@ export function expandLocalScheduleOccurrencesForRange(
   };
 }
 
+export function resolveEffectiveScheduleStatus(
+  schedule: Pick<LocalScheduleRecord, 'status' | 'endDateYmd'>,
+  todayYmd: string = getTodayLocalYmd(),
+): ScheduleStatusDto {
+  if (
+    schedule.status === 'ACTIVE' &&
+    schedule.endDateYmd &&
+    schedule.endDateYmd < todayYmd
+  ) {
+    return 'COMPLETED';
+  }
+  return schedule.status;
+}
+
+function buildMissedLocalDoseHistoryItems(
+  schedules: LocalScheduleRecord[],
+  medMap: Map<string, PersonalMedicationRecord>,
+  recordedSlotKeys: Set<string>,
+  filter: {
+    fromDate?: string;
+    toDate?: string;
+    medicationId?: string | null;
+  },
+  now: Date,
+): DoseHistoryItemDto[] {
+  const todayYmd = getTodayLocalYmd(now);
+  const scanToYmd = filter.toDate && filter.toDate < todayYmd ? filter.toDate : todayYmd;
+  const defaultStartYmd = addDaysYmd(todayYmd, -30);
+  const earliestSafeYmd = addDaysYmd(scanToYmd, -120);
+  const lowerBoundYmd = filter.fromDate
+    ? filter.fromDate < earliestSafeYmd
+      ? earliestSafeYmd
+      : filter.fromDate
+    : defaultStartYmd;
+
+  if (lowerBoundYmd > scanToYmd) {
+    return [];
+  }
+
+  const missed: DoseHistoryItemDto[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const sched of schedules) {
+    if (sched.status !== 'ACTIVE') continue;
+    if (filter.medicationId && sched.patientMedicationId !== filter.medicationId) {
+      continue;
+    }
+    const med = medMap.get(sched.patientMedicationId);
+    if (!med || med.archived) continue;
+
+    const endLimitYmd =
+      sched.endDateYmd && sched.endDateYmd < scanToYmd ? sched.endDateYmd : scanToYmd;
+    let cursorYmd =
+      lowerBoundYmd > sched.startDateYmd ? lowerBoundYmd : sched.startDateYmd;
+
+    while (cursorYmd <= endLimitYmd) {
+      const times = getLocalScheduleTimesForDate(sched, cursorYmd);
+      for (const time24 of times) {
+        const scheduledFor = buildLocalOccurrenceDate(cursorYmd, time24).toISOString();
+        const slotKey = `${sched.id}:${scheduledFor}`;
+        if (seenKeys.has(slotKey) || recordedSlotKeys.has(slotKey)) {
+          continue;
+        }
+        if (computeDoseDisplayStatus(scheduledFor, null, now) !== 'missed') {
+          continue;
+        }
+        seenKeys.add(slotKey);
+        missed.push({
+          id: `missed:${slotKey}`,
+          scheduleId: sched.id,
+          patientMedicationId: med.id,
+          medicineName: med.name,
+          strength: med.strength ?? null,
+          dosageForm: med.dosageForm,
+          doseAmount: Number(sched.doseAmount ?? 1).toFixed(2),
+          doseUnit: sched.doseUnit,
+          scheduledDateYmd: cursorYmd,
+          scheduledTime12: format24To12Hour(time24),
+          scheduledFor,
+          recordedAt: null,
+          status: 'missed',
+          note: null,
+        });
+      }
+      cursorYmd = addDaysYmd(cursorYmd, 1);
+    }
+  }
+
+  return missed;
+}
+
 export function filterLocalDoseHistory(
   events: LocalDoseEventRecord[],
   schedules: LocalScheduleRecord[],
@@ -796,37 +902,31 @@ export function filterLocalDoseHistory(
   filter: {
     fromDate?: string;
     toDate?: string;
-    status?: 'all' | 'taken' | 'skipped';
+    status?: 'all' | 'taken' | 'skipped' | 'missed';
     medicationId?: string | null;
   },
+  now: Date = new Date(),
 ): DoseHistoryResponseDto {
   const schedMap = new Map(schedules.map((s) => [s.id, s]));
   const medMap = new Map(medications.map((m) => [m.id, m]));
 
-  const baseMatches = events.filter((ev) => {
+  const recordedSlotKeys = new Set<string>();
+  const recordedItems: DoseHistoryItemDto[] = [];
+
+  for (const ev of events) {
+    recordedSlotKeys.add(`${ev.scheduleId}:${ev.scheduledFor}`);
     if (filter.medicationId && ev.patientMedicationId !== filter.medicationId) {
-      return false;
+      continue;
     }
     if (filter.fromDate && ev.scheduledDateYmd < filter.fromDate) {
-      return false;
+      continue;
     }
     if (filter.toDate && ev.scheduledDateYmd > filter.toDate) {
-      return false;
+      continue;
     }
-    return true;
-  });
-
-  const takenCount = baseMatches.filter((e) => e.status === 'taken').length;
-  const skippedCount = baseMatches.filter((e) => e.status === 'skipped').length;
-
-  const statusFiltered = baseMatches
-    .filter((ev) => !filter.status || filter.status === 'all' || ev.status === filter.status)
-    .sort((a, b) => b.scheduledFor.localeCompare(a.scheduledFor));
-
-  const items: DoseHistoryItemDto[] = statusFiltered.map((ev) => {
     const med = medMap.get(ev.patientMedicationId);
     const sched = schedMap.get(ev.scheduleId);
-    return {
+    recordedItems.push({
       id: ev.id,
       scheduleId: ev.scheduleId,
       patientMedicationId: ev.patientMedicationId,
@@ -841,15 +941,36 @@ export function filterLocalDoseHistory(
       recordedAt: ev.recordedAt,
       status: ev.status,
       note: ev.note,
-    };
-  });
+    });
+  }
+
+  const missedItems = buildMissedLocalDoseHistoryItems(
+    schedules,
+    medMap,
+    recordedSlotKeys,
+    filter,
+    now,
+  );
+
+  const combined = [...recordedItems, ...missedItems].sort((a, b) =>
+    b.scheduledFor.localeCompare(a.scheduledFor),
+  );
+
+  const takenCount = combined.filter((e) => e.status === 'taken').length;
+  const skippedCount = combined.filter((e) => e.status === 'skipped').length;
+  const missedCount = combined.filter((e) => e.status === 'missed').length;
+
+  const items = combined.filter(
+    (item) => !filter.status || filter.status === 'all' || item.status === filter.status,
+  );
 
   return {
     items,
     counts: {
-      all: baseMatches.length,
+      all: combined.length,
       taken: takenCount,
       skipped: skippedCount,
+      missed: missedCount,
     },
     hasMore: false,
     nextCursor: null,
@@ -979,10 +1100,14 @@ export function createFixtureDemoDoseEvents(todayYmd = getTodayLocalYmd()): Loca
 export function getUnscheduledActiveMedications(
   activeMedications: PersonalMedicationRecord[],
   schedules: LocalScheduleRecord[],
+  todayYmd: string = getTodayLocalYmd(),
 ): PersonalMedicationRecord[] {
   const bookedMedicationIds = new Set(
     schedules
-      .filter((s) => s.status !== 'COMPLETED')
+      .filter((s) => {
+        const eff = resolveEffectiveScheduleStatus(s, todayYmd);
+        return eff !== 'COMPLETED' && eff !== 'ARCHIVED';
+      })
       .map((s) => s.patientMedicationId),
   );
   return activeMedications.filter(

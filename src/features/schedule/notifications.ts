@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import type { ScheduleStatusDto } from '../../api/schedules';
 import {
   addDaysYmd,
   buildLocalOccurrenceDate,
@@ -6,6 +7,7 @@ import {
   getLocalScheduleTimesForDate,
   getTodayLocalYmd,
   LocalScheduleRecord,
+  resolveEffectiveScheduleStatus,
 } from './dose-rules';
 
 export interface NotificationCapabilityState {
@@ -16,15 +18,36 @@ export interface NotificationCapabilityState {
 }
 
 type NotificationsModule = typeof import('expo-notifications');
+type MinimalNotificationsClient = Pick<
+  NotificationsModule,
+  | 'getPermissionsAsync'
+  | 'requestPermissionsAsync'
+  | 'getAllScheduledNotificationsAsync'
+  | 'cancelScheduledNotificationAsync'
+  | 'scheduleNotificationAsync'
+> & {
+  SchedulableTriggerInputTypes: { DATE: NotificationsModule['SchedulableTriggerInputTypes']['DATE'] };
+};
 
-function loadNotificationsModule(): NotificationsModule | null {
+let testNotificationsClient: MinimalNotificationsClient | null = null;
+
+export function __setNotificationsClientForTesting(
+  client: MinimalNotificationsClient | null,
+): void {
+  testNotificationsClient = client;
+}
+
+function loadNotificationsModule(): MinimalNotificationsClient | null {
+  if (testNotificationsClient) {
+    return testNotificationsClient;
+  }
   if (Platform.OS === 'web') {
     return null;
   }
   try {
     // Lazy require avoids crashing Vitest / Web SSR runtimes without native bindings
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('expo-notifications') as NotificationsModule;
+    const mod = require('expo-notifications') as MinimalNotificationsClient;
     if (typeof mod?.getPermissionsAsync === 'function') {
       return mod;
     }
@@ -121,6 +144,32 @@ export async function cancelScheduleNotifications(scheduleId: string): Promise<v
   }
 }
 
+export function describeScheduleReminderStatus(
+  remindersEnabled: boolean,
+  effectiveStatus: ScheduleStatusDto,
+  capability: NotificationCapabilityState,
+): { active: boolean; label: string } {
+  if (effectiveStatus === 'ARCHIVED') {
+    return { active: false, label: 'Reminders: Off (archived)' };
+  }
+  if (effectiveStatus === 'COMPLETED') {
+    return { active: false, label: 'Reminders: Off (completed)' };
+  }
+  if (effectiveStatus === 'PAUSED') {
+    return { active: false, label: 'Reminders: Paused' };
+  }
+  if (!remindersEnabled) {
+    return { active: false, label: 'Reminders: Off' };
+  }
+  if (!capability.supported) {
+    return { active: false, label: 'Reminders: Unavailable on web' };
+  }
+  if (!capability.granted) {
+    return { active: false, label: 'Reminders: Permission needed' };
+  }
+  return { active: true, label: 'Reminders: On' };
+}
+
 /**
  * Schedules real local device notification alerts for upcoming doses when supported & granted.
  * Notifications ONLY alert the user and never mark doses as Taken automatically.
@@ -128,10 +177,13 @@ export async function cancelScheduleNotifications(scheduleId: string): Promise<v
 export async function syncScheduleNotifications(
   schedule: LocalScheduleRecord,
   medicineName: string,
+  now: Date = new Date(),
 ): Promise<{ scheduledCount: number }> {
   await cancelScheduleNotifications(schedule.id);
 
-  if (!schedule.remindersEnabled || schedule.status !== 'ACTIVE') {
+  const todayYmd = getTodayLocalYmd(now);
+  const effectiveStatus = resolveEffectiveScheduleStatus(schedule, todayYmd);
+  if (!schedule.remindersEnabled || effectiveStatus !== 'ACTIVE') {
     return { scheduledCount: 0 };
   }
 
@@ -145,8 +197,6 @@ export async function syncScheduleNotifications(
     return { scheduledCount: 0 };
   }
 
-  const now = new Date();
-  const todayYmd = getTodayLocalYmd(now);
   let scheduledCount = 0;
 
   try {
@@ -182,4 +232,46 @@ export async function syncScheduleNotifications(
   }
 
   return { scheduledCount };
+}
+
+export async function reconcileScheduleNotifications(
+  schedules: LocalScheduleRecord[],
+  resolveMedName: (medicationId: string) => string,
+  now: Date = new Date(),
+): Promise<void> {
+  const Notifications = loadNotificationsModule();
+  if (!Notifications) return;
+
+  const todayYmd = getTodayLocalYmd(now);
+  const scheduleMap = new Map(schedules.map((s) => [s.id, s]));
+
+  try {
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    const orphanedIds = new Set<string>();
+    for (const item of existing) {
+      const rawId = item.content?.data?.scheduleId;
+      if (typeof rawId !== 'string') continue;
+      const sched = scheduleMap.get(rawId);
+      const eff = sched ? resolveEffectiveScheduleStatus(sched, todayYmd) : null;
+      if (!sched || !sched.remindersEnabled || eff !== 'ACTIVE') {
+        orphanedIds.add(rawId);
+      }
+    }
+    for (const scheduleId of orphanedIds) {
+      await cancelScheduleNotifications(scheduleId);
+    }
+  } catch {
+    // Ignore read/cancel errors cleanly
+  }
+
+  for (const sched of schedules) {
+    const eff = resolveEffectiveScheduleStatus(sched, todayYmd);
+    if (eff === 'ACTIVE' && sched.remindersEnabled) {
+      await syncScheduleNotifications(
+        sched,
+        resolveMedName(sched.patientMedicationId),
+        now,
+      );
+    }
+  }
 }

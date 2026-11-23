@@ -168,6 +168,7 @@ describe('Phase 2 — Mobile UI Foundation & Design System Component Logic', () 
     const expectedPaths = [
       '/',
       '/schedule',
+      '/schedules',
       '/medicines',
       '/medicines/med-1',
       '/explore',

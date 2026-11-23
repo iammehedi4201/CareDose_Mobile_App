@@ -5,6 +5,7 @@ import { getResponsiveMetrics, VIEWPORT_BREAKPOINTS } from '../../theme/responsi
 import { computeKeyboardModalMetrics } from '../BottomSheetContext';
 import { PrimaryButton, SecondaryButton } from '../Buttons';
 import { DoseCard } from '../DoseCard';
+import { DoseProgressCard } from '../DoseProgressCard';
 import { EmptyState, ErrorState, LoadingSkeleton, SuccessToast } from '../FeedbackStates';
 import { FormCol, FormRow } from '../FormFields';
 import { MedicineCard } from '../MedicineCard';
@@ -14,23 +15,52 @@ import { StatusBadge } from '../StatusBadge';
 import { AppHeader } from '../AppHeader';
 import { BottomNavigation } from '../BottomNavigation';
 import { ScreenContainer } from '../ScreenContainer';
+import HomeScreen from '../../../app/index';
 import ScheduleScreen from '../../../app/schedule';
+import ManageSchedulesScreen from '../../../app/schedules';
+import DoseHistoryScreen from '../../../app/history';
 
 const mockRouterPush = vi.fn();
 const mockRouterNavigate = vi.fn();
 const mockRouterBack = vi.fn();
 const mockUpdateScheduleById = vi.fn(() => Promise.resolve(null));
+const mockArchiveScheduleById = vi.fn(() => Promise.resolve(null));
+const mockRecordDoseAction = vi.fn(async () => ({
+  status: 'taken' as const,
+  stockDeducted: true,
+  deductedQuantity: 1,
+  stockUnit: 'tablet',
+  idempotentReplay: false,
+}));
+const mockQueryDoseHistory = vi.fn(async () => ({
+  items: [],
+  counts: { all: 0, taken: 0, skipped: 0, missed: 0 },
+  hasMore: false,
+  nextCursor: null,
+}));
+let mockSchedulesOverride: unknown[] | null = null;
+let mockDayItemsOverride: unknown[] | null = null;
+let mockUseStateOverrides: unknown[] | null = null;
+let mockUseStateIndex = 0;
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
   const mockReact = {
     ...actual,
-    useState: <T,>(init: T | (() => T)) =>
-      [typeof init === 'function' ? (init as () => T)() : init, vi.fn()] as const,
+    useState: <T,>(init: T | (() => T)) => {
+      if (mockUseStateOverrides && mockUseStateIndex < mockUseStateOverrides.length) {
+        const val = mockUseStateOverrides[mockUseStateIndex] as T;
+        mockUseStateIndex += 1;
+        return [val, vi.fn()] as const;
+      }
+      return [typeof init === 'function' ? (init as () => T)() : init, vi.fn()] as const;
+    },
     useRef: <T,>(init: T) => ({ current: init }),
     useEffect: vi.fn(),
     useCallback: <T,>(fn: T) => fn,
     useMemo: <T,>(fn: () => T) => fn(),
+    useContext: <T,>(ctx: React.Context<T>) =>
+      (ctx as unknown as { _currentValue: T })._currentValue,
   };
   return {
     ...mockReact,
@@ -45,6 +75,7 @@ vi.mock('expo-router', () => ({
     back: mockRouterBack,
   }),
   usePathname: () => '/',
+  useLocalSearchParams: () => ({}),
 }));
 
 vi.mock('../../features/medications/MedicationsContext', () => ({
@@ -83,7 +114,7 @@ vi.mock('../../features/medications/MedicationsContext', () => ({
 
 vi.mock('../../features/schedule/SchedulesContext', () => ({
   useSchedules: () => ({
-    schedules: [
+    schedules: mockSchedulesOverride ?? [
       {
         id: 'sched-1',
         patientMedicationId: 'med-1',
@@ -100,25 +131,36 @@ vi.mock('../../features/schedule/SchedulesContext', () => ({
         status: 'ACTIVE',
       },
     ],
+    doseEvents: [],
+    loading: false,
     pendingOccurrenceKeys: {},
     getLocalRangeDoses: (startYmd: string, daysCount = 1) => ({
       startDate: startYmd,
       daysCount,
       timezone: 'Local',
-      days: Array.from({ length: daysCount }, (_, idx) => ({
-        date: idx === 0 ? startYmd : `2026-11-${23 + idx}`,
-        totalCount: 1,
-        takenCount: 0,
-        skippedCount: 0,
-        pendingCount: 1,
-        items: [],
-      })),
+      days: Array.from({ length: daysCount }, (_, idx) => {
+        const items = idx === 0 && mockDayItemsOverride ? mockDayItemsOverride : [];
+        return {
+          date: idx === 0 ? startYmd : `2026-11-${23 + idx}`,
+          totalCount: items.length || 1,
+          takenCount: 0,
+          skippedCount: 0,
+          pendingCount: items.length || 1,
+          items,
+        };
+      }),
       summary: { total: 0, taken: 0, skipped: 0, remaining: 0 },
-      nextDose: null,
+      nextDose:
+        (mockDayItemsOverride as Array<{ status?: string }> | null)?.find(
+          (i) => i.status === 'due' || i.status === 'upcoming',
+        ) ?? null,
     }),
     createSchedule: vi.fn(),
     updateScheduleById: mockUpdateScheduleById,
-    recordDoseAction: vi.fn(),
+    archiveScheduleById: mockArchiveScheduleById,
+    recordDoseAction: mockRecordDoseAction,
+    queryDoseHistory: mockQueryDoseHistory,
+    refreshSchedules: vi.fn(async () => {}),
   }),
 }));
 
@@ -168,6 +210,9 @@ function collectElements(node: unknown, out: ElementMatch[] = []): ElementMatch[
       props,
       style: flattenStyle(props.style),
     });
+    if (node.type === 'Modal' && props.visible === false) {
+      return out;
+    }
     if (props.children !== undefined) {
       collectElements(props.children, out);
     }
@@ -309,19 +354,101 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(medEls.some((e) => hasClass(e, 'flex-wrap'))).toBe(true);
     expect(medEls.some((e) => e.style.padding === 12)).toBe(true);
 
-    const doseEls = collectElements(
-      DoseCard({
-        medicineName: 'Escitalopram Oxalate 10 mg Extended Release Tablet',
+    const doseCases = [
+      {
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseInstruction: '1 tablet · After breakfast',
+        scheduledTime: '09:00 AM',
+        expectedAmount: '1 tablet',
+      },
+      {
+        medicineName: 'Escitalopram Oxalate Extended Release Coated Tablet',
         strength: '10 mg',
-        doseInstruction: '1 tablet · After dinner with water',
-        scheduledTime: '09:00 PM',
-        status: 'upcoming',
-        onMarkTaken: vi.fn(),
-        onSkip: vi.fn(),
+        dosageForm: 'Capsule',
+        doseInstruction:
+          '2 capsules · Take after dinner with a full glass of lukewarm water and avoid lying down',
+        scheduledTime: '10:30 PM',
+        expectedAmount: '2 capsules',
+      },
+      {
+        medicineName: '3-C Syrup',
+        strength: '100 mg/5 ml',
+        dosageForm: 'Syrup',
+        doseInstruction: '2.5 mL · Shake bottle thoroughly before measuring',
+        scheduledTime: '02:00 PM',
+        expectedAmount: '2.5 mL',
+      },
+    ];
+
+    for (const c of doseCases) {
+      const doseEls = collectElements(
+        DoseCard({
+          medicineName: c.medicineName,
+          strength: c.strength,
+          doseInstruction: c.doseInstruction,
+          scheduledTime: c.scheduledTime,
+          status: 'upcoming',
+          onMarkTaken: vi.fn(),
+          onSkip: vi.fn(),
+        }),
+      );
+      expect(doseEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
+      expect(doseEls.some((e) => hasClass(e, 'min-h-[40px]'))).toBe(true);
+      expect(doseEls.some((e) => e.type === 'Image')).toBe(false);
+      // Calm aligned text block beside 34px clock icon, without oversized bold/pills
+      expect(doseEls.some((e) => hasClass(e, 'h-[34px]') && hasClass(e, 'w-[34px]'))).toBe(true);
+      const fullTitle = `${c.medicineName} ${c.strength}`;
+      const titleEl = doseEls.find((e) => e.props.children === fullTitle);
+      const detailsEl = doseEls.find(
+        (e) => e.props.accessibilityLabel === `Dose details ${c.doseInstruction}`,
+      );
+      const timeEl = doseEls.find(
+        (e) => e.props.accessibilityLabel === `Scheduled time ${c.scheduledTime}`,
+      );
+      expect(Boolean(titleEl && hasClass(titleEl, 'font-semibold'))).toBe(true);
+      expect(detailsEl).toBeDefined();
+      expect(Boolean(timeEl && hasClass(timeEl, 'text-primary'))).toBe(true);
+      expect(hasClass(timeEl!, 'bg-mint')).toBe(false);
+
+      const takenAction = doseEls.find(
+        (e) => e.props.accessibilityLabel === `Mark ${fullTitle} as taken`,
+      );
+      const skipAction = doseEls.find(
+        (e) => e.props.accessibilityLabel === `Skip ${fullTitle}`,
+      );
+      expect(takenAction).toBeDefined();
+      expect(skipAction).toBeDefined();
+      expect(hasClass(takenAction!, 'flex-1')).toBe(true);
+      expect(hasClass(takenAction!, 'bg-white')).toBe(true);
+      expect(hasClass(skipAction!, 'flex-1')).toBe(true);
+      expect(hasClass(skipAction!, 'bg-white')).toBe(true);
+    }
+
+    const progressEls = collectElements(
+      DoseProgressCard({
+        takenCount: 2,
+        totalCount: 5,
+        upcomingCount: 1,
+        overdueCount: 2,
+        label: "Today's progress",
       }),
     );
-    expect(doseEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
-    expect(doseEls.some((e) => hasClass(e, 'min-h-[40px]'))).toBe(true);
+    expect(
+      progressEls.some(
+        (e) => e.props.accessibilityLabel === "Today's progress: 2 of 5 doses taken",
+      ),
+    ).toBe(true);
+    expect(
+      progressEls.some((e) => e.props.accessibilityLabel === 'Total scheduled doses 5'),
+    ).toBe(true);
+    expect(progressEls.some((e) => e.props.accessibilityLabel === 'Taken doses 2')).toBe(true);
+    expect(progressEls.some((e) => e.props.accessibilityLabel === 'Upcoming doses 1')).toBe(
+      true,
+    );
+    expect(progressEls.some((e) => e.props.accessibilityLabel === 'Overdue doses 2')).toBe(true);
+    expect(progressEls.some((e) => Array.isArray(e.props.children) && e.props.children.join('') === '2/5')).toBe(true);
 
     const badgeEls = collectElements(
       StatusBadge({ variant: 'unverified', label: 'Long Custom Status Badge' }),
@@ -441,44 +568,136 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(keyboardOpen.backdropPaddingBottom + keyboardOpen.sheetMaxHeight).toBeLessThanOrEqual(800);
   });
 
-  it('keeps ScheduleScreen Saved Schedules responsive across 320px-768px, wires Dose History navigation, and prevents automatic medicine selection in ScheduleModal', () => {
+  it('keeps ScheduleScreen focused on daily doses with Manage Schedules and Dose History secondary links, and validates ManageSchedulesScreen + DoseHistoryScreen', () => {
     mockRouterPush.mockClear();
 
     for (const width of [320, 360, 390, 768]) {
       __setMockWindowWidth(width);
       const metrics = getResponsiveMetrics(width);
-      const screenEls = collectElements(ScheduleScreen());
 
-      const doseHistoryBtn = screenEls.find(
-        (e) => e.props.accessibilityLabel === 'Open Dose History',
-      );
-      expect(doseHistoryBtn).toBeDefined();
-      expect(hasClass(doseHistoryBtn!, 'min-h-[38px]')).toBe(true);
-      expect(doseHistoryBtn!.props.hitSlop).toBe(8);
+      // ScheduleScreen has Add Dose + overflow menu button, Day/Week toggle, and NO bottom Manage Schedules/Dose History cards when menu is closed
+      const scheduleEls = collectElements(ScheduleScreen());
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Schedule options'),
+      ).toBe(true);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Day view'),
+      ).toBe(true);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Week view'),
+      ).toBe(true);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Open Manage Schedules'),
+      ).toBe(false);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Open Dose History'),
+      ).toBe(false);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Edit Napa 500 mg schedule'),
+      ).toBe(false);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Pause Napa 500 mg schedule'),
+      ).toBe(false);
 
-      const editBtn = screenEls.find(
-        (e) => e.props.accessibilityLabel === 'Edit Napa 500 mg schedule',
+      // ManageSchedulesScreen renders summary + Edit/Pause/Archive cleanly across breakpoints without Taken/Skip
+      const manageScreenEls = collectElements(ManageSchedulesScreen());
+      expect(
+        manageScreenEls.some((e) => e.props.accessibilityLabel === 'Total schedules 1'),
+      ).toBe(true);
+      expect(
+        manageScreenEls.some((e) => e.props.accessibilityLabel === 'Active schedules 1'),
+      ).toBe(true);
+      const editBtn = manageScreenEls.find(
+        (e) => e.props.accessibilityLabel === 'Edit Napa schedule',
       );
-      const pauseBtn = screenEls.find(
-        (e) => e.props.accessibilityLabel === 'Pause Napa 500 mg schedule',
+      const pauseBtn = manageScreenEls.find(
+        (e) => e.props.accessibilityLabel === 'Pause Napa schedule',
+      );
+      const archiveBtn = manageScreenEls.find(
+        (e) => e.props.accessibilityLabel === 'Archive Napa schedule',
       );
       expect(editBtn).toBeDefined();
       expect(pauseBtn).toBeDefined();
-      expect(hasClass(editBtn!, 'min-h-[40px]')).toBe(true);
-      expect(hasClass(pauseBtn!, 'min-h-[40px]')).toBe(true);
+      expect(archiveBtn).toBeDefined();
+      expect(manageScreenEls.some((e) => e.props.children === 'Taken')).toBe(false);
+      expect(manageScreenEls.some((e) => e.props.children === 'Skip')).toBe(false);
       if (metrics.stackTwoCol) {
         expect(hasClass(editBtn!, 'w-full')).toBe(true);
       } else {
         expect(hasClass(editBtn!, 'flex-1')).toBe(true);
-        expect(hasClass(editBtn!, 'min-w-0')).toBe(true);
       }
     }
 
-    // Clicking Dose History navigates cleanly to /history?from=schedule
-    const defaultEls = collectElements(ScheduleScreen());
-    const historyBtn = defaultEls.find((e) => e.props.accessibilityLabel === 'Open Dose History');
-    (historyBtn!.props.onPress as () => void)();
+    // Opening Schedule Options overflow menu displays Manage Schedules & Dose History and navigates cleanly
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = ['day', '2026-11-23', null, false, true];
+    const openMenuScheduleEls = collectElements(ScheduleScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
+
+    expect(
+      openMenuScheduleEls.some((e) => e.props.children === 'Schedule Options'),
+    ).toBe(true);
+    const manageMenuItem = openMenuScheduleEls.find(
+      (e) => e.props.accessibilityLabel === 'Open Manage Schedules',
+    );
+    const historyMenuItem = openMenuScheduleEls.find(
+      (e) => e.props.accessibilityLabel === 'Open Dose History',
+    );
+    expect(manageMenuItem).toBeDefined();
+    expect(historyMenuItem).toBeDefined();
+    const backdropClose = openMenuScheduleEls.find(
+      (e) => e.props.accessibilityLabel === 'Close dialog',
+    );
+    const activeModal = openMenuScheduleEls.find(
+      (e) => e.type === 'Modal' && e.props.visible === true,
+    );
+    expect(backdropClose).toBeDefined();
+    expect(activeModal).toBeDefined();
+    expect(() => (backdropClose!.props.onPress as () => void)()).not.toThrow();
+    expect(() => (activeModal!.props.onRequestClose as () => void)()).not.toThrow();
+
+    (manageMenuItem!.props.onPress as () => void)();
+    expect(mockRouterPush).toHaveBeenCalledWith('/schedules');
+    (historyMenuItem!.props.onPress as () => void)();
     expect(mockRouterPush).toHaveBeenCalledWith('/history?from=schedule');
+
+    // Empty state on ManageSchedulesScreen renders exact required copy
+    mockSchedulesOverride = [];
+    const emptyManageEls = collectElements(ManageSchedulesScreen());
+    mockSchedulesOverride = null;
+    expect(
+      emptyManageEls.some(
+        (e) =>
+          e.props.children ===
+          'No schedules yet. Create a medication schedule to organise your daily doses.',
+      ),
+    ).toBe(true);
+
+    // DoseHistoryScreen renders All / Taken / Skipped / Missed filter chips and exact empty state copy
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = [
+      '2026-11-09',
+      '2026-11-23',
+      'all',
+      null,
+      [],
+      { all: 0, taken: 0, skipped: 0, missed: 0 },
+      false,
+      null,
+      false,
+      false,
+      null,
+    ];
+    const historyEls = collectElements(DoseHistoryScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
+    expect(historyEls.some((e) => String(e.props.children ?? '').startsWith('Missed'))).toBe(true);
+    expect(
+      historyEls.some(
+        (e) => e.props.children === 'No dose history yet. Your recorded doses will appear here.',
+      ),
+    ).toBe(true);
 
     // ScheduleModal opened normally does not auto-select any medicine and gates Save
     const schedModalEls = collectElements(
@@ -535,5 +754,301 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       }),
     );
     expect(editNapaEls.some((e) => e.props.children === 'Napa')).toBe(true);
+  });
+
+  it('verifies all 5 DoseCard statuses, single/multi-dose Schedule progress counters without counting skipped/missed as completed, Week view, and overflow menu closing', () => {
+    const sampleStatuses = ['upcoming', 'due', 'taken', 'skipped', 'missed'] as const;
+    const expectedLabels: Record<(typeof sampleStatuses)[number], string> = {
+      upcoming: 'Status: Upcoming',
+      due: 'Status: Due now',
+      taken: 'Status: Taken',
+      skipped: 'Status: Skipped',
+      missed: 'Status: Missed',
+    };
+
+    for (const st of sampleStatuses) {
+      const cardEls = collectElements(
+        DoseCard({
+          medicineName: 'Napa',
+          strength: '500 mg',
+          doseInstruction: '1 tablet · After breakfast',
+          scheduledTime: '09:00 AM',
+          status: st,
+          onMarkTaken: vi.fn(),
+          onSkip: vi.fn(),
+        }),
+      );
+      expect(cardEls.some((e) => e.props.accessibilityLabel === expectedLabels[st])).toBe(true);
+      const showsButtons = st !== 'taken' && st !== 'skipped';
+      expect(
+        cardEls.some((e) => e.props.accessibilityLabel === 'Mark Napa 500 mg as taken'),
+      ).toBe(showsButtons);
+      expect(
+        cardEls.some((e) => e.props.accessibilityLabel === 'Skip Napa 500 mg'),
+      ).toBe(showsButtons);
+    }
+
+    // Multi-dose schedule day: 1 taken, 1 skipped, 1 missed, 1 due, 1 upcoming -> Total 5, Taken 1 (NOT 2), Upcoming 2, Overdue 1
+    mockDayItemsOverride = [
+      {
+        occurrenceKey: 'k1',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet · After breakfast',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '08:00',
+        scheduledTime12: '08:00 AM',
+        scheduledFor: '2026-11-23T02:00:00.000Z',
+        period: 'Morning',
+        status: 'taken',
+        recordedAt: '2026-11-23T02:05:00.000Z',
+        note: null,
+      },
+      {
+        occurrenceKey: 'k2',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet · After breakfast',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '09:00',
+        scheduledTime12: '09:00 AM',
+        scheduledFor: '2026-11-23T03:00:00.000Z',
+        period: 'Morning',
+        status: 'skipped',
+        recordedAt: '2026-11-23T03:05:00.000Z',
+        note: null,
+      },
+      {
+        occurrenceKey: 'k3',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Seclo',
+        strength: '20 mg',
+        dosageForm: 'Capsule',
+        doseAmount: '1',
+        doseUnit: 'capsule',
+        doseInstruction: '1 capsule · Before lunch',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '13:00',
+        scheduledTime12: '01:00 PM',
+        scheduledFor: '2026-11-23T07:00:00.000Z',
+        period: 'Afternoon',
+        status: 'missed',
+        recordedAt: null,
+        note: null,
+      },
+      {
+        occurrenceKey: 'k4',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '18:00',
+        scheduledTime12: '06:00 PM',
+        scheduledFor: '2026-11-23T12:00:00.000Z',
+        period: 'Evening',
+        status: 'due',
+        recordedAt: null,
+        note: null,
+      },
+      {
+        occurrenceKey: 'k5',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet · Bedtime',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '22:00',
+        scheduledTime12: '10:00 PM',
+        scheduledFor: '2026-11-23T16:00:00.000Z',
+        period: 'Bedtime',
+        status: 'upcoming',
+        recordedAt: null,
+        note: null,
+      },
+    ];
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = ['day', '2026-11-23', null, false, false];
+    const multiDayEls = collectElements(ScheduleScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
+
+    expect(
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Daily progress: 1 of 5 doses taken'),
+    ).toBe(true);
+    expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Total scheduled doses 5')).toBe(
+      true,
+    );
+    expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Taken doses 1')).toBe(true);
+    expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Upcoming doses 2')).toBe(true);
+    expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Overdue doses 1')).toBe(true);
+
+    // Single-dose schedule day stays clean without bottom Manage Schedules / Dose History cards
+    mockDayItemsOverride = [mockDayItemsOverride[0]];
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = ['week', '2026-11-23', null, false, false];
+    const weekSingleEls = collectElements(ScheduleScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
+    mockDayItemsOverride = null;
+
+    expect(
+      weekSingleEls.some((e) => e.props.accessibilityLabel === 'Previous week'),
+    ).toBe(true);
+    expect(
+      weekSingleEls.some((e) => e.props.accessibilityLabel === 'Open Manage Schedules'),
+    ).toBe(false);
+    expect(
+      weekSingleEls.some((e) => e.props.accessibilityLabel === 'Open Dose History'),
+    ).toBe(false);
+  });
+
+  it('renders redesigned HomeScreen with progress tiles, Next dose hero, compact Today schedule summary, supplies banner, and Quick overview across 320px-768px', () => {
+    mockRouterPush.mockClear();
+    mockRecordDoseAction.mockClear();
+
+    mockDayItemsOverride = [
+      {
+        occurrenceKey: 'h1',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet · After breakfast',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '08:00',
+        scheduledTime12: '08:00 AM',
+        scheduledFor: '2026-11-23T02:00:00.000Z',
+        period: 'Morning',
+        status: 'missed',
+        recordedAt: null,
+        note: null,
+      },
+      {
+        occurrenceKey: 'h2',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet · After breakfast',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '14:00',
+        scheduledTime12: '02:00 PM',
+        scheduledFor: '2026-11-23T08:00:00.000Z',
+        period: 'Afternoon',
+        status: 'upcoming',
+        recordedAt: null,
+        note: null,
+      },
+      {
+        occurrenceKey: 'h3',
+        scheduleId: 'sched-1',
+        patientMedicationId: 'med-1',
+        medicineName: 'Seclo',
+        strength: '20 mg',
+        dosageForm: 'Capsule',
+        doseAmount: '1',
+        doseUnit: 'capsule',
+        doseInstruction: '1 capsule · Bedtime',
+        scheduledDateYmd: '2026-11-23',
+        scheduledTime24: '22:00',
+        scheduledTime12: '10:00 PM',
+        scheduledFor: '2026-11-23T16:00:00.000Z',
+        period: 'Bedtime',
+        status: 'upcoming',
+        recordedAt: null,
+        note: null,
+      },
+    ];
+
+    for (const width of [320, 360, 390, 768]) {
+      __setMockWindowWidth(width);
+      const els = collectElements(HomeScreen());
+
+      // Progress tiles: Scheduled 3, Overdue 1, Upcoming 2
+      expect(
+        els.some((e) => e.props.accessibilityLabel === "Today's progress: 0 of 3 doses taken"),
+      ).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'Total scheduled doses 3')).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'Overdue doses 1')).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'Upcoming doses 2')).toBe(true);
+
+      // Next dose hero + Take now + View schedule
+      const takeNowBtn = els.find((e) => e.props.accessibilityLabel === 'Take now');
+      expect(takeNowBtn).toBeDefined();
+      expect(hasClass(takeNowBtn!, 'rounded-full')).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'View schedule')).toBe(true);
+
+      // Compact Today's schedule period rows + See all 3
+      expect(els.some((e) => e.props.accessibilityLabel === 'See all 3 doses')).toBe(true);
+      expect(
+        els.some((e) => e.props.accessibilityLabel === 'Morning, 1 scheduled doses, 1 overdue'),
+      ).toBe(true);
+      expect(
+        els.some(
+          (e) => e.props.accessibilityLabel === 'Afternoon, 1 scheduled doses, 1 upcoming',
+        ),
+      ).toBe(true);
+
+      // Supplies banner + Quick overview cards
+      expect(
+        els.some(
+          (e) => e.props.accessibilityLabel === 'Medicine supplies: No medicines are low on stock',
+        ),
+      ).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'Latest glucose 106 mg/dL')).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'Monthly spend ৳ 720')).toBe(true);
+    }
+
+    // Trigger interactions on HomeScreen
+    const homeEls = collectElements(HomeScreen());
+    (homeEls.find((e) => e.props.accessibilityLabel === 'Take now')!.props.onPress as () => void)();
+    expect(mockRecordDoseAction).toHaveBeenCalledTimes(1);
+
+    (
+      homeEls.find((e) => e.props.accessibilityLabel === 'See all 3 doses')!.props
+        .onPress as () => void
+    )();
+    expect(mockRouterPush).toHaveBeenCalledWith('/schedule');
+
+    (
+      homeEls.find(
+        (e) => e.props.accessibilityLabel === 'Medicine supplies: No medicines are low on stock',
+      )!.props.onPress as () => void
+    )();
+    expect(mockRouterPush).toHaveBeenCalledWith('/medicines');
+
+    (
+      homeEls.find((e) => e.props.accessibilityLabel === 'Monthly spend ৳ 720')!.props
+        .onPress as () => void
+    )();
+    expect(mockRouterPush).toHaveBeenCalledWith('/expenses');
+
+    mockDayItemsOverride = null;
   });
 });

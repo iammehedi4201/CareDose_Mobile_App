@@ -12,6 +12,7 @@ export interface PersonalMedicationRecord {
   strength?: string | null;
   dosageForm: string;
   manufacturer?: string | null;
+  imageUrl?: string | null;
   instructions: string;
   stockRemaining: number;
   stockUnit: string;
@@ -210,6 +211,7 @@ export function mapApiMedicationToRecord(dto: PatientMedicationDto): PersonalMed
     strength: dto.strength,
     dosageForm: dto.dosageForm ?? 'Medicine',
     manufacturer: dto.manufacturer,
+    imageUrl: dto.catalogueBrand?.primaryImageUrl ?? null,
     instructions: dto.personalInstructions,
     stockRemaining: Number(dto.stockRemaining) || 0,
     stockUnit: dto.stockUnit,

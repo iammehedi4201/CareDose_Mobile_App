@@ -14,6 +14,8 @@ export type StatusVariant =
   | 'unverified'
   | 'verified'
   | 'active'
+  | 'paused'
+  | 'completed'
   | 'archived';
 
 export interface StatusStyleConfig {
@@ -89,6 +91,18 @@ const STATUS_MAP: Record<StatusVariant, StatusStyleConfig> = {
     backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
     textColor: CAREDOSE_EXTENDED_COLORS.primary,
     borderColor: '#C5E8D8',
+  },
+  paused: {
+    label: 'Paused',
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
+    textColor: CAREDOSE_EXTENDED_COLORS.warning,
+    borderColor: '#F3D9A4',
+  },
+  completed: {
+    label: 'Completed',
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.infoSurface,
+    textColor: CAREDOSE_EXTENDED_COLORS.info,
+    borderColor: '#C4DBF5',
   },
   archived: {
     label: 'Archived',

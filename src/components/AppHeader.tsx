@@ -10,6 +10,13 @@ export interface AppHeaderAction {
   onPress: () => void;
   iconName?: keyof typeof Feather.glyphMap;
   disabled?: boolean;
+  pill?: boolean;
+}
+
+export interface AppHeaderOverflowAction {
+  onPress: () => void;
+  accessibilityLabel?: string;
+  iconName?: keyof typeof Feather.glyphMap;
 }
 
 export interface AppHeaderProps {
@@ -18,6 +25,7 @@ export interface AppHeaderProps {
   subtitle?: string;
   onBack?: () => void;
   primaryAction?: AppHeaderAction;
+  overflowAction?: AppHeaderOverflowAction;
   rightBadgeText?: string;
 }
 
@@ -27,6 +35,7 @@ export function AppHeader({
   subtitle,
   onBack,
   primaryAction,
+  overflowAction,
   rightBadgeText,
 }: AppHeaderProps): React.JSX.Element {
   const layout = useResponsiveLayout();
@@ -71,19 +80,37 @@ export function AppHeader({
             ) : null}
           </View>
 
-          {primaryAction ? (
-            <View className="shrink-0">
-              <PrimaryButton
-                compact
-                label={primaryAction.label}
-                onPress={primaryAction.onPress}
-                disabled={primaryAction.disabled}
-                leftIcon={
-                  primaryAction.iconName ? (
-                    <Feather name={primaryAction.iconName} size={14} color="#FFFFFF" />
-                  ) : undefined
-                }
-              />
+          {primaryAction || overflowAction ? (
+            <View className="shrink-0 flex-row items-center gap-2">
+              {primaryAction ? (
+                <PrimaryButton
+                  compact
+                  pill={primaryAction.pill}
+                  label={primaryAction.label}
+                  onPress={primaryAction.onPress}
+                  disabled={primaryAction.disabled}
+                  leftIcon={
+                    primaryAction.iconName ? (
+                      <Feather name={primaryAction.iconName} size={14} color="#FFFFFF" />
+                    ) : undefined
+                  }
+                />
+              ) : null}
+              {overflowAction ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={overflowAction.accessibilityLabel ?? 'More options'}
+                  hitSlop={6}
+                  onPress={overflowAction.onPress}
+                  className="h-10 w-10 items-center justify-center rounded-full border border-border bg-white active:bg-mint"
+                >
+                  <Feather
+                    name={overflowAction.iconName ?? 'more-vertical'}
+                    size={18}
+                    color={CAREDOSE_EXTENDED_COLORS.mainText}
+                  />
+                </Pressable>
+              ) : null}
             </View>
           ) : rightBadgeText ? (
             <View className="h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-[#C5E8D8] bg-mint">

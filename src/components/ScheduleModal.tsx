@@ -279,12 +279,14 @@ export function ScheduleModal({
     };
   }, [visible, editingSchedule, initialMedicationId]);
 
+  const resolvedSelectedMedId = editingSchedule?.patientMedicationId ?? selectedMedId;
+
   const selectedMed = useMemo(
     () =>
-      activeMeds.find((m) => m.id === selectedMedId) ??
-      medications.find((m) => m.id === selectedMedId) ??
+      activeMeds.find((m) => m.id === resolvedSelectedMedId) ??
+      medications.find((m) => m.id === resolvedSelectedMedId) ??
       null,
-    [activeMeds, medications, selectedMedId],
+    [activeMeds, medications, resolvedSelectedMedId],
   );
 
   const filteredMeds = useMemo(() => {
@@ -636,6 +638,7 @@ export function ScheduleModal({
                 <MedicineFormThumbnail
                   size="card"
                   dosageForm={selectedMed.dosageForm}
+                  imageUrl={selectedMed.imageUrl}
                 />
                 <View className="flex-1 min-w-0">
                   <View className="flex-row items-start justify-between gap-2">
@@ -725,6 +728,7 @@ export function ScheduleModal({
                           <MedicineFormThumbnail
                             size="card"
                             dosageForm={med.dosageForm}
+                            imageUrl={med.imageUrl}
                           />
                           <View className="flex-1 min-w-0">
                             <Text className="text-[13px] font-bold text-main" numberOfLines={1}>

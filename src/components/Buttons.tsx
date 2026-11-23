@@ -16,6 +16,7 @@ export interface ActionButtonProps {
   loading?: boolean;
   compact?: boolean;
   fullWidth?: boolean;
+  pill?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
   className?: string;
@@ -33,6 +34,7 @@ export function PrimaryButton({
   loading = false,
   compact = false,
   fullWidth = false,
+  pill = false,
   accessibilityLabel,
   style,
   className = '',
@@ -51,8 +53,14 @@ export function PrimaryButton({
           onPress();
         }
       }}
-      className={`flex-row items-center justify-center rounded-field ${
-        compact ? 'min-h-[40px] px-2.5 py-2' : 'min-h-[44px] px-3.5 py-2.5'
+      className={`flex-row items-center justify-center ${
+        pill ? 'rounded-full' : 'rounded-field'
+      } ${
+        compact
+          ? pill
+            ? 'min-h-[40px] px-4 py-2'
+            : 'min-h-[40px] px-2.5 py-2'
+          : 'min-h-[44px] px-3.5 py-2.5'
       } ${fullWidth ? 'w-full' : ''} ${
         interactive ? 'bg-primary' : 'bg-[#9BBFB7]'
       } ${className}`.trim()}

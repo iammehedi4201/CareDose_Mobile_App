@@ -3,32 +3,31 @@ import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
+  BottomSheet,
   DoseCard,
+  DoseProgressCard,
   EmptyState,
-  FilterChips,
   ScheduleModal,
   ScreenContainer,
-  StatusBadge,
   SuccessToast,
 } from '../src/components';
 import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
 import { useMedications } from '../src/features/medications/MedicationsContext';
 import {
   addDaysYmd,
-  format24To12Hour,
-  formatDayHeadingLabel,
   formatDoseActionFeedback,
-  formatDoseAmountDisplay,
-  formatRecurrenceSummary,
+  formatScheduleBarDateLabel,
   formatWeekRangeLabel,
   getMondayOfWeekYmd,
   getTodayLocalYmd,
-  LocalScheduleRecord,
   parseYmdToLocalDate,
 } from '../src/features/schedule/dose-rules';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
+import {
+  CAREDOSE_EXTENDED_COLORS,
+  SCHEDULE_PERIOD_META,
+} from '../src/theme/tokens';
 
 type ViewMode = 'day' | 'week';
 
@@ -45,10 +44,8 @@ export default function ScheduleScreen(): React.JSX.Element {
   const layout = useResponsiveLayout();
   const { medications } = useMedications();
   const {
-    schedules,
     pendingOccurrenceKeys,
     getLocalRangeDoses,
-    updateScheduleById,
     recordDoseAction,
   } = useSchedules();
 
@@ -57,9 +54,9 @@ export default function ScheduleScreen(): React.JSX.Element {
   const [selectedYmd, setSelectedYmd] = useState(todayYmd);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Create / Edit Dose Schedule modal state
+  // Create Dose Schedule & overflow options menu state
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<LocalScheduleRecord | null>(null);
+  const [optionsMenuOpen, setOptionsMenuOpen] = useState(false);
 
   const weekStartYmd = useMemo(
     () => getMondayOfWeekYmd(selectedYmd),
@@ -80,6 +77,23 @@ export default function ScheduleScreen(): React.JSX.Element {
 
   const dayDoses = selectedDayBucket?.items ?? [];
 
+  const progressCounts = useMemo(() => {
+    let taken = 0;
+    let upcoming = 0;
+    let overdue = 0;
+    for (const d of dayDoses) {
+      if (d.status === 'taken') taken += 1;
+      else if (d.status === 'upcoming' || d.status === 'due') upcoming += 1;
+      else if (d.status === 'missed') overdue += 1;
+    }
+    return {
+      total: dayDoses.length,
+      taken,
+      upcoming,
+      overdue,
+    };
+  }, [dayDoses]);
+
   const handleUpdateDose = async (
     item: ScheduledDoseItemDto,
     action: 'TAKEN' | 'SKIPPED',
@@ -89,7 +103,6 @@ export default function ScheduleScreen(): React.JSX.Element {
   };
 
   const handleOpenCreateModal = (): void => {
-    setEditingSchedule(null);
     setScheduleModalOpen(true);
   };
 
@@ -99,27 +112,61 @@ export default function ScheduleScreen(): React.JSX.Element {
       primaryAction={{
         label: 'Add Dose',
         iconName: 'plus',
+        pill: true,
         onPress: handleOpenCreateModal,
+      }}
+      overflowAction={{
+        accessibilityLabel: 'Schedule options',
+        onPress: () => setOptionsMenuOpen(true),
       }}
     >
       <SuccessToast message={toast} />
 
-      <FilterChips
-        options={[
-          { key: 'day', label: 'Day' },
-          { key: 'week', label: 'Week' },
-        ]}
-        selectedKey={viewMode}
-        onSelect={setViewMode}
-      />
+      {/* Day / Week segmented control */}
+      <View className="flex-row items-center rounded-full border border-border bg-white p-1">
+        {(
+          [
+            { key: 'day', label: 'Day' },
+            { key: 'week', label: 'Week' },
+          ] as const
+        ).map((tab) => {
+          const active = viewMode === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              accessibilityRole="button"
+              accessibilityLabel={`${tab.label} view`}
+              accessibilityState={{ selected: active }}
+              onPress={() => setViewMode(tab.key)}
+              className={`min-h-[40px] flex-1 min-w-0 flex-row items-center justify-center gap-1.5 rounded-full px-3 py-2 ${
+                active ? 'bg-primary' : 'bg-transparent'
+              }`}
+            >
+              <Feather
+                name="calendar"
+                size={15}
+                color={active ? '#FFFFFF' : CAREDOSE_EXTENDED_COLORS.primary}
+              />
+              <Text
+                numberOfLines={1}
+                className={`text-[13px] font-semibold ${
+                  active ? 'text-white' : 'text-main'
+                }`}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {viewMode === 'day' ? (
-        <View className="mt-2.5 flex-row items-center justify-between rounded-card border border-border bg-white px-2.5 py-2.5">
+        <View className="mt-3 flex-row items-center justify-between rounded-full border border-border bg-white px-2.5 py-1.5">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Previous day"
             onPress={() => setSelectedYmd((d) => addDaysYmd(d, -1))}
-            className="h-9 w-9 items-center justify-center rounded-[10px]"
+            className="h-9 w-9 items-center justify-center rounded-full"
           >
             <Feather name="chevron-left" size={18} color={CAREDOSE_EXTENDED_COLORS.mainText} />
           </Pressable>
@@ -127,17 +174,18 @@ export default function ScheduleScreen(): React.JSX.Element {
             accessibilityRole="button"
             accessibilityLabel="Jump to today"
             onPress={() => setSelectedYmd(todayYmd)}
-            className="flex-1 items-center"
+            className="flex-1 min-w-0 flex-row items-center justify-center gap-2 px-2"
           >
-            <Text className="text-center text-sm font-bold text-main">
-              {formatDayHeadingLabel(selectedYmd, todayYmd)}
+            <Feather name="calendar" size={15} color={CAREDOSE_EXTENDED_COLORS.primary} />
+            <Text className="text-center text-sm font-semibold text-main" numberOfLines={1}>
+              {formatScheduleBarDateLabel(selectedYmd)}
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Next day"
             onPress={() => setSelectedYmd((d) => addDaysYmd(d, 1))}
-            className="h-9 w-9 items-center justify-center rounded-[10px]"
+            className="h-9 w-9 items-center justify-center rounded-full"
           >
             <Feather name="chevron-right" size={18} color={CAREDOSE_EXTENDED_COLORS.mainText} />
           </Pressable>
@@ -157,7 +205,7 @@ export default function ScheduleScreen(): React.JSX.Element {
             >
               <Feather name="chevron-left" size={16} color={CAREDOSE_EXTENDED_COLORS.mainText} />
             </Pressable>
-            <Text className="text-[13px] font-bold text-main">
+            <Text className="text-[13px] font-semibold text-main">
               {formatWeekRangeLabel(weekStartYmd)}
             </Text>
             <Pressable
@@ -191,7 +239,7 @@ export default function ScheduleScreen(): React.JSX.Element {
                   >
                     {dayLabel}
                   </Text>
-                  <Text className={`my-0.5 text-[13px] font-bold ${active ? 'text-white' : 'text-main'}`}>
+                  <Text className={`my-0.5 text-[13px] font-semibold ${active ? 'text-white' : 'text-main'}`}>
                     {dt.getDate()}
                   </Text>
                   <Text
@@ -207,6 +255,16 @@ export default function ScheduleScreen(): React.JSX.Element {
         </View>
       )}
 
+      {dayDoses.length > 0 ? (
+        <DoseProgressCard
+          takenCount={progressCounts.taken}
+          totalCount={progressCounts.total}
+          upcomingCount={progressCounts.upcoming}
+          overdueCount={progressCounts.overdue}
+          label={selectedYmd === todayYmd ? "Today's progress" : 'Daily progress'}
+        />
+      ) : null}
+
       {dayDoses.length === 0 ? (
         <EmptyState
           title="No scheduled doses for this day"
@@ -221,13 +279,21 @@ export default function ScheduleScreen(): React.JSX.Element {
           if (items.length === 0) {
             return null;
           }
+          const periodMeta = SCHEDULE_PERIOD_META[group];
           return (
-            <View key={group} className="mt-3.5">
+            <View key={group} className="mt-4">
               <View className="mb-2 flex-row items-center justify-between gap-2.5">
-                <Text className="flex-1 min-w-0 text-[15px] font-semibold text-main">
-                  {group}
-                </Text>
-                <View className="shrink-0 rounded-full bg-[#EEF2F0] px-2.5 py-0.5">
+                <View className="flex-1 min-w-0 flex-row items-center gap-2">
+                  <View
+                    className={`h-7 w-7 shrink-0 items-center justify-center rounded-full ${periodMeta.bgClass}`}
+                  >
+                    <Feather name={periodMeta.icon} size={14} color={periodMeta.color} />
+                  </View>
+                  <Text className="flex-1 min-w-0 text-[15px] font-semibold text-main" numberOfLines={1}>
+                    {group}
+                  </Text>
+                </View>
+                <View className="shrink-0 rounded-full bg-[#EAF1EE] px-2.5 py-1">
                   <Text className="text-[11px] font-semibold text-[#5A706B]">
                     {items.length} {items.length === 1 ? 'dose' : 'doses'}
                   </Text>
@@ -251,120 +317,83 @@ export default function ScheduleScreen(): React.JSX.Element {
         })
       )}
 
-      {/* Saved Schedule Plans Summary (edit / pause / resume) */}
-      {schedules.length > 0 ? (
-        <View
-          className="mt-5 rounded-card border border-border bg-white"
-          style={{ padding: layout.cardPadding }}
-        >
-          <View className="mb-2.5 flex-row flex-wrap items-center justify-between gap-2">
-            <Text className="flex-1 min-w-0 text-sm font-semibold text-main">
-              Saved schedules ({schedules.length})
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open Dose History"
-              hitSlop={8}
-              onPress={() => router.push('/history?from=schedule')}
-              className="min-h-[38px] shrink-0 flex-row items-center gap-1.5 rounded-full border border-[#C5E8D8] bg-mint px-3 py-1.5"
-            >
-              <Feather name="clock" size={13} color={CAREDOSE_EXTENDED_COLORS.primary} />
-              <Text className="text-xs font-semibold text-primary-dark">Dose history</Text>
-              <Feather name="chevron-right" size={13} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            </Pressable>
-          </View>
-          {schedules.map((s) => {
-            const med = medications.find((m) => m.id === s.patientMedicationId);
-            if (!med) return null;
-            const paused = s.status !== 'ACTIVE';
-            const medTitle = med.strength ? `${med.name} ${med.strength}` : med.name;
-            const formattedTimes = s.scheduledTimes.map(format24To12Hour).join(', ');
-            return (
-              <View
-                key={s.id}
-                className="border-t border-border py-3"
-              >
-                <View className="flex-row items-start justify-between gap-2.5">
-                  <Text
-                    className="flex-1 min-w-0 text-[14px] font-semibold leading-[19px] text-main"
-                    numberOfLines={2}
-                  >
-                    {medTitle}
-                  </Text>
-                  <StatusBadge
-                    variant={paused ? 'archived' : 'active'}
-                    label={paused ? 'Paused' : 'Active'}
-                  />
-                </View>
-
-                <Text className="mt-1 text-xs font-medium text-[#5A706B]">
-                  {formatRecurrenceSummary(s)} · {formatDoseAmountDisplay(s.doseAmount, s.doseUnit)}
-                </Text>
-                <Text className="mt-0.5 text-xs leading-[17px] text-[#5A706B]">
-                  {formattedTimes}
-                </Text>
-
-                <View
-                  className={`mt-2.5 gap-2 ${layout.stackTwoCol ? 'flex-col' : 'flex-row'}`}
-                >
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit ${medTitle} schedule`}
-                    hitSlop={4}
-                    onPress={() => {
-                      setEditingSchedule(s);
-                      setScheduleModalOpen(true);
-                    }}
-                    className={`min-h-[40px] flex-row items-center justify-center gap-1.5 rounded-[10px] border border-border bg-background px-3 py-2 ${
-                      layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'
-                    }`}
-                  >
-                    <Feather name="edit-2" size={13} color={CAREDOSE_EXTENDED_COLORS.primary} />
-                    <Text className="text-xs font-semibold text-primary" numberOfLines={1}>
-                      Edit
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${paused ? 'Resume' : 'Pause'} ${medTitle} schedule`}
-                    hitSlop={4}
-                    onPress={() =>
-                      void updateScheduleById(s.id, {
-                        status: paused ? 'ACTIVE' : 'PAUSED',
-                      }).then(() =>
-                        setToast(
-                          paused
-                            ? `${med.name} schedule resumed.`
-                            : `${med.name} schedule paused.`,
-                        ),
-                      )
-                    }
-                    className={`min-h-[40px] flex-row items-center justify-center gap-1.5 rounded-[10px] border border-border bg-background px-3 py-2 ${
-                      layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'
-                    }`}
-                  >
-                    <Feather
-                      name={paused ? 'play-circle' : 'pause-circle'}
-                      size={13}
-                      color={CAREDOSE_EXTENDED_COLORS.primary}
-                    />
-                    <Text className="text-xs font-semibold text-primary" numberOfLines={1}>
-                      {paused ? 'Resume' : 'Pause'}
-                    </Text>
-                  </Pressable>
-                </View>
+      {/* Overflow menu bottom sheet for secondary navigation */}
+      <BottomSheet
+        visible={optionsMenuOpen}
+        onClose={() => setOptionsMenuOpen(false)}
+        title="Schedule Options"
+        subtitle="Manage your recurring schedules or inspect dose history."
+        iconName="sliders"
+        hideFooter
+      >
+        <View className="overflow-hidden rounded-card border border-border bg-white">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Manage Schedules"
+            hitSlop={6}
+            onPress={() => {
+              setOptionsMenuOpen(false);
+              router.push('/schedules');
+            }}
+            className="min-h-[56px] flex-row items-center justify-between gap-3 px-4 py-3 active:bg-mint"
+          >
+            <View className="flex-1 min-w-0 flex-row items-center gap-3">
+              <View className="h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-mint">
+                <Feather name="sliders" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
               </View>
-            );
-          })}
+              <View className="flex-1 min-w-0">
+                <Text className="text-[14px] font-semibold text-main" numberOfLines={1}>
+                  Manage Schedules
+                </Text>
+                <Text className="mt-0.5 text-xs text-[#5A706B]" numberOfLines={1}>
+                  Edit, pause, or archive recurring plans
+                </Text>
+              </View>
+            </View>
+            <Feather
+              name="chevron-right"
+              size={16}
+              color={CAREDOSE_EXTENDED_COLORS.secondaryText}
+            />
+          </Pressable>
+          <View className="h-px bg-border" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Dose History"
+            hitSlop={6}
+            onPress={() => {
+              setOptionsMenuOpen(false);
+              router.push('/history?from=schedule');
+            }}
+            className="min-h-[56px] flex-row items-center justify-between gap-3 px-4 py-3 active:bg-mint"
+          >
+            <View className="flex-1 min-w-0 flex-row items-center gap-3">
+              <View className="h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-mint">
+                <Feather name="clock" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+              </View>
+              <View className="flex-1 min-w-0">
+                <Text className="text-[14px] font-semibold text-main" numberOfLines={1}>
+                  Dose History
+                </Text>
+                <Text className="mt-0.5 text-xs text-[#5A706B]" numberOfLines={1}>
+                  View taken, skipped, and missed doses
+                </Text>
+              </View>
+            </View>
+            <Feather
+              name="chevron-right"
+              size={16}
+              color={CAREDOSE_EXTENDED_COLORS.secondaryText}
+            />
+          </Pressable>
         </View>
-      ) : null}
+      </BottomSheet>
 
       <ScheduleModal
         visible={scheduleModalOpen}
-        editingSchedule={editingSchedule}
+        editingSchedule={null}
         onClose={() => {
           setScheduleModalOpen(false);
-          setEditingSchedule(null);
         }}
         onSaved={(saved, isEdit) => {
           const med = medications.find((m) => m.id === saved.patientMedicationId);

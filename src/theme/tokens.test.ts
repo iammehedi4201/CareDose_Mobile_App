@@ -5,6 +5,7 @@ import {
   CAREDOSE_SPACING,
   CAREDOSE_TYPOGRAPHY,
   PRIMARY_BOTTOM_TABS,
+  resolveActiveBottomTab,
   SECONDARY_PROFILE_DESTINATIONS,
 } from './tokens';
 
@@ -32,6 +33,8 @@ describe('CareDose Design System Tokens & Navigation Rules', () => {
       'Explore',
       'Profile',
     ]);
+    expect(resolveActiveBottomTab('/schedule')).toBe('schedule');
+    expect(resolveActiveBottomTab('/schedules')).toBe('schedule');
   });
 
   it('keeps Health Log, Dose History, Expenses, Purchases, Alternatives, and Settings as secondary destinations', () => {

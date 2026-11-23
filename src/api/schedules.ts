@@ -1,6 +1,6 @@
 import { apiRequest } from './config';
 
-export type ScheduleStatusDto = 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+export type ScheduleStatusDto = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ARCHIVED';
 export type DoseDisplayStatusDto = 'upcoming' | 'due' | 'missed' | 'taken' | 'skipped';
 export type SchedulePeriodGroupDto = 'Morning' | 'Afternoon' | 'Evening' | 'Bedtime';
 
@@ -42,6 +42,7 @@ export interface ScheduledDoseItemDto {
   medicineName: string;
   strength: string | null;
   dosageForm: string | null;
+  imageUrl?: string | null;
   doseAmount: string;
   doseUnit: string;
   doseInstruction: string;
@@ -85,13 +86,14 @@ export interface DoseHistoryItemDto {
   medicineName: string;
   strength: string | null;
   dosageForm: string | null;
+  imageUrl?: string | null;
   doseAmount: string;
   doseUnit: string;
   scheduledDateYmd: string;
   scheduledTime12: string;
   scheduledFor: string;
   recordedAt: string | null;
-  status: 'taken' | 'skipped';
+  status: 'taken' | 'skipped' | 'missed';
   note: string | null;
 }
 
@@ -101,6 +103,7 @@ export interface DoseHistoryResponseDto {
     all: number;
     taken: number;
     skipped: number;
+    missed: number;
   };
   hasMore: boolean;
   nextCursor: string | null;
@@ -154,7 +157,7 @@ function authHeaders(token: string): Record<string, string> {
 export function listPatientSchedules(
   patientId: string,
   token: string,
-  status: 'ALL' | 'ACTIVE' | 'PAUSED' | 'COMPLETED' = 'ALL',
+  status: 'ALL' | ScheduleStatusDto = 'ALL',
 ): Promise<MedicationScheduleDto[]> {
   return apiRequest<MedicationScheduleDto[]>(
     `/patients/${encodeURIComponent(patientId)}/schedules?status=${encodeURIComponent(status)}`,
@@ -215,6 +218,19 @@ export function deleteSchedule(
   );
 }
 
+export function archiveSchedule(
+  scheduleId: string,
+  token: string,
+): Promise<MedicationScheduleDto> {
+  return apiRequest<MedicationScheduleDto>(
+    `/schedules/${encodeURIComponent(scheduleId)}/archive`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+    },
+  );
+}
+
 export function getPatientDoses(
   patientId: string,
   token: string,
@@ -256,7 +272,7 @@ export function listPatientDoseHistory(
   query: {
     from?: string;
     to?: string;
-    status?: 'ALL' | 'TAKEN' | 'SKIPPED';
+    status?: 'ALL' | 'TAKEN' | 'SKIPPED' | 'MISSED';
     medicationId?: string;
     cursor?: string;
     limit?: number;

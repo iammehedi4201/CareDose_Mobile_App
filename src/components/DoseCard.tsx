@@ -37,16 +37,34 @@ export function DoseCard({
       style={{ padding: layout.cardPadding }}
     >
       <View className="flex-row items-start">
-        <View className="mt-0.5 mr-2.5 h-[34px] w-[34px] items-center justify-center rounded-full bg-mint">
+        <View
+          accessible={false}
+          className="mt-0.5 mr-2.5 h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-mint"
+        >
           <Feather name="clock" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
         </View>
         <View className="flex-1 min-w-0">
           <View className="flex-row items-start justify-between gap-2">
-            <Text className="flex-1 min-w-0 text-sm font-semibold text-main">{titleText}</Text>
+            <Text
+              className="flex-1 min-w-0 text-[15px] font-semibold leading-[20px] text-main"
+              numberOfLines={2}
+            >
+              {titleText}
+            </Text>
             <StatusBadge variant={status} />
           </View>
-          <Text className="mt-[3px] text-xs text-[#5A706B]">{doseInstruction}</Text>
-          <Text className="mt-[3px] text-[11px] font-semibold text-primary">
+          <Text
+            accessibilityLabel={`Dose details ${doseInstruction}`}
+            className="mt-[3px] text-[13px] font-normal leading-[18px] text-[#5A706B]"
+            numberOfLines={2}
+          >
+            {doseInstruction}
+          </Text>
+          <Text
+            accessibilityLabel={`Scheduled time ${scheduledTime}`}
+            className="mt-[3px] text-[12px] font-semibold text-primary"
+            numberOfLines={1}
+          >
             {scheduledTime}
           </Text>
         </View>
@@ -59,10 +77,13 @@ export function DoseCard({
               accessibilityRole="button"
               accessibilityLabel={`Mark ${titleText} as taken`}
               disabled={actionLoading}
+              hitSlop={4}
               onPress={onMarkTaken}
-              className="min-h-[40px] flex-1 items-center justify-center rounded-[10px] border border-border bg-white px-2.5 py-2"
+              className="min-h-[40px] flex-1 min-w-0 items-center justify-center rounded-[10px] border border-border bg-white px-2.5 py-2 active:bg-mint"
             >
-              <Text className="text-xs font-semibold text-primary">Taken</Text>
+              <Text className="text-[13px] font-semibold text-primary" numberOfLines={1}>
+                Taken
+              </Text>
             </Pressable>
           ) : null}
           {onSkip ? (
@@ -70,10 +91,13 @@ export function DoseCard({
               accessibilityRole="button"
               accessibilityLabel={`Skip ${titleText}`}
               disabled={actionLoading}
+              hitSlop={4}
               onPress={onSkip}
-              className="min-h-[40px] flex-1 items-center justify-center rounded-[10px] border border-border bg-white px-2.5 py-2"
+              className="min-h-[40px] flex-1 min-w-0 items-center justify-center rounded-[10px] border border-border bg-white px-2.5 py-2 active:bg-background"
             >
-              <Text className="text-xs font-semibold text-[#5A706B]">Skip</Text>
+              <Text className="text-[13px] font-semibold text-[#5A706B]" numberOfLines={1}>
+                Skip
+              </Text>
             </Pressable>
           ) : null}
         </View>
