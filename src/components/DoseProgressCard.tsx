@@ -78,50 +78,50 @@ export function DoseProgressCard({
       </View>
 
       {variant === 'tiles' ? (
-        <View className="mt-3.5 flex-row flex-wrap gap-2">
+        <View className="mt-3.5 flex-row flex-wrap gap-1.5">
           <View
             accessibilityLabel={`Total scheduled doses ${safeTotal}`}
-            className="flex-1 min-w-[82px] flex-row items-center gap-2 rounded-field border border-[#DCEFE6] bg-[#F1F9F5] px-2.5 py-2"
+            className="flex-1 min-w-[78px] rounded-field border border-[#DCEFE6] bg-[#F1F9F5] px-2.5 py-2"
           >
-            <Feather name="calendar" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            <View className="flex-1 min-w-0">
+            <View className="flex-row items-center gap-1.5">
+              <Feather name="calendar" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
               <Text className="text-[15px] font-bold leading-[18px] text-primary">
                 {safeTotal}
               </Text>
-              <Text className="text-[11px] font-medium text-[#5A706B]" numberOfLines={1}>
-                Scheduled
-              </Text>
             </View>
+            <Text className="mt-0.5 text-[11px] font-medium text-[#5A706B]" numberOfLines={1}>
+              Scheduled
+            </Text>
           </View>
 
           <View
             accessibilityLabel={`Overdue doses ${safeOverdue}`}
-            className="flex-1 min-w-[82px] flex-row items-center gap-2 rounded-field border border-[#F7D7D6] bg-[#FDF3F3] px-2.5 py-2"
+            className="flex-1 min-w-[78px] rounded-field border border-[#F7D7D6] bg-[#FDF3F3] px-2.5 py-2"
           >
-            <Feather name="alert-triangle" size={16} color={CAREDOSE_EXTENDED_COLORS.error} />
-            <View className="flex-1 min-w-0">
+            <View className="flex-row items-center gap-1.5">
+              <Feather name="alert-triangle" size={14} color={CAREDOSE_EXTENDED_COLORS.error} />
               <Text className="text-[15px] font-bold leading-[18px] text-error">
                 {safeOverdue}
               </Text>
-              <Text className="text-[11px] font-medium text-[#5A706B]" numberOfLines={1}>
-                Overdue
-              </Text>
             </View>
+            <Text className="mt-0.5 text-[11px] font-medium text-[#5A706B]" numberOfLines={1}>
+              Overdue
+            </Text>
           </View>
 
           <View
             accessibilityLabel={`Upcoming doses ${safeUpcoming}`}
-            className="flex-1 min-w-[82px] flex-row items-center gap-2 rounded-field border border-[#D4E3F6] bg-[#F1F6FC] px-2.5 py-2"
+            className="flex-1 min-w-[78px] rounded-field border border-[#D4E3F6] bg-[#F1F6FC] px-2.5 py-2"
           >
-            <Feather name="clock" size={16} color={CAREDOSE_EXTENDED_COLORS.info} />
-            <View className="flex-1 min-w-0">
+            <View className="flex-row items-center gap-1.5">
+              <Feather name="clock" size={14} color={CAREDOSE_EXTENDED_COLORS.info} />
               <Text className="text-[15px] font-bold leading-[18px] text-info">
                 {safeUpcoming}
               </Text>
-              <Text className="text-[11px] font-medium text-[#5A706B]" numberOfLines={1}>
-                Upcoming
-              </Text>
             </View>
+            <Text className="mt-0.5 text-[11px] font-medium text-[#5A706B]" numberOfLines={1}>
+              Upcoming
+            </Text>
           </View>
         </View>
       ) : (

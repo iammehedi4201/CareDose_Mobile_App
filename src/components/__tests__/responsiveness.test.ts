@@ -990,6 +990,9 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       __setMockWindowWidth(width);
       const els = collectElements(HomeScreen());
 
+      // Header illustration image renders on HomeScreen
+      expect(els.some((e) => e.type === 'Image')).toBe(true);
+
       // Progress tiles: Scheduled 3, Overdue 1, Upcoming 2
       expect(
         els.some((e) => e.props.accessibilityLabel === "Today's progress: 0 of 3 doses taken"),

@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import homeHeaderImage from '../assets/home-header-illustration.jpg';
 import {
   BottomSheet,
   DoseProgressCard,
@@ -139,15 +140,30 @@ export default function HomeScreen(): React.JSX.Element {
     <ScreenContainer title="Today" hideHeader>
       <SuccessToast message={toastMessage} />
 
-      {/* Top Greeting Header with subtle decorative wellness bottle artwork + KH badge */}
-      <View className="relative overflow-hidden pb-1 pt-1">
-        {/* Soft botanical header accents */}
+      {/* Full-bleed Top Greeting Banner with botanical medication illustration + KH badge */}
+      <View
+        className="relative justify-start overflow-hidden bg-[#EBF7F1]"
+        style={{
+          marginHorizontal: -layout.screenPadding,
+          marginTop: -layout.screenPadding,
+          paddingHorizontal: layout.screenPadding,
+          paddingTop: layout.screenPadding + 6,
+          paddingBottom: 42,
+          minHeight: 162,
+        }}
+      >
+        <Image
+          source={homeHeaderImage}
+          resizeMode="cover"
+          accessible={false}
+          className="absolute inset-0 h-full w-full"
+        />
         <View
           accessible={false}
-          className="absolute -right-8 -top-6 h-28 w-28 rounded-full bg-mint opacity-80"
+          className="absolute bottom-0 left-0 right-0 h-5 bg-[#F7FAF8]/65"
         />
         <View className="flex-row items-start justify-between gap-3">
-          <View className="flex-1 min-w-0">
+          <View className="flex-1 min-w-0 pr-6">
             <Text className="text-[13px] font-semibold text-primary" numberOfLines={1}>
               Good Morning, Karim
             </Text>
@@ -159,40 +175,28 @@ export default function HomeScreen(): React.JSX.Element {
             </Text>
           </View>
 
-          <View className="flex-row items-center gap-2.5 shrink-0">
-            {!layout.isCompact ? (
-              <View accessible={false} className="items-center justify-end pr-1 pt-1">
-                <View className="h-2.5 w-6 rounded-t-[4px] bg-[#DCE7E2]" />
-                <View className="h-8 w-8 items-center justify-center rounded-[8px] border border-[#E29A2B] bg-[#F2A634]">
-                  <View className="h-3.5 w-3.5 items-center justify-center rounded-full bg-white/90">
-                    <View className="h-2 w-0.5 bg-[#087E67]" />
-                    <View className="absolute h-0.5 w-2 bg-[#087E67]" />
-                  </View>
-                </View>
-              </View>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open Profile"
-              onPress={() => router.push('/profile')}
-              className="h-10 w-10 items-center justify-center rounded-full border border-[#C5E8D8] bg-white active:bg-mint"
-            >
-              <Text className="text-[13px] font-bold text-primary-dark">KH</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Profile"
+            onPress={() => router.push('/profile')}
+            className="h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C5E8D8] bg-white/95 active:bg-mint"
+          >
+            <Text className="text-[13px] font-bold text-primary-dark">KH</Text>
+          </Pressable>
         </View>
       </View>
 
       {/* Progress Summary Card */}
-      <DoseProgressCard
-        variant="tiles"
-        takenCount={completedCount}
-        totalCount={totalScheduled}
-        upcomingCount={upcomingCount}
-        overdueCount={overdueCount}
-        label="Today's progress"
-      />
+      <View className="-mt-6">
+        <DoseProgressCard
+          variant="tiles"
+          takenCount={completedCount}
+          totalCount={totalScheduled}
+          upcomingCount={upcomingCount}
+          overdueCount={overdueCount}
+          label="Today's progress"
+        />
+      </View>
 
       {/* Primary Dark-Green Next Dose Hero Card */}
       {nextDose ? (
@@ -210,79 +214,92 @@ export default function HomeScreen(): React.JSX.Element {
             className="absolute -bottom-12 right-8 h-28 w-28 rounded-full bg-primary-dark/45"
           />
 
+          {/* Top row: Circular icon column + aligned text stack + right tablets artwork */}
           <View className="flex-row items-center justify-between gap-3">
-            <View className="flex-1 min-w-0">
-              <View className="flex-row items-center gap-2">
-                <View className="h-6 w-6 items-center justify-center rounded-full bg-white/20">
-                  <Feather name="disc" size={13} color="#FFFFFF" />
-                </View>
+            <View className="flex-1 min-w-0 flex-row items-start gap-2.5">
+              <View className="mt-0.5 h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20">
+                <Feather name="disc" size={16} color="#FFFFFF" />
+              </View>
+
+              <View className="flex-1 min-w-0">
                 <Text className="text-xs font-medium text-white/90">Next dose</Text>
-              </View>
-
-              <Text
-                className="mt-2 text-[19px] font-bold leading-[24px] text-white"
-                numberOfLines={2}
-              >
-                {nextDose.strength
-                  ? `${nextDose.medicineName} ${nextDose.strength}`
-                  : nextDose.medicineName}
-              </Text>
-              <Text className="mt-0.5 text-xs leading-[17px] text-white/90" numberOfLines={2}>
-                {nextDose.doseInstruction}
-              </Text>
-
-              <View className="mt-2 flex-row items-center gap-1.5">
-                <Feather name="clock" size={13} color="#FFFFFF" />
-                <Text className="text-[13px] font-bold text-white">
-                  {nextDose.scheduledTime12}
+                <Text
+                  className="mt-1 text-[19px] font-bold leading-[24px] text-white"
+                  numberOfLines={2}
+                >
+                  {nextDose.strength
+                    ? `${nextDose.medicineName} ${nextDose.strength}`
+                    : nextDose.medicineName}
                 </Text>
-              </View>
-
-              <View className="mt-3.5 flex-row flex-wrap items-center gap-3">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Take now"
-                  disabled={nextDoseBusy}
-                  onPress={() => void markDoseStatus(nextDose, 'taken')}
-                  className="min-h-[40px] flex-row items-center justify-center rounded-full bg-white px-5 py-2 active:bg-mint"
-                >
-                  {nextDoseBusy ? (
-                    <ActivityIndicator size="small" color={CAREDOSE_EXTENDED_COLORS.primary} />
-                  ) : (
-                    <Text className="text-[13px] font-bold text-main">Take now</Text>
-                  )}
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="View schedule"
-                  onPress={() => router.push('/schedule')}
-                  className="min-h-[40px] flex-row items-center gap-1 px-1 py-2"
-                >
-                  <Text className="text-xs font-semibold text-white">View schedule</Text>
-                  <Feather name="arrow-right" size={14} color="#FFFFFF" />
-                </Pressable>
+                <Text className="mt-0.5 text-xs leading-[17px] text-white/90" numberOfLines={2}>
+                  {nextDose.doseInstruction}
+                </Text>
+                <View className="mt-1.5 flex-row items-center gap-1.5">
+                  <Feather name="clock" size={13} color="#FFFFFF" />
+                  <Text className="text-[13px] font-semibold text-white">
+                    {nextDose.scheduledTime12}
+                  </Text>
+                </View>
               </View>
             </View>
 
             {!layout.isCompact ? (
-              <View accessible={false} className="shrink-0 items-center justify-center px-1">
-                <View className="flex-row items-end gap-1">
+              <View accessible={false} className="shrink-0 items-center justify-center pr-1">
+                {/* Subtle accent rays above pills */}
+                <View className="mb-1 flex-row items-end gap-1.5">
                   <View
-                    className="h-9 w-9 items-center justify-center rounded-full border-2 border-[#DCEEE7] bg-white shadow-sm"
+                    className="h-2.5 w-[2px] rounded-full bg-white/70"
+                    style={{ transform: [{ rotate: '-18deg' }] }}
+                  />
+                  <View className="h-3 w-[2px] rounded-full bg-white/85" />
+                  <View
+                    className="h-2.5 w-[2px] rounded-full bg-white/70"
+                    style={{ transform: [{ rotate: '18deg' }] }}
+                  />
+                </View>
+                <View className="flex-row items-end -space-x-2">
+                  <View
+                    className="h-11 w-11 items-center justify-center rounded-full border-2 border-[#DCEEE7] bg-white shadow-sm"
                     style={{ transform: [{ rotate: '-20deg' }] }}
                   >
-                    <View className="h-[1.5px] w-6 bg-[#CBD8D3]" />
+                    <View className="h-[2px] w-7 bg-[#CBD8D3]" />
                   </View>
                   <View
-                    className="h-7 w-7 items-center justify-center rounded-full border-2 border-[#DCEEE7] bg-white/95"
+                    className="h-9 w-9 items-center justify-center rounded-full border-2 border-[#DCEEE7] bg-white/95"
                     style={{ transform: [{ rotate: '18deg' }] }}
                   >
-                    <View className="h-[1.5px] w-4 bg-[#CBD8D3]" />
+                    <View className="h-[1.5px] w-5 bg-[#CBD8D3]" />
                   </View>
                 </View>
               </View>
             ) : null}
+          </View>
+
+          {/* Bottom row: Take now pill CTA + View schedule link aligned smoothly */}
+          <View className="mt-4 flex-row flex-wrap items-center gap-4">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Take now"
+              disabled={nextDoseBusy}
+              onPress={() => void markDoseStatus(nextDose, 'taken')}
+              className="min-h-[40px] flex-row items-center justify-center rounded-full bg-white px-5 py-2 active:bg-mint"
+            >
+              {nextDoseBusy ? (
+                <ActivityIndicator size="small" color={CAREDOSE_EXTENDED_COLORS.primary} />
+              ) : (
+                <Text className="text-[13px] font-bold text-main">Take now</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View schedule"
+              onPress={() => router.push('/schedule')}
+              className="min-h-[40px] flex-row items-center gap-1 px-1 py-2"
+            >
+              <Text className="text-xs font-semibold text-white">View schedule</Text>
+              <Feather name="arrow-right" size={14} color="#FFFFFF" />
+            </Pressable>
           </View>
         </View>
       ) : (
