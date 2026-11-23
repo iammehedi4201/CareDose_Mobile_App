@@ -31,6 +31,7 @@ export interface BottomSheetProps {
   cancelLabel?: string;
   submitDisabled?: boolean;
   submitLoading?: boolean;
+  hideFooter?: boolean;
   children: React.ReactNode;
 }
 
@@ -46,6 +47,7 @@ export function BottomSheet({
   cancelLabel = 'Cancel',
   submitDisabled = false,
   submitLoading = false,
+  hideFooter = false,
   children,
 }: BottomSheetProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
@@ -127,23 +129,25 @@ export function BottomSheet({
             ) : null}
           </ScrollView>
 
-          <View style={styles.footerRow}>
-            <SecondaryButton
-              label={cancelLabel}
-              onPress={onClose}
-              disabled={submitLoading}
-              style={styles.footerBtn}
-            />
-            {onSubmit ? (
-              <PrimaryButton
-                label={submitLabel}
-                onPress={onSubmit}
-                disabled={submitDisabled}
-                loading={submitLoading}
+          {!hideFooter ? (
+            <View style={styles.footerRow}>
+              <SecondaryButton
+                label={cancelLabel}
+                onPress={onClose}
+                disabled={submitLoading}
                 style={styles.footerBtn}
               />
-            ) : null}
-          </View>
+              {onSubmit ? (
+                <PrimaryButton
+                  label={submitLabel}
+                  onPress={onSubmit}
+                  disabled={submitDisabled}
+                  loading={submitLoading}
+                  style={styles.footerBtn}
+                />
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -286,6 +290,7 @@ const styles = StyleSheet.create({
   },
   headerTextCol: {
     flex: 1,
+    minWidth: 0,
   },
   closeBtn: {
     width: MIN_TOUCH_TARGET - 8,

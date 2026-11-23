@@ -59,6 +59,8 @@ export interface ExtractedPackInfo {
   meteredDoses: number | null;
   /** Specific container unit for injections/topicals/inhalers (e.g. "vials", "ampoules", "syringes", "tube"). */
   containerUnit: string | null;
+  /** True when catalogue packaging supports automatic unit conversion without manual guesswork. */
+  hasReliableDefaultPackaging: boolean;
   /** Price for 1 discrete unit (tablet, capsule, piece, sachet), or derived packPrice / packTotalUnits when pack is countable. */
   discreteUnitPrice: number | null;
   discretePriceSource: 'unit_price' | 'derived_from_pack' | 'none';
@@ -187,7 +189,8 @@ export function extractStripDetails(
   const cleanExplicit =
     typeof explicitStripUnits === 'number' &&
     Number.isInteger(explicitStripUnits) &&
-    explicitStripUnits > 0
+    explicitStripUnits > 1 &&
+    explicitStripUnits <= 100
       ? explicitStripUnits
       : null;
 
@@ -196,6 +199,11 @@ export function extractStripDetails(
   }
   const clean = packQuantity.trim();
 
+  // Reject bottle/jar/pot/tin containers even if solid dosage form
+  if (/\b(pot|jar|bottle|tin|container|vial|ampoule)\b/i.test(clean)) {
+    return { stripUnits: null, stripsInPack: null };
+  }
+
   // "50 x 10", "3 x 10", "4 x 14", "6 x 5", "3 x 10's pack"
   const matrixMatch = clean.match(
     /^(\d+)\s*x\s*(\d+)(?:'s|’s)?(?:\s+(?:pack|strip|blister|box|pot|tin))?$/i,
@@ -203,7 +211,7 @@ export function extractStripDetails(
   if (matrixMatch) {
     const a = Number(matrixMatch[1]);
     const b = Number(matrixMatch[2]);
-    if (a > 0 && b > 0) {
+    if (a > 0 && b > 1 && b <= 100) {
       return { stripUnits: cleanExplicit ?? b, stripsInPack: a };
     }
   }
@@ -214,7 +222,7 @@ export function extractStripDetails(
   );
   if (nounStripMatch) {
     const n = Number(nounStripMatch[1]);
-    if (n > 0) {
+    if (n > 1 && n <= 100) {
       return { stripUnits: cleanExplicit ?? n, stripsInPack: 1 };
     }
   }
@@ -223,7 +231,7 @@ export function extractStripDetails(
   const sStripMatch = clean.match(/^(\d+)(?:'s|’s)\s+(?:strip|blister)$/i);
   if (sStripMatch) {
     const n = Number(sStripMatch[1]);
-    if (n > 0) {
+    if (n > 1 && n <= 100) {
       return { stripUnits: cleanExplicit ?? n, stripsInPack: 1 };
     }
   }
@@ -364,22 +372,29 @@ export function extractPackInfo(
   ) {
     strategy = 'sachet';
   }
-  const { stripUnits, stripsInPack: parsedStripsInPack } = extractStripDetails(
+  const { stripUnits: candidateStripUnits, stripsInPack: parsedStripsInPack } = extractStripDetails(
     packQty,
     strategy,
     selectedPack?.stripUnits ?? null,
   );
+  // Reject strip metadata that contradicts total commercial pack units (e.g., 28's pack with strip=10)
+  const stripConsistent =
+    candidateStripUnits !== null &&
+    (packTotalUnits === null ||
+      (packTotalUnits >= candidateStripUnits && packTotalUnits % candidateStripUnits === 0));
+  const stripUnits = stripConsistent ? candidateStripUnits : null;
   const stripsInPack =
-    parsedStripsInPack ??
-    (stripUnits !== null &&
-    packTotalUnits !== null &&
-    packTotalUnits >= stripUnits &&
-    packTotalUnits % stripUnits === 0
-      ? packTotalUnits / stripUnits
-      : null);
-  const bottleVolumeMl =
+    stripUnits !== null
+      ? (parsedStripsInPack ?? (packTotalUnits !== null ? packTotalUnits / stripUnits : null))
+      : null;
+
+  const rawBottleVolumeMl =
     strategy === 'liquid' || strategy === 'drops' || strategy === 'injection'
       ? extractVolumeMl(packQty)
+      : null;
+  const bottleVolumeMl =
+    rawBottleVolumeMl !== null && rawBottleVolumeMl > 0 && rawBottleVolumeMl <= 10000
+      ? rawBottleVolumeMl
       : null;
   const tubeWeightGm = strategy === 'topical' ? extractWeightGm(packQty) : null;
   const meteredDoses = strategy === 'inhaler' ? extractMeteredDoses(packQty) : null;
@@ -406,11 +421,15 @@ export function extractPackInfo(
   let discreteUnitPrice: number | null = null;
   let discretePriceSource: ExtractedPackInfo['discretePriceSource'] = 'none';
 
+  const derivedSolidUnits =
+    packTotalUnits ??
+    (stripsInPack !== null && stripUnits !== null ? stripsInPack * stripUnits : null);
+
   if (rawUnitPrice !== null) {
     discreteUnitPrice = rawUnitPrice;
     discretePriceSource = 'unit_price';
-  } else if (rawPackPrice !== null && packTotalUnits !== null && packTotalUnits > 0) {
-    discreteUnitPrice = Number((rawPackPrice / packTotalUnits).toFixed(4));
+  } else if (rawPackPrice !== null && derivedSolidUnits !== null && derivedSolidUnits > 0) {
+    discreteUnitPrice = Number((rawPackPrice / derivedSolidUnits).toFixed(4));
     discretePriceSource = 'derived_from_pack';
   } else if (
     strategy === 'sachet' &&
@@ -446,6 +465,19 @@ export function extractPackInfo(
     }
   }
 
+  const hasReliableDefaultPackaging =
+    strategy === 'tablet_capsule'
+      ? stripUnits !== null
+      : strategy === 'liquid'
+        ? bottleVolumeMl !== null
+        : strategy === 'injection'
+          ? containerUnit !== null
+          : strategy === 'inhaler'
+            ? meteredDoses !== null
+            : strategy === 'drops' || strategy === 'suppository' || strategy === 'topical' || strategy === 'sachet'
+              ? true
+              : Boolean(packQty || packTotalUnits);
+
   return {
     strategy,
     dosageFormLabel: dosageForm?.trim() || 'Medicine',
@@ -459,6 +491,7 @@ export function extractPackInfo(
     tubeWeightGm,
     meteredDoses,
     containerUnit,
+    hasReliableDefaultPackaging,
     discreteUnitPrice,
     discretePriceSource,
     containerPrice,
@@ -717,14 +750,13 @@ export function calculateStockAndPrice(params: {
   if (mode === 'strips') {
     const stripSize = p2 !== null && p2 > 0 ? p2 : null;
     if (hasCatalogSelection && packInfo.stripUnits === null) {
-      missingPackagingNotice = packInfo.packQuantityLabel
-        ? `Strip size is not listed in catalogue (${packInfo.packQuantityLabel}). Enter your tablets per strip manually, or switch to ${formatUnitNounCapitalized(packInfo.baseUnit)}.`
-        : `Strip size is not listed in catalogue. Enter your tablets per strip manually.`;
+      missingPackagingNotice =
+        'Strip size is not listed in catalogue. Enter your units per strip manually.';
     }
-    if (p1 !== null && stripSize !== null) {
+    if (p1 !== null && p1 > 0 && stripSize !== null) {
       stockRemaining = Number((p1 * stripSize).toFixed(2));
       const unitLabel = formatUnitLabelForCount(stockRemaining, packInfo.baseUnit);
-      calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${unitLabel} (${formatStockQuantity(p1)} ${p1 === 1 ? 'strip' : 'strips'} × ${formatStockQuantity(stripSize)})`;
+      calculationSummary = `${formatStockQuantity(p1)} ${p1 === 1 ? 'strip' : 'strips'} = ${formatStockQuantity(stockRemaining)} ${unitLabel}`;
       if (packInfo.discreteUnitPrice !== null) {
         calculatedTotalPrice = Number((stockRemaining * packInfo.discreteUnitPrice).toFixed(2));
         priceScopeDescription = `Total value for ${formatStockQuantity(stockRemaining)} ${unitLabel} (Ref: ${referenceUnitPriceText})`;
@@ -732,10 +764,10 @@ export function calculateStockAndPrice(params: {
     }
   } else if (mode === 'packs') {
     const packUnits = packInfo.packTotalUnits;
-    if (p1 !== null && packUnits !== null) {
+    if (p1 !== null && p1 > 0 && packUnits !== null) {
       stockRemaining = Number((p1 * packUnits).toFixed(2));
       const unitLabel = formatUnitLabelForCount(stockRemaining, packInfo.baseUnit);
-      calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${unitLabel} (${formatStockQuantity(p1)} ${p1 === 1 ? 'pack' : 'packs'} × ${packUnits})`;
+      calculationSummary = `${formatStockQuantity(p1)} ${p1 === 1 ? 'pack' : 'packs'} = ${formatStockQuantity(stockRemaining)} ${unitLabel}`;
       const packPrice = toPositiveNumber(packInfo.pack?.packPrice);
       if (packPrice !== null) {
         calculatedTotalPrice = Number((p1 * packPrice).toFixed(2));
@@ -755,94 +787,87 @@ export function calculateStockAndPrice(params: {
       stockUnit = 'ml';
       if (hasCatalogSelection && packInfo.bottleVolumeMl === null) {
         missingPackagingNotice =
-          'Bottle volume (ml) is not listed in catalogue. Enter ml per bottle manually, or switch to "In ml".';
+          'Package information is unavailable. Enter your current quantity manually.';
       }
-      if (p1 !== null && bottleVol !== null) {
+      if (p1 !== null && p1 > 0 && bottleVol !== null) {
         stockRemaining = Number((p1 * bottleVol).toFixed(2));
-        calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ml (${formatStockQuantity(p1)} ${p1 === 1 ? 'bottle' : 'bottles'} × ${formatStockQuantity(bottleVol)} ml)`;
+        calculationSummary = `${formatStockQuantity(p1)} ${p1 === 1 ? 'bottle' : 'bottles'} = ${formatStockQuantity(stockRemaining)} ml`;
       }
     } else {
       // Eye/ear/nasal/pediatric drops stored as bottle count when in bottle mode
       stockUnit = 'bottle';
-      if (p1 !== null) {
+      if (p1 !== null && p1 > 0) {
         stockRemaining = Number(p1.toFixed(2));
         const bottleLabel = formatUnitLabelForCount(stockRemaining, 'bottle');
         if (bottleVol !== null) {
           const totalMl = Number((stockRemaining * bottleVol).toFixed(2));
-          calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${bottleLabel} (${formatStockQuantity(totalMl)} ml total)`;
+          calculationSummary = `${formatStockQuantity(stockRemaining)} ${bottleLabel} · ${formatStockQuantity(totalMl)} ml total`;
         } else {
-          calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${bottleLabel}`;
-          if (hasCatalogSelection) {
-            missingPackagingNotice =
-              'Bottle volume (ml) is not listed in catalogue. Quantity will be tracked in bottles.';
-          }
+          calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${bottleLabel}`;
         }
       }
     }
 
-    if (p1 !== null && packInfo.containerPrice !== null) {
+    if (p1 !== null && p1 > 0 && packInfo.containerPrice !== null) {
       calculatedTotalPrice = Number((p1 * packInfo.containerPrice).toFixed(2));
       const volNote = bottleVol ? `${formatStockQuantity(bottleVol)} ml bottle` : 'bottle';
       priceScopeDescription = `Total value for ${formatStockQuantity(p1)} ${p1 === 1 ? 'bottle' : 'bottles'} (Ref: ৳${formatBdtCurrency(packInfo.containerPrice)} / ${volNote})`;
     }
   } else if (mode === 'ml') {
     stockUnit = 'ml';
-    if (p1 !== null) {
+    if (p1 !== null && p1 > 0) {
       stockRemaining = Number(p1.toFixed(2));
-      calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ml`;
+      calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ml`;
       if (packInfo.containerPrice !== null && packInfo.bottleVolumeMl !== null && packInfo.bottleVolumeMl > 0) {
         const perMl = packInfo.containerPrice / packInfo.bottleVolumeMl;
         calculatedTotalPrice = Number((stockRemaining * perMl).toFixed(2));
         priceScopeDescription = `Proportional value for ${formatStockQuantity(stockRemaining)} ml (Ref: ৳${formatBdtCurrency(packInfo.containerPrice)} / ${formatStockQuantity(packInfo.bottleVolumeMl)} ml bottle)`;
-      } else if (packInfo.containerPrice !== null && hasCatalogSelection) {
-        missingPackagingNotice =
-          `Catalogue lists ৳${formatBdtCurrency(packInfo.containerPrice)} per bottle without bottle volume (ml). Enter total stock price manually.`;
       }
     }
   } else if (mode === 'containers') {
     stockUnit = resolvedContainerUnit;
     if (packInfo.strategy === 'injection' && !packInfo.containerUnit && hasCatalogSelection) {
       missingPackagingNotice =
-        'Container type (vial, ampoule, or pre-filled syringe) is not specified in catalogue. Choose your unit below.';
+        'Package information is unavailable. Enter your current quantity manually.';
     }
 
     if (packInfo.strategy === 'inhaler') {
-      if (packInfo.meteredDoses !== null && p1 !== null) {
+      if (packInfo.meteredDoses !== null && p1 !== null && p1 > 0) {
         stockUnit = 'puffs';
         stockRemaining = Number((p1 * packInfo.meteredDoses).toFixed(2));
-        calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} puffs (${formatStockQuantity(p1)} × ${packInfo.meteredDoses} puffs)`;
-      } else if (p1 !== null) {
+        calculationSummary = `${formatStockQuantity(p1)} ${p1 === 1 ? 'inhaler' : 'inhalers'} = ${formatStockQuantity(stockRemaining)} puffs`;
+      } else if (p1 !== null && p1 > 0) {
         stockUnit = resolvedContainerUnit;
         stockRemaining = Number(p1.toFixed(2));
         const lbl = formatUnitLabelForCount(stockRemaining, stockUnit);
-        calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${lbl}`;
+        calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${lbl}`;
         if (hasCatalogSelection) {
           missingPackagingNotice =
-            'Dose/puff count is not listed in catalogue. Quantity is tracked by container.';
+            'Package information is unavailable. Enter your current quantity manually.';
         }
       }
-    } else if (p1 !== null) {
+    } else if (p1 !== null && p1 > 0) {
       stockRemaining = Number(p1.toFixed(2));
       const lbl = formatUnitLabelForCount(stockRemaining, stockUnit);
       if (packInfo.strategy === 'topical' && packInfo.tubeWeightGm !== null) {
-        calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${lbl} (${formatStockQuantity(packInfo.tubeWeightGm)} gm each)`;
+        calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${lbl} (${formatStockQuantity(packInfo.tubeWeightGm)} gm each)`;
       } else if (packInfo.strategy === 'injection' && packInfo.packQuantityLabel) {
-        calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${lbl} (${packInfo.packQuantityLabel})`;
+        calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${lbl} (${packInfo.packQuantityLabel})`;
       } else {
-        calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${lbl}`;
+        calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${lbl}`;
       }
     }
 
-    if (p1 !== null && packInfo.containerPrice !== null) {
+    if (p1 !== null && p1 > 0 && packInfo.containerPrice !== null) {
       calculatedTotalPrice = Number((p1 * packInfo.containerPrice).toFixed(2));
       const cLabel = formatUnitLabelForCount(1, resolvedContainerUnit);
       priceScopeDescription = `Total value for ${formatStockQuantity(p1)} ${formatUnitLabelForCount(p1, resolvedContainerUnit)} (Ref: ৳${formatBdtCurrency(packInfo.containerPrice)} / ${cLabel})`;
     }
   } else if (mode === 'puffs') {
     stockUnit = 'puffs';
-    if (p1 !== null) {
+    if (p1 !== null && p1 > 0) {
       stockRemaining = Number(p1.toFixed(2));
-      calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${stockRemaining === 1 ? 'puff' : 'puffs'}`;
+      calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${stockRemaining === 1 ? 'puff' : 'puffs'}`;
       if (packInfo.containerPrice !== null && packInfo.meteredDoses !== null && packInfo.meteredDoses > 0) {
         calculatedTotalPrice = Number(((stockRemaining / packInfo.meteredDoses) * packInfo.containerPrice).toFixed(2));
         priceScopeDescription = `Proportional value for ${formatStockQuantity(stockRemaining)} puffs (Ref: ৳${formatBdtCurrency(packInfo.containerPrice)} / ${packInfo.meteredDoses} puffs)`;
@@ -852,10 +877,10 @@ export function calculateStockAndPrice(params: {
     // 'direct' mode: tablets, capsules, pieces, sachets, units
     stockUnit = packInfo.baseUnit;
 
-    if (p1 !== null) {
+    if (p1 !== null && p1 > 0) {
       stockRemaining = Number(p1.toFixed(2));
       const lbl = formatUnitLabelForCount(stockRemaining, stockUnit);
-      calculationSummary = `Total stock: ${formatStockQuantity(stockRemaining)} ${lbl}`;
+      calculationSummary = `Your current stock: ${formatStockQuantity(stockRemaining)} ${lbl}`;
       if (packInfo.discreteUnitPrice !== null) {
         calculatedTotalPrice = Number((stockRemaining * packInfo.discreteUnitPrice).toFixed(2));
         priceScopeDescription = `Total value for ${formatStockQuantity(stockRemaining)} ${lbl} (Ref: ${referenceUnitPriceText})`;
@@ -872,7 +897,7 @@ export function calculateStockAndPrice(params: {
     referencePackText,
     priceScopeDescription,
     missingPackagingNotice,
-    isValid: stockRemaining !== null && stockRemaining >= 0,
+    isValid: stockRemaining !== null && stockRemaining > 0,
   };
 }
 
@@ -882,6 +907,30 @@ function toPositiveNumberAllowZero(raw: string): number | null {
   const num = Number(trimmed);
   if (!Number.isFinite(num) || num < 0) return null;
   return num;
+}
+
+export function getEnteredQuantityUnit(params: {
+  mode: StockEntryMode;
+  baseUnit: string;
+  containerUnit: string;
+}): string {
+  const { mode, baseUnit, containerUnit } = params;
+  switch (mode) {
+    case 'strips':
+      return 'strips';
+    case 'packs':
+      return 'packs';
+    case 'bottles':
+      return 'bottles';
+    case 'ml':
+      return 'ml';
+    case 'puffs':
+      return 'puffs';
+    case 'containers':
+      return formatUnitLabelForCount(2, containerUnit || baseUnit);
+    default:
+      return formatUnitLabelForCount(2, baseUnit);
+  }
 }
 
 export function getPriceUnitBasis(params: {
@@ -916,4 +965,136 @@ export function getPriceUnitBasis(params: {
     multiplier: stockRemaining !== null && stockRemaining > 0 ? stockRemaining : null,
     unitLabel: formatUnitLabelForCount(1, stockUnit),
   };
+}
+
+function normalizeSingularStockUnit(unit?: string | null): string {
+  const lower = (unit ?? '').trim().toLowerCase();
+  if (!lower) return '';
+  if (lower === 'tablets' || lower === 'tablet') return 'tablet';
+  if (lower === 'capsules' || lower === 'capsule') return 'capsule';
+  if (lower === 'pieces' || lower === 'piece') return 'piece';
+  if (lower === 'bottles' || lower === 'bottle') return 'bottle';
+  if (lower === 'tubes' || lower === 'tube') return 'tube';
+  if (lower === 'vials' || lower === 'vial') return 'vial';
+  if (lower === 'ampoules' || lower === 'ampoule') return 'ampoule';
+  if (lower === 'syringes' || lower === 'syringe' || lower.includes('syringe')) return 'syringe';
+  if (lower === 'pens' || lower === 'pen') return 'pen';
+  if (lower === 'cartridges' || lower === 'cartridge') return 'cartridge';
+  if (lower === 'bags' || lower === 'bag') return 'bag';
+  if (lower === 'sachets' || lower === 'sachet') return 'sachet';
+  if (lower === 'puffs' || lower === 'puff') return 'puff';
+  if (lower === 'inhalers' || lower === 'inhaler') return 'inhaler';
+  if (lower === 'ml') return 'ml';
+  return lower;
+}
+
+const DISCRETE_ESTIMATE_UNITS = new Set([
+  'tablet',
+  'capsule',
+  'piece',
+  'bottle',
+  'tube',
+  'vial',
+  'ampoule',
+  'syringe',
+  'pen',
+  'cartridge',
+  'bag',
+  'sachet',
+  'inhaler',
+  'unit',
+]);
+
+/**
+ * Estimates current stock value from catalogue unit/pack rates without ever treating
+ * reference pricing as an actual purchase amount paid.
+ */
+export function estimateCurrentStockValue(params: {
+  stockRemaining: number;
+  stockUnit: string;
+  unitPriceText?: string | null;
+  referencePackText?: string | null;
+}): number | null {
+  const { stockRemaining, stockUnit, unitPriceText, referencePackText } = params;
+  if (!Number.isFinite(stockRemaining) || stockRemaining <= 0) return null;
+
+  const targetUnit = normalizeSingularStockUnit(stockUnit);
+  const priceMatch = (unitPriceText ?? '')
+    .trim()
+    .match(/^৳\s*([\d,]+(?:\.\d+)?)\s*\/\s*([a-zA-Z\s-]+)$/);
+
+  if (priceMatch) {
+    const rate = Number(priceMatch[1].replace(/,/g, ''));
+    const rateUnit = normalizeSingularStockUnit(priceMatch[2]);
+    if (Number.isFinite(rate) && rate > 0) {
+      if (rateUnit === targetUnit) {
+        return Number((stockRemaining * rate).toFixed(2));
+      }
+      if (rateUnit === 'unit' && DISCRETE_ESTIMATE_UNITS.has(targetUnit)) {
+        return Number((stockRemaining * rate).toFixed(2));
+      }
+      if (
+        targetUnit === 'ml' &&
+        (rateUnit === 'bottle' || rateUnit === 'pack') &&
+        referencePackText
+      ) {
+        const volMl = extractVolumeMl(referencePackText);
+        if (volMl !== null && volMl > 0) {
+          return Number(((rate / volMl) * stockRemaining).toFixed(2));
+        }
+      }
+    }
+  }
+
+  if (referencePackText) {
+    const refMatch = referencePackText.match(/^(.+?)\s*·\s*৳\s*([\d,]+(?:\.\d+)?)$/);
+    if (refMatch) {
+      const packDesc = refMatch[1].trim();
+      const packPrice = Number(refMatch[2].replace(/,/g, ''));
+      if (Number.isFinite(packPrice) && packPrice > 0) {
+        if (targetUnit === 'ml') {
+          const volMl = extractVolumeMl(packDesc);
+          if (volMl !== null && volMl > 0) {
+            return Number(((packPrice / volMl) * stockRemaining).toFixed(2));
+          }
+        }
+        if (targetUnit === 'puff') {
+          const doses = extractMeteredDoses(packDesc);
+          if (doses !== null && doses > 0) {
+            return Number(((packPrice / doses) * stockRemaining).toFixed(2));
+          }
+        }
+        const matrixMatch = packDesc.match(/^(\d+)\s*x\s*(\d+)/i);
+        if (matrixMatch && DISCRETE_ESTIMATE_UNITS.has(targetUnit)) {
+          const totalUnits = Number(matrixMatch[1]) * Number(matrixMatch[2]);
+          if (totalUnits > 0) {
+            return Number(((packPrice / totalUnits) * stockRemaining).toFixed(2));
+          }
+        }
+        const countPackMatch = packDesc.match(/^(\d+)'s\s+(?:pack|strip|box|blister)/i);
+        if (countPackMatch && DISCRETE_ESTIMATE_UNITS.has(targetUnit)) {
+          const totalUnits = Number(countPackMatch[1]);
+          if (totalUnits > 0) {
+            return Number(((packPrice / totalUnits) * stockRemaining).toFixed(2));
+          }
+        }
+        const singleContainerMatch =
+          (targetUnit === 'bottle' && /\b(drop|drops|bottle|syrup|suspension|solution)\b/i.test(packDesc)) ||
+          (targetUnit === 'tube' && /\b(tube|cream|ointment|gel)\b/i.test(packDesc)) ||
+          (targetUnit === 'sachet' && /\bsachet\b/i.test(packDesc)) ||
+          ((targetUnit === 'vial' ||
+            targetUnit === 'ampoule' ||
+            targetUnit === 'syringe' ||
+            targetUnit === 'pen' ||
+            targetUnit === 'cartridge' ||
+            targetUnit === 'bag') &&
+            new RegExp(`\\b${targetUnit}s?\\b`, 'i').test(packDesc));
+        if (singleContainerMatch) {
+          return Number((packPrice * stockRemaining).toFixed(2));
+        }
+      }
+    }
+  }
+
+  return null;
 }

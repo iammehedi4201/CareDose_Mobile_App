@@ -55,8 +55,44 @@ describe('Add Medicine — Dosage-Form Stock & Price Calculation Engine', () => 
     expect(res.stockUnit).toBe('tablets');
     expect(res.calculatedTotalPrice).toBe(36);
     expect(res.missingPackagingNotice).toBeNull();
-    expect(res.calculationSummary).toContain('30 tablets');
+    expect(res.calculationSummary).toBe('3 strips = 30 tablets');
     expect(res.priceScopeDescription).toContain('Total value for 30 tablets');
+    expect(info.hasReliableDefaultPackaging).toBe(true);
+  });
+
+  it('rejects inconsistent stripUnits and falls back to safe direct entry without guessing', () => {
+    const inconsistentPack = makePack({
+      packQuantity: "28's pack",
+      packUnits: 28,
+      stripUnits: 10,
+      packPrice: '280.00',
+    });
+    const badInfo = extractPackInfo('Tablet', inconsistentPack, [inconsistentPack]);
+    expect(badInfo.stripUnits).toBeNull();
+    expect(badInfo.hasReliableDefaultPackaging).toBe(false);
+    expect(getDefaultStockMode(badInfo)).toBe('direct');
+
+    const jarPack = makePack({
+      packQuantity: '100 ml bottle',
+      packUnits: 100,
+      stripUnits: 10,
+    });
+    const jarInfo = extractPackInfo('Tablet', jarPack, [jarPack]);
+    expect(jarInfo.stripUnits).toBeNull();
+    expect(jarInfo.hasReliableDefaultPackaging).toBe(false);
+  });
+
+  it('requires strictly positive quantities for saving opening stock', () => {
+    const pack = makePack({ packQuantity: '5 x 10', packUnits: 50, stripUnits: 10 });
+    const info = extractPackInfo('Tablet', pack, [pack]);
+    const zeroRes = calculateStockAndPrice({
+      packInfo: info,
+      mode: 'strips',
+      primaryQty: '0',
+      secondaryQty: '10',
+    });
+    expect(zeroRes.isValid).toBe(false);
+    expect(zeroRes.stockRemaining).toBeNull();
   });
 
   it('does NOT assume strip size when tablet pack only lists box count ("510\'s pack" / "30\'s pack")', () => {

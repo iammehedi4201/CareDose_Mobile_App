@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { usePathname, useRouter } from 'expo-router';
 import {
   CatalogueBrandDetailDto,
   CatalogueBrandSummaryDto,
@@ -12,6 +13,8 @@ import {
   formatPackSummary,
   formatUnitOrPackPrice,
   OFFLINE_FALLBACK_CATALOGUE_BRANDS,
+  resolveBrandBadge,
+  resolvePackQuantityUnit,
 } from '../features/catalogue/catalogue-helpers';
 import {
   inferStockUnit,
@@ -28,16 +31,18 @@ import {
   formatUnitNounCapitalized,
   getAvailableStockModes,
   getDefaultStockMode,
-  getPriceUnitBasis,
-  getSuggestedInstructionPlaceholder,
+  getEnteredQuantityUnit,
   resolveBrandPacks,
   StockEntryMode,
 } from '../features/medications/stock-calculator';
+import { getTodayLocalYmd } from '../features/schedule/dose-rules';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS, MIN_TOUCH_TARGET } from '../theme/tokens';
-import { FormCol, FormField, FormRow, SelectField, validateRequiredFields } from './FormFields';
+import { PrimaryButton, SecondaryButton } from './Buttons';
+import { DateField, FormCol, FormField, FormRow, SelectField, validateRequiredFields } from './FormFields';
 import { MedicineFormThumbnail } from './MedicineFormThumbnail';
 import { BottomSheet } from './Overlays';
 import { SearchInput } from './SearchInput';
+import { StatusBadge } from './StatusBadge';
 
 const QUICK_SEARCH_TERMS = ['Napa', 'Seclo', 'Maxpro', 'Monas', 'Paracetamol', 'Omeprazole'];
 
@@ -62,12 +67,12 @@ const INJECTION_UNIT_OPTIONS = [
   { label: 'Bags / Bottles', value: 'bags' },
 ];
 
-type ModalStage = 'search' | 'configure' | 'manual';
-type PriceInputScope = 'total' | 'per_unit_or_pack';
+type ModalStage = 'search' | 'configure' | 'manual' | 'success';
 
 export interface AddMedicineModalProps {
   visible: boolean;
   initialBrand?: CatalogueBrandDetailDto | CatalogueBrandSummaryDto | null;
+  initialPackId?: string | null;
   onClose: () => void;
   onSaved: (created: PersonalMedicationRecord) => void;
 }
@@ -75,10 +80,13 @@ export interface AddMedicineModalProps {
 export function AddMedicineModal({
   visible,
   initialBrand = null,
+  initialPackId = null,
   onClose,
   onSaved,
 }: AddMedicineModalProps): React.JSX.Element {
   const { addMedication } = useMedications();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [stage, setStage] = useState<ModalStage>(initialBrand ? 'configure' : 'search');
 
@@ -111,18 +119,26 @@ export function AddMedicineModal({
   // Dynamic stock states
   const [stockMode, setStockMode] = useState<StockEntryMode>('direct');
   const [primaryQty, setPrimaryQty] = useState('');
+  const primaryQtyRef = useRef('');
+  primaryQtyRef.current = primaryQty;
   const [secondaryQty, setSecondaryQty] = useState('');
   const [injectionContainerUnit, setInjectionContainerUnit] = useState<string>('vials');
 
-  // Price states
-  const [priceInput, setPriceInput] = useState('');
-  const [priceEditedManually, setPriceEditedManually] = useState(false);
-  const [priceScope, setPriceScope] = useState<PriceInputScope>('total');
+  // Unit toggle & optional purchase details (collapsed by default)
+  const [showUnitPicker, setShowUnitPicker] = useState(false);
+  const [showPurchaseDetails, setShowPurchaseDetails] = useState(false);
+  const [purchaseAmount, setPurchaseAmount] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(getTodayLocalYmd());
+  const [purchaseVendor, setPurchaseVendor] = useState('');
 
-  // Instructions + save state
-  const [instructions, setInstructions] = useState('');
+  // Validation, API error & save confirmation state
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savedRecord, setSavedRecord] = useState<PersonalMedicationRecord | null>(null);
+  const [savedSummaryText, setSavedSummaryText] = useState<string | null>(null);
+  const [savedEstimatedPrice, setSavedEstimatedPrice] = useState<number | null>(null);
+  const [savedPaidPrice, setSavedPaidPrice] = useState<number | null>(null);
 
   const availablePacks = useMemo(
     () => (stage === 'configure' ? resolveBrandPacks(selectedBrand, brandDetail) : []),
@@ -145,11 +161,7 @@ export function AddMedicineModal({
   const availableModes = useMemo(() => getAvailableStockModes(packInfo), [packInfo]);
 
   const syncModeDefaults = useCallback(
-    (
-      nextInfo: ReturnType<typeof extractPackInfo>,
-      nextMode: StockEntryMode,
-      preserveManualPrice = false,
-    ) => {
+    (nextInfo: ReturnType<typeof extractPackInfo>, nextMode: StockEntryMode) => {
       setStockMode(nextMode);
       if (nextMode === 'strips') {
         setSecondaryQty(nextInfo.stripUnits ? String(nextInfo.stripUnits) : '');
@@ -163,22 +175,42 @@ export function AddMedicineModal({
       } else {
         setInjectionContainerUnit('vials');
       }
-      if (!preserveManualPrice) {
-        setPriceEditedManually(false);
-        setPriceScope('total');
-      }
     },
     [],
   );
 
+  const resetFormEntries = useCallback(() => {
+    setPrimaryQty('');
+    setSecondaryQty('');
+    setShowUnitPicker(false);
+    setShowPurchaseDetails(false);
+    setPurchaseAmount('');
+    setPurchaseDate(getTodayLocalYmd());
+    setPurchaseVendor('');
+    setErrors({});
+    setSaveError(null);
+    setSavedRecord(null);
+    setSavedSummaryText(null);
+    setSavedEstimatedPrice(null);
+    setSavedPaidPrice(null);
+    setInjectionContainerUnit('vials');
+  }, []);
+
   const applyBrandSelection = useCallback(
-    async (brand: CatalogueBrandSummaryDto | CatalogueBrandDetailDto) => {
+    async (
+      brand: CatalogueBrandSummaryDto | CatalogueBrandDetailDto,
+      preferredPackId: string | null = null,
+    ) => {
       const selReqId = ++selectionReqIdRef.current;
       const initialPacks = resolveBrandPacks(
         brand,
         'packs' in brand ? brand : null,
       );
-      const firstPack = initialPacks[0] ?? brand.primaryPack ?? null;
+      const firstPack =
+        (preferredPackId ? initialPacks.find((p) => p.id === preferredPackId) : null) ??
+        initialPacks[0] ??
+        brand.primaryPack ??
+        null;
       const initialInfo = extractPackInfo(brand.dosageForm, firstPack, initialPacks);
       const defaultMode = getDefaultStockMode(initialInfo);
 
@@ -186,10 +218,8 @@ export function AddMedicineModal({
       setBrandDetail('packs' in brand ? brand : null);
       setSelectedPackId(firstPack?.id ?? null);
       setStage('configure');
-      setPrimaryQty('');
-      setPriceInput('');
-      setErrors({});
-      syncModeDefaults(initialInfo, defaultMode, false);
+      resetFormEntries();
+      syncModeDefaults(initialInfo, defaultMode);
 
       // Fetch full pack variations in background if not already hydrated
       if (!('packs' in brand) || brand.packs.length === 0) {
@@ -200,14 +230,16 @@ export function AddMedicineModal({
           setBrandDetail(detail);
           const fullPacks = resolveBrandPacks(brand, detail);
           const nextFirst =
-            fullPacks.find((p) => p.id === firstPack?.id) ?? fullPacks[0] ?? null;
+            (preferredPackId ? fullPacks.find((p) => p.id === preferredPackId) : null) ??
+            fullPacks.find((p) => p.id === firstPack?.id) ??
+            fullPacks[0] ??
+            null;
           if (nextFirst) {
             setSelectedPackId(nextFirst.id);
             const fullInfo = extractPackInfo(detail.dosageForm, nextFirst, fullPacks);
-            if (
-              fullInfo.containerUnit !== initialInfo.containerUnit &&
-              fullInfo.containerUnit
-            ) {
+            if (primaryQtyRef.current.trim().length === 0) {
+              syncModeDefaults(fullInfo, getDefaultStockMode(fullInfo));
+            } else if (fullInfo.containerUnit && fullInfo.containerUnit !== initialInfo.containerUnit) {
               setInjectionContainerUnit(fullInfo.containerUnit);
             }
           }
@@ -220,20 +252,14 @@ export function AddMedicineModal({
         }
       }
     },
-    [syncModeDefaults],
+    [resetFormEntries, syncModeDefaults],
   );
 
   // Reset modal whenever visibility toggles
   useEffect(() => {
     if (!visible) return;
-    setErrors({});
-    setInstructions('');
     setSaving(false);
-    setPriceInput('');
-    setPriceEditedManually(false);
-    setPriceScope('total');
-    setPrimaryQty('');
-    setSecondaryQty('');
+    resetFormEntries();
     setManualName('');
     setManualGeneric('');
     setManualStrength('');
@@ -241,7 +267,7 @@ export function AddMedicineModal({
     setSearchQuery('');
 
     if (initialBrand) {
-      void applyBrandSelection(initialBrand);
+      void applyBrandSelection(initialBrand, initialPackId);
     } else {
       selectionReqIdRef.current += 1;
       setStage('search');
@@ -250,7 +276,7 @@ export function AddMedicineModal({
       setSelectedPackId(null);
       setLoadingBrandDetail(false);
     }
-  }, [visible, initialBrand, applyBrandSelection]);
+  }, [visible, initialBrand, initialPackId, applyBrandSelection, resetFormEntries]);
 
   // Execute debounced catalogue search when in Search stage
   useEffect(() => {
@@ -308,28 +334,42 @@ export function AddMedicineModal({
     [packInfo, stockMode, primaryQty, secondaryQty, effectiveContainerUnit, stage],
   );
 
-  // Auto-populate Price whenever calculatedTotalPrice updates (unless user edited price manually)
-  useEffect(() => {
-    if (priceEditedManually) return;
-    if (stockCalc.calculatedTotalPrice !== null) {
-      setPriceScope('total');
-      setPriceInput(formatBdtCurrency(stockCalc.calculatedTotalPrice));
-    } else if (stage === 'configure') {
-      setPriceInput('');
-    }
-  }, [stockCalc.calculatedTotalPrice, priceEditedManually, stage]);
+  const handleChangeMedicine = (): void => {
+    selectionReqIdRef.current += 1;
+    setLoadingBrandDetail(false);
+    setSelectedBrand(null);
+    setBrandDetail(null);
+    setSelectedPackId(null);
+    resetFormEntries();
+    setManualName('');
+    setManualGeneric('');
+    setManualStrength('');
+    setManualForm('Tablet');
+    setStage('search');
+  };
 
   const handleSelectPack = (pack: CataloguePackDto): void => {
     setSelectedPackId(pack.id);
+    setShowUnitPicker(false);
+    setSaveError(null);
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.primaryQty;
+      delete next.secondaryQty;
+      return next;
+    });
     const nextInfo = extractPackInfo(selectedBrand?.dosageForm, pack, availablePacks);
     const currentAvailable = getAvailableStockModes(nextInfo);
     const stillValid = currentAvailable.some((m) => m.mode === stockMode);
-    const nextMode = stillValid ? stockMode : getDefaultStockMode(nextInfo);
-    setPriceEditedManually(false);
-    syncModeDefaults(nextInfo, nextMode, false);
+    const nextMode =
+      primaryQty.trim().length > 0 && stillValid
+        ? stockMode
+        : getDefaultStockMode(nextInfo);
+    syncModeDefaults(nextInfo, nextMode);
   };
 
   const handleSelectMode = (nextMode: StockEntryMode): void => {
+    setSaveError(null);
     setErrors((prev) => {
       const next = { ...prev };
       delete next.primaryQty;
@@ -337,7 +377,7 @@ export function AddMedicineModal({
       return next;
     });
     setPrimaryQty('');
-    syncModeDefaults(packInfo, nextMode, priceEditedManually);
+    syncModeDefaults(packInfo, nextMode);
   };
 
   const handleSelectManualForm = (nextForm: string): void => {
@@ -345,78 +385,40 @@ export function AddMedicineModal({
     const nextInfo = extractPackInfo(nextForm, null, []);
     const nextDefaultMode = getDefaultStockMode(nextInfo);
     setPrimaryQty('');
+    setShowUnitPicker(false);
+    setSaveError(null);
     setErrors((prev) => {
       const next = { ...prev };
       delete next.primaryQty;
       delete next.secondaryQty;
       return next;
     });
-    syncModeDefaults(nextInfo, nextDefaultMode, false);
-  };
-
-  const priceBasis = useMemo(
-    () =>
-      getPriceUnitBasis({
-        mode: stockMode,
-        primaryQty,
-        stockRemaining: stockCalc.stockRemaining,
-        containerUnit: effectiveContainerUnit,
-        stockUnit: stockCalc.stockUnit,
-      }),
-    [stockMode, primaryQty, stockCalc.stockRemaining, effectiveContainerUnit, stockCalc.stockUnit],
-  );
-
-  const handleSwitchPriceScope = (nextScope: PriceInputScope): void => {
-    if (nextScope === priceScope) return;
-    const currentNum = parseNonNegativeNumberInput(priceInput);
-    const mult = priceBasis.multiplier;
-    if (nextScope === 'per_unit_or_pack') {
-      setPriceScope('per_unit_or_pack');
-      setPriceEditedManually(true);
-      if (currentNum !== null && mult !== null && mult > 0) {
-        setPriceInput(formatBdtCurrency(currentNum / mult));
-      }
-      return;
-    }
-
-    setPriceScope('total');
-    if (currentNum !== null && mult !== null && mult > 0) {
-      setPriceEditedManually(true);
-      setPriceInput(formatBdtCurrency(currentNum * mult));
-    } else {
-      setPriceEditedManually(false);
-    }
+    syncModeDefaults(nextInfo, nextDefaultMode);
   };
 
   const handleSave = async (): Promise<void> => {
+    if (saving) return;
+    setSaveError(null);
     const nextErrors: Record<string, string> = {};
 
     if (stage === 'manual') {
       Object.assign(
         nextErrors,
-        validateRequiredFields(
-          { manualName, instructions },
-          {
-            manualName: 'Medicine name',
-            instructions: 'Personal instructions',
-          },
-        ),
-      );
-    } else {
-      Object.assign(
-        nextErrors,
-        validateRequiredFields({ instructions }, { instructions: 'Personal instructions' }),
+        validateRequiredFields({ manualName }, { manualName: 'Medicine name' }),
       );
     }
 
     const p1 = parseNonNegativeNumberInput(primaryQty);
     if (primaryQty.trim().length === 0) {
       nextErrors.primaryQty = 'Enter current quantity.';
-    } else if (p1 === null) {
-      nextErrors.primaryQty = 'Enter a valid non-negative number.';
+    } else if (p1 === null || p1 <= 0) {
+      nextErrors.primaryQty = 'Enter a quantity greater than 0.';
     }
 
-    if (stockMode === 'strips' || (stockMode === 'bottles' && packInfo.strategy === 'liquid')) {
+    if (
+      (stockMode === 'strips' && !packInfo.stripUnits) ||
+      (stockMode === 'bottles' && packInfo.strategy === 'liquid' && !packInfo.bottleVolumeMl)
+    ) {
       const p2 = parseNonNegativeNumberInput(secondaryQty);
       if (secondaryQty.trim().length === 0) {
         nextErrors.secondaryQty =
@@ -426,16 +428,27 @@ export function AddMedicineModal({
       }
     }
 
-    let parsedPrice: number | null = null;
-    if (priceInput.trim().length > 0) {
-      parsedPrice = parseNonNegativeNumberInput(priceInput);
-      if (parsedPrice === null) {
-        nextErrors.priceInput = 'Enter a valid non-negative price.';
+    let parsedPurchaseAmount: number | null = null;
+    if (showPurchaseDetails) {
+      const trimmedAmount = purchaseAmount.trim();
+      const trimmedVendor = purchaseVendor.trim();
+      if (trimmedAmount.length > 0) {
+        parsedPurchaseAmount = parseNonNegativeNumberInput(trimmedAmount);
+        if (parsedPurchaseAmount === null) {
+          nextErrors.purchaseAmount = 'Enter a valid non-negative amount.';
+        }
+      } else if (trimmedVendor.length > 0) {
+        nextErrors.purchaseAmount = 'Enter the amount paid to record this purchase.';
       }
     }
 
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0 || !stockCalc.isValid || stockCalc.stockRemaining === null) {
+    if (
+      Object.keys(nextErrors).length > 0 ||
+      p1 === null ||
+      !stockCalc.isValid ||
+      stockCalc.stockRemaining === null
+    ) {
       return;
     }
 
@@ -453,26 +466,20 @@ export function AddMedicineModal({
       effectiveBottleVol,
     );
 
-    let totalStockPrice: number | null = null;
-    let priceScopeLabel: string | null = null;
-    let unitPriceText = stockCalc.referenceUnitPriceText;
-
-    if (parsedPrice !== null) {
-      if (priceScope === 'total') {
-        totalStockPrice = parsedPrice;
-        priceScopeLabel = 'Total stock value';
-        const formattedTotal = `৳${formatBdtCurrency(totalStockPrice)} total`;
-        unitPriceText =
-          stockCalc.referenceUnitPriceText !== 'Not listed'
-            ? `${formattedTotal} (${stockCalc.referenceUnitPriceText})`
-            : formattedTotal;
-      } else {
-        const count = priceBasis.multiplier ?? 1;
-        totalStockPrice = Number((parsedPrice * count).toFixed(2));
-        priceScopeLabel = `৳${formatBdtCurrency(parsedPrice)}/${priceBasis.unitLabel}`;
-        unitPriceText = `৳${formatBdtCurrency(totalStockPrice)} total (৳${formatBdtCurrency(parsedPrice)}/${priceBasis.unitLabel})`;
-      }
-    }
+    const purchaseDetails =
+      showPurchaseDetails && parsedPurchaseAmount !== null
+        ? {
+            amountPaid: parsedPurchaseAmount,
+            purchaseDate: purchaseDate.trim() || undefined,
+            vendor: purchaseVendor.trim() || undefined,
+            ...(Number.isInteger(p1) && p1 >= 1 && savedStock > 0
+              ? {
+                  packCount: p1,
+                  unitsPerPack: Math.max(0.01, Number((savedStock / p1).toFixed(2))),
+                }
+              : {}),
+          }
+        : undefined;
 
     setSaving(true);
     try {
@@ -490,19 +497,34 @@ export function AddMedicineModal({
             : manualStrength.trim() || null,
         dosageForm: activeDosageForm,
         manufacturer: stage === 'configure' ? selectedBrand?.manufacturer ?? null : null,
-        personalInstructions: instructions.trim(),
         startingStock: savedStock,
         stockUnit: savedUnit,
+        enteredQuantity: p1,
+        enteredUnit: enteredUnitDisplay,
+        selectedPackId: stage === 'configure' ? selectedPack?.id ?? null : null,
         stripUnits: packInfo.stripUnits ?? null,
         lowStockThreshold: autoThreshold,
-        unitPriceText,
-        totalStockPrice,
-        priceScopeLabel,
+        unitPriceText: stockCalc.referenceUnitPriceText,
+        totalStockPrice: parsedPurchaseAmount,
+        priceScopeLabel: parsedPurchaseAmount !== null ? 'Recorded purchase' : null,
         referencePackText: stockCalc.referencePackText,
+        purchaseDetails,
       });
 
       onSaved(created);
-      onClose();
+      setSavedRecord(created);
+      setSavedSummaryText(
+        stockCalc.calculationSummary ?? `${savedStock} ${formatUnitLabelForCount(savedStock, savedUnit)}`,
+      );
+      setSavedEstimatedPrice(stockCalc.calculatedTotalPrice);
+      setSavedPaidPrice(purchaseDetails ? parsedPurchaseAmount : null);
+      setStage('success');
+    } catch (err) {
+      setSaveError(
+        err instanceof Error && err.message.trim().length > 0
+          ? err.message
+          : 'Unable to save medicine. Please try again.',
+      );
     } finally {
       setSaving(false);
     }
@@ -510,6 +532,24 @@ export function AddMedicineModal({
 
   const renderPrimaryStockInput = (): React.JSX.Element => {
     if (stockMode === 'strips') {
+      if (packInfo.stripUnits) {
+        return (
+          <FormField
+            label="Number of strips"
+            value={primaryQty}
+            onChangeText={(txt) => {
+              setPrimaryQty(txt);
+              if (errors.primaryQty) setErrors((e) => ({ ...e, primaryQty: '' }));
+            }}
+            placeholder="e.g. 3"
+            keyboardType="decimal-pad"
+            required
+            errorMessage={errors.primaryQty || undefined}
+            helperText={`Verified: ${packInfo.stripUnits} ${packInfo.baseUnit} per strip`}
+          />
+        );
+      }
+
       const perUnitLabel =
         packInfo.baseUnit === 'capsules'
           ? 'Capsules per strip'
@@ -540,19 +580,11 @@ export function AddMedicineModal({
                 setSecondaryQty(txt);
                 if (errors.secondaryQty) setErrors((e) => ({ ...e, secondaryQty: '' }));
               }}
-              placeholder={packInfo.stripUnits ? String(packInfo.stripUnits) : 'e.g. 10'}
+              placeholder="e.g. 10"
               keyboardType="decimal-pad"
               required
               errorMessage={errors.secondaryQty || undefined}
-              helperText={
-                packInfo.stripUnits
-                  ? packInfo.stripsInPack
-                    ? `${packInfo.stripsInPack} strips in pack (${packInfo.packQuantityLabel})`
-                    : packInfo.packQuantityLabel
-                      ? `Catalogue: ${packInfo.stripUnits}/strip (${packInfo.packQuantityLabel})`
-                      : `Catalogue: ${packInfo.stripUnits} per strip`
-                  : 'Enter your strip count'
-              }
+              helperText="Enter units per strip"
             />
           </FormCol>
         </FormRow>
@@ -583,6 +615,24 @@ export function AddMedicineModal({
 
     if (stockMode === 'bottles') {
       if (packInfo.strategy === 'liquid') {
+        if (packInfo.bottleVolumeMl) {
+          return (
+            <FormField
+              label="Number of bottles"
+              value={primaryQty}
+              onChangeText={(txt) => {
+                setPrimaryQty(txt);
+                if (errors.primaryQty) setErrors((e) => ({ ...e, primaryQty: '' }));
+              }}
+              placeholder="e.g. 2"
+              keyboardType="decimal-pad"
+              required
+              errorMessage={errors.primaryQty || undefined}
+              helperText={`Verified: ${packInfo.bottleVolumeMl} ml per bottle`}
+            />
+          );
+        }
+
         return (
           <FormRow>
             <FormCol>
@@ -607,15 +657,11 @@ export function AddMedicineModal({
                   setSecondaryQty(txt);
                   if (errors.secondaryQty) setErrors((e) => ({ ...e, secondaryQty: '' }));
                 }}
-                placeholder={packInfo.bottleVolumeMl ? String(packInfo.bottleVolumeMl) : 'e.g. 100'}
+                placeholder="e.g. 100"
                 keyboardType="decimal-pad"
                 required
                 errorMessage={errors.secondaryQty || undefined}
-                helperText={
-                  packInfo.bottleVolumeMl
-                    ? `From pack (${packInfo.packQuantityLabel})`
-                    : 'Enter bottle ml'
-                }
+                helperText="Enter bottle ml"
               />
             </FormCol>
           </FormRow>
@@ -646,7 +692,7 @@ export function AddMedicineModal({
     if (stockMode === 'ml') {
       return (
         <FormField
-          label="Available quantity (ml)"
+          label="Quantity (ml)"
           value={primaryQty}
           onChangeText={(txt) => {
             setPrimaryQty(txt);
@@ -681,7 +727,7 @@ export function AddMedicineModal({
           errorMessage={errors.primaryQty || undefined}
           helperText={
             packInfo.strategy === 'inhaler' && packInfo.meteredDoses
-              ? `Each pack contains ${packInfo.meteredDoses} puffs`
+              ? `Each inhaler contains ${packInfo.meteredDoses} puffs`
               : packInfo.packQuantityLabel
                 ? `Packaging: ${packInfo.packQuantityLabel}`
                 : undefined
@@ -711,7 +757,7 @@ export function AddMedicineModal({
     const nounPlural = formatUnitLabelForCount(2, packInfo.baseUnit);
     return (
       <FormField
-        label={`Quantity (${nounPlural})`}
+        label={packInfo.strategy === 'suppository' ? 'Number of pieces' : `Quantity (${nounPlural})`}
         value={primaryQty}
         onChangeText={(txt) => {
           setPrimaryQty(txt);
@@ -725,62 +771,50 @@ export function AddMedicineModal({
     );
   };
 
-  const pricePerUnitHint = useMemo(() => {
-    const numPrice = parseNonNegativeNumberInput(priceInput);
-    if (priceScope === 'total') {
-      if (priceBasis.multiplier !== null && priceBasis.multiplier > 0 && numPrice !== null) {
-        const computedUnit = numPrice / priceBasis.multiplier;
-        const unitPart =
-          computedUnit > 0
-            ? `৳${formatBdtCurrency(computedUnit)}/${priceBasis.unitLabel}`
-            : null;
-        return `Total stock value${unitPart ? ` (${unitPart})` : ''}${
-          stockCalc.referenceUnitPriceText !== 'Not listed'
-            ? ` · Catalogue: ${stockCalc.referenceUnitPriceText}`
-            : ''
-        }`;
-      }
-      return stockCalc.referenceUnitPriceText !== 'Not listed'
-        ? `Total stock value · Catalogue ref: ${stockCalc.referenceUnitPriceText}`
-        : 'Represents the total value of the stock you entered above';
-    }
-
-    if (numPrice !== null && priceBasis.multiplier !== null && priceBasis.multiplier > 0) {
-      return `Equals ৳${formatBdtCurrency(numPrice * priceBasis.multiplier)} total stock value`;
-    }
-    return `Represents the price of 1 ${priceBasis.unitLabel}`;
-  }, [priceInput, priceScope, priceBasis, stockCalc.referenceUnitPriceText]);
-
-  const modalTitle =
-    stage === 'search'
-      ? 'Add Medicine'
-      : stage === 'manual'
-        ? 'Add Medicine (Manual)'
-        : 'Add Medicine';
-
+  const modalTitle = stage === 'success' ? 'Medicine Added' : 'Add Medicine';
   const modalSubtitle =
-    stage === 'search'
-      ? 'Search by brand or generic name to auto-fill details'
-      : stage === 'manual'
-        ? 'Enter medicine details when unavailable in database'
-        : 'Confirm quantity, price & personal instructions';
+    stage === 'success'
+      ? 'Ready in My Medicines'
+      : 'Select a medicine and enter your current stock.';
+
+  const selectedBrandBadge = selectedBrand ? resolveBrandBadge(selectedBrand) : null;
+  const selectedUnitDetails =
+    stage === 'configure' && selectedBrand
+      ? resolvePackQuantityUnit(selectedPack, selectedBrand.dosageForm, availablePacks)
+      : null;
+  const enteredUnitDisplay = getEnteredQuantityUnit({
+    mode: stockMode,
+    baseUnit: packInfo.baseUnit,
+    containerUnit: effectiveContainerUnit,
+  });
+  const missingPackagingBannerText =
+    stage === 'configure' &&
+    (!packInfo.hasReliableDefaultPackaging || Boolean(stockCalc.missingPackagingNotice))
+      ? 'Package information is unavailable. Enter your current quantity manually.'
+      : null;
+
+  const isSaveDisabled =
+    saving ||
+    !stockCalc.isValid ||
+    (stage === 'manual' && manualName.trim().length === 0);
 
   return (
     <BottomSheet
       visible={visible}
       title={modalTitle}
       subtitle={modalSubtitle}
-      iconName={stage === 'search' ? 'search' : 'package'}
-      warningNote={
-        stage === 'search'
-          ? undefined
-          : 'Adding a medicine does not auto-create a schedule. Add dose times separately.'
+      iconName={
+        stage === 'search' ? 'search' : stage === 'success' ? 'check-circle' : 'package'
       }
       onClose={onClose}
-      onSubmit={stage === 'search' ? undefined : () => void handleSave()}
-      submitLabel="Save medicine"
+      onSubmit={
+        stage === 'search' || stage === 'success' ? undefined : () => void handleSave()
+      }
+      submitLabel="Save Medicine"
       cancelLabel="Cancel"
+      submitDisabled={isSaveDisabled}
       submitLoading={saving}
+      hideFooter={stage === 'success'}
     >
       {stage === 'search' ? (
         <View style={styles.searchStage}>
@@ -878,10 +912,15 @@ export function AddMedicineModal({
             onPress={() => {
               selectionReqIdRef.current += 1;
               setLoadingBrandDetail(false);
+              setSelectedBrand(null);
+              setBrandDetail(null);
+              setSelectedPackId(null);
+              resetFormEntries();
               setManualName(searchQuery.trim());
+              setManualForm('Tablet');
               setStage('manual');
-              setErrors({});
-              syncModeDefaults(extractPackInfo(manualForm, null, []), 'direct', false);
+              const tabletInfo = extractPackInfo('Tablet', null, []);
+              syncModeDefaults(tabletInfo, getDefaultStockMode(tabletInfo));
             }}
             style={styles.manualSwitchBtn}
           >
@@ -890,6 +929,62 @@ export function AddMedicineModal({
               Can&apos;t find medicine? Enter details manually
             </Text>
           </Pressable>
+        </View>
+      ) : stage === 'success' && savedRecord ? (
+        <View style={styles.successStage}>
+          <View style={styles.successIconWrap}>
+            <Feather name="check" size={26} color={CAREDOSE_EXTENDED_COLORS.primary} />
+          </View>
+          <Text style={styles.successTitle}>Medicine added successfully.</Text>
+          <Text style={styles.successSub}>
+            No schedule was created automatically. You can track doses anytime from schedules.
+          </Text>
+
+          <View style={styles.successSummaryCard}>
+            <Text style={styles.successMedName}>{savedRecord.name}</Text>
+            <Text style={styles.successMedMeta}>
+              {[savedRecord.genericName, savedRecord.strength, savedRecord.dosageForm]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <View style={styles.successStockBadge}>
+              <Feather name="package" size={14} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
+              <Text style={styles.successStockText}>
+                {savedSummaryText ?? `${savedRecord.stockRemaining} ${savedRecord.stockUnit}`}
+              </Text>
+            </View>
+            {savedPaidPrice !== null ? (
+              <Text style={styles.successPriceNote}>
+                Recorded purchase paid: ৳{formatBdtCurrency(savedPaidPrice)}
+              </Text>
+            ) : savedEstimatedPrice !== null ? (
+              <Text style={styles.successPriceNote}>
+                Estimated stock value: ৳{formatBdtCurrency(savedEstimatedPrice)}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={styles.successActionsCol}>
+            <PrimaryButton
+              fullWidth
+              label="Create a Dose Schedule"
+              onPress={() => {
+                const targetId = savedRecord.id;
+                onClose();
+                router.push(`/medicines/${targetId}?openSchedule=1`);
+              }}
+            />
+            <SecondaryButton
+              fullWidth
+              label="Go to My Medicines"
+              onPress={() => {
+                onClose();
+                if (pathname !== '/medicines') {
+                  router.push('/medicines');
+                }
+              }}
+            />
+          </View>
         </View>
       ) : (
         <View>
@@ -906,19 +1001,13 @@ export function AddMedicineModal({
                     <Text style={styles.selectedName} numberOfLines={2}>
                       {selectedBrand.name}
                     </Text>
-                    {!initialBrand ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          selectionReqIdRef.current += 1;
-                          setLoadingBrandDetail(false);
-                          setStage('search');
-                        }}
-                        style={styles.changeBtn}
-                      >
-                        <Text style={styles.changeBtnText}>Change</Text>
-                      </Pressable>
-                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={handleChangeMedicine}
+                      style={styles.changeBtn}
+                    >
+                      <Text style={styles.changeBtnText}>Change</Text>
+                    </Pressable>
                   </View>
                   <Text style={styles.selectedMeta}>
                     {selectedBrand.generic?.name ?? 'Generic: Not available'}
@@ -932,6 +1021,14 @@ export function AddMedicineModal({
                       {selectedBrand.manufacturer}
                     </Text>
                   ) : null}
+                  {selectedBrandBadge ? (
+                    <View style={styles.selectedBadgeRow}>
+                      <StatusBadge
+                        variant={selectedBrandBadge.variant}
+                        label={selectedBrandBadge.label}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               </View>
 
@@ -943,7 +1040,7 @@ export function AddMedicineModal({
               ) : availablePacks.length > 1 ? (
                 <View style={styles.packsSection}>
                   <Text style={styles.packsLabel}>
-                    Select packaging ({availablePacks.length} options)
+                    Package size ({availablePacks.length} options)
                   </Text>
                   <View style={styles.packChipsWrap}>
                     {availablePacks.map((pk) => {
@@ -972,9 +1069,17 @@ export function AddMedicineModal({
                   </View>
                 </View>
               ) : selectedPack ? (
-                <Text style={styles.singlePackHint}>
-                  Packaging: {formatPackSummary(selectedPack)} · {formatUnitOrPackPrice(selectedPack)}
-                </Text>
+                <View style={styles.singlePackBox}>
+                  <Text style={styles.singlePackHint}>
+                    {formatPackSummary(selectedPack)}
+                    {selectedUnitDetails ? ` · ${selectedUnitDetails.value}` : ''}
+                  </Text>
+                  {selectedPack.packPrice || selectedPack.unitPrice ? (
+                    <Text style={styles.refPriceCaption}>
+                      Catalogue ref: {formatUnitOrPackPrice(selectedPack)}
+                    </Text>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           ) : (
@@ -983,7 +1088,7 @@ export function AddMedicineModal({
                 <Text style={styles.manualHeaderTitle}>Medicine details</Text>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => setStage('search')}
+                  onPress={handleChangeMedicine}
                   style={styles.changeBtn}
                 >
                   <Text style={styles.changeBtnText}>Search DB</Text>
@@ -992,7 +1097,10 @@ export function AddMedicineModal({
               <FormField
                 label="Medicine name"
                 value={manualName}
-                onChangeText={setManualName}
+                onChangeText={(txt) => {
+                  setManualName(txt);
+                  if (errors.manualName) setErrors((e) => ({ ...e, manualName: '' }));
+                }}
                 placeholder="e.g. Napa 500 mg"
                 required
                 errorMessage={errors.manualName}
@@ -1025,39 +1133,21 @@ export function AddMedicineModal({
             </View>
           )}
 
-          {/* Dynamic Stock Section */}
+          {/* Simplified Stock Entry Section */}
           <View style={styles.sectionBox}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>Quantity you have</Text>
+              <Text style={styles.sectionHeading}>How much do you currently have?</Text>
               <View style={styles.unitTag}>
                 <Text style={styles.unitTagText}>
-                  {formatUnitNounCapitalized(stockCalc.stockUnit)}
+                  {formatUnitNounCapitalized(enteredUnitDisplay)}
                 </Text>
               </View>
             </View>
 
-            {availableModes.length > 1 ? (
-              <View style={styles.modeChipsWrap}>
-                {availableModes.map((m) => {
-                  const active = stockMode === m.mode;
-                  return (
-                    <Pressable
-                      key={m.mode}
-                      accessibilityRole="button"
-                      onPress={() => handleSelectMode(m.mode)}
-                      style={[styles.modeChip, active ? styles.modeChipActive : null]}
-                    >
-                      <Text
-                        style={[
-                          styles.modeChipText,
-                          active ? styles.modeChipTextActive : null,
-                        ]}
-                      >
-                        {m.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+            {missingPackagingBannerText ? (
+              <View style={styles.infoNoticeBox}>
+                <Feather name="info" size={13} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
+                <Text style={styles.infoNoticeText}>{missingPackagingBannerText}</Text>
               </View>
             ) : null}
 
@@ -1086,118 +1176,171 @@ export function AddMedicineModal({
               </View>
             ) : null}
 
-            {stockCalc.missingPackagingNotice ? (
-              <View style={styles.infoNoticeBox}>
-                <Feather name="info" size={13} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
-                <Text style={styles.infoNoticeText}>{stockCalc.missingPackagingNotice}</Text>
-              </View>
-            ) : null}
-
             {renderPrimaryStockInput()}
 
-            {stockCalc.calculationSummary && primaryQty.trim().length > 0 ? (
+            {stockCalc.calculationSummary && primaryQty.trim().length > 0 && stockCalc.isValid ? (
               <View style={styles.calculatedStockPill}>
-                <Feather name="check-circle" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
-                <Text style={styles.calculatedStockText}>{stockCalc.calculationSummary}</Text>
+                <View style={styles.calculatedSummaryHeader}>
+                  <Feather name="check-circle" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                  <Text style={styles.calculatedStockText}>{stockCalc.calculationSummary}</Text>
+                </View>
+                {stockCalc.calculatedTotalPrice !== null ? (
+                  <View style={styles.calculatedPriceRow}>
+                    <View style={styles.calculatedPriceLeft}>
+                      <Feather name="tag" size={13} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
+                      <Text style={styles.calculatedPriceText}>
+                        Estimated price: ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
+                      </Text>
+                    </View>
+                    {stockCalc.referenceUnitPriceText !== 'Not listed' ? (
+                      <Text style={styles.calculatedRateText}>
+                        {stockCalc.referenceUnitPriceText}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : stage === 'configure' ? (
+                  <Text style={styles.calculatedPriceMissingText}>
+                    Catalogue reference price unavailable
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {availableModes.length > 1 ? (
+              <View style={styles.unitToggleArea}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setShowUnitPicker((v) => !v)}
+                  style={styles.changeUnitLinkBtn}
+                >
+                  <Feather name="sliders" size={12} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                  <Text style={styles.changeUnitLinkText}>
+                    {showUnitPicker ? 'Hide unit options' : 'Change quantity unit'}
+                  </Text>
+                </Pressable>
+
+                {showUnitPicker ? (
+                  <View style={styles.modeChipsWrap}>
+                    {availableModes.map((m) => {
+                      const active = stockMode === m.mode;
+                      return (
+                        <Pressable
+                          key={m.mode}
+                          accessibilityRole="button"
+                          onPress={() => handleSelectMode(m.mode)}
+                          style={[styles.modeChip, active ? styles.modeChipActive : null]}
+                        >
+                          <Text
+                            style={[
+                              styles.modeChipText,
+                              active ? styles.modeChipTextActive : null,
+                            ]}
+                          >
+                            {m.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>
 
-          {/* Price Section */}
-          <View style={styles.sectionBox}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>Price (৳ BDT)</Text>
-              <View style={styles.priceScopeRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => handleSwitchPriceScope('total')}
-                  style={[
-                    styles.scopeChip,
-                    priceScope === 'total' ? styles.scopeChipActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.scopeChipText,
-                      priceScope === 'total' ? styles.scopeChipTextActive : null,
-                    ]}
-                  >
-                    Total stock
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => handleSwitchPriceScope('per_unit_or_pack')}
-                  style={[
-                    styles.scopeChip,
-                    priceScope === 'per_unit_or_pack' ? styles.scopeChipActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.scopeChipText,
-                      priceScope === 'per_unit_or_pack' ? styles.scopeChipTextActive : null,
-                    ]}
-                  >
-                    Per {priceBasis.unitLabel}
-                  </Text>
-                </Pressable>
+          {/* Optional Collapsible Purchase Details (hidden by default) */}
+          <View style={styles.purchaseCard}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowPurchaseDetails((prev) => !prev)}
+              style={styles.purchaseToggleRow}
+            >
+              <View style={styles.purchaseToggleLeft}>
+                <Feather
+                  name={showPurchaseDetails ? 'chevron-up' : 'plus-circle'}
+                  size={15}
+                  color={CAREDOSE_EXTENDED_COLORS.primary}
+                />
+                <Text style={styles.purchaseToggleText}>Add purchase details (optional)</Text>
               </View>
-            </View>
+              <Text style={styles.purchaseToggleHint}>
+                {showPurchaseDetails
+                  ? 'Hide'
+                  : stockCalc.calculatedTotalPrice !== null
+                    ? `Est. ৳${formatBdtCurrency(stockCalc.calculatedTotalPrice)}`
+                    : 'Optional'}
+              </Text>
+            </Pressable>
 
-            <FormField
-              label={
-                priceScope === 'total'
-                  ? 'Total stock value (৳)'
-                  : `Price per ${priceBasis.unitLabel} (৳)`
-              }
-              value={priceInput}
-              onChangeText={(txt) => {
-                setPriceEditedManually(true);
-                setPriceInput(txt);
-                if (errors.priceInput) setErrors((e) => ({ ...e, priceInput: '' }));
-              }}
-              placeholder={
-                stockCalc.calculatedTotalPrice !== null
-                  ? formatBdtCurrency(stockCalc.calculatedTotalPrice)
-                  : 'Optional (e.g. 50.00)'
-              }
-              keyboardType="decimal-pad"
-              errorMessage={errors.priceInput || undefined}
-              helperText={pricePerUnitHint}
-            />
-
-            {priceEditedManually && stockCalc.calculatedTotalPrice !== null ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setPriceScope('total');
-                  setPriceEditedManually(false);
-                  setPriceInput(formatBdtCurrency(stockCalc.calculatedTotalPrice!));
-                }}
-                style={styles.resetPriceBtn}
-              >
-                <Feather name="rotate-ccw" size={12} color={CAREDOSE_EXTENDED_COLORS.primary} />
-                <Text style={styles.resetPriceText}>
-                  Reset to calculated ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
+            {showPurchaseDetails ? (
+              <View style={styles.purchaseFieldsWrap}>
+                {stockCalc.calculatedTotalPrice !== null ? (
+                  <View style={styles.purchaseEstimateRow}>
+                    <Text style={styles.purchaseEstimateText}>
+                      Calculated catalogue price: ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
+                    </Text>
+                    {purchaseAmount.trim() !== formatBdtCurrency(stockCalc.calculatedTotalPrice) ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setPurchaseAmount(formatBdtCurrency(stockCalc.calculatedTotalPrice!));
+                          if (errors.purchaseAmount) {
+                            setErrors((e) => ({ ...e, purchaseAmount: '' }));
+                          }
+                        }}
+                        style={styles.useEstimateChip}
+                      >
+                        <Text style={styles.useEstimateChipText}>
+                          Use ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+                <FormRow>
+                  <FormCol>
+                    <FormField
+                      label="Amount paid (৳ BDT)"
+                      value={purchaseAmount}
+                      onChangeText={(txt) => {
+                        setPurchaseAmount(txt);
+                        if (errors.purchaseAmount) setErrors((e) => ({ ...e, purchaseAmount: '' }));
+                      }}
+                      placeholder={
+                        stockCalc.calculatedTotalPrice !== null
+                          ? `e.g. ${formatBdtCurrency(stockCalc.calculatedTotalPrice)}`
+                          : 'e.g. 50.00'
+                      }
+                      keyboardType="decimal-pad"
+                      errorMessage={errors.purchaseAmount || undefined}
+                    />
+                  </FormCol>
+                  <FormCol>
+                    <DateField
+                      label="Purchase date"
+                      value={purchaseDate}
+                      onChangeDate={setPurchaseDate}
+                    />
+                  </FormCol>
+                </FormRow>
+                <FormField
+                  label="Pharmacy / vendor"
+                  value={purchaseVendor}
+                  onChangeText={setPurchaseVendor}
+                  placeholder="Optional (e.g. Lazz Pharma)"
+                />
+                <Text style={styles.purchaseDisclaimer}>
+                  Records only what you paid. Catalogue reference prices are never copied automatically.
                 </Text>
-              </Pressable>
+              </View>
             ) : null}
           </View>
 
-          {/* Instructions */}
-          <FormField
-            label="Personal instructions"
-            value={instructions}
-            onChangeText={(txt) => {
-              setInstructions(txt);
-              if (errors.instructions) setErrors((e) => ({ ...e, instructions: '' }));
-            }}
-            placeholder={getSuggestedInstructionPlaceholder(packInfo.strategy)}
-            required
-            errorMessage={errors.instructions || undefined}
-            helperText="Low-stock alerts can be customized later in Medicine Details."
-          />
+          {saveError ? (
+            <View style={styles.errorBanner}>
+              <Feather name="alert-circle" size={14} color={CAREDOSE_EXTENDED_COLORS.error} />
+              <Text style={styles.errorBannerText}>{saveError}</Text>
+            </View>
+          ) : null}
         </View>
       )}
     </BottomSheet>
@@ -1330,9 +1473,11 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_TARGET,
   },
   manualSwitchText: {
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.primary,
+    textAlign: 'center',
   },
   selectedCard: {
     backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
@@ -1340,7 +1485,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C5E8D8',
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   selectedTopRow: {
     flexDirection: 'row',
@@ -1434,14 +1579,175 @@ const styles = StyleSheet.create({
   packChipTextActive: {
     color: '#FFFFFF',
   },
-  singlePackHint: {
+  singlePackBox: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#C5E8D8',
+  },
+  singlePackHint: {
     fontSize: 11,
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.primaryDark,
+  },
+  refPriceCaption: {
+    marginTop: 2,
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  selectedBadgeRow: {
+    marginTop: 6,
+    alignItems: 'flex-start',
+  },
+  unitToggleArea: {
+    marginTop: 10,
+  },
+  changeUnitLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  changeUnitLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.primary,
+  },
+  purchaseCard: {
+    borderRadius: CAREDOSE_RADIUS.card,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: CAREDOSE_EXTENDED_COLORS.border,
+    padding: 12,
+    marginBottom: 10,
+  },
+  purchaseToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    minHeight: 36,
+  },
+  purchaseToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  purchaseToggleText: {
+    flex: 1,
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
+  },
+  purchaseToggleHint: {
+    flexShrink: 0,
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.mutedText,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  purchaseFieldsWrap: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
+  },
+  purchaseDisclaimer: {
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+    marginTop: 2,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.errorSurface,
+    borderWidth: 1,
+    borderColor: '#F2C6C6',
+    marginBottom: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.error,
+  },
+  successStage: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  successIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
+    borderWidth: 1,
+    borderColor: '#C5E8D8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  successTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
+    textAlign: 'center',
+  },
+  successSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  successSummaryCard: {
+    width: '100%',
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
+    borderRadius: CAREDOSE_RADIUS.card,
+    borderWidth: 1,
+    borderColor: CAREDOSE_EXTENDED_COLORS.border,
+    padding: 14,
+    marginBottom: 16,
+  },
+  successMedName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
+  },
+  successMedMeta: {
+    marginTop: 3,
+    fontSize: 12,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  successStockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
+    borderWidth: 1,
+    borderColor: '#C5E8D8',
+    alignSelf: 'flex-start',
+  },
+  successStockText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
+  },
+  successActionsCol: {
+    width: '100%',
+    gap: 10,
   },
   manualCard: {
     padding: 12,
@@ -1468,22 +1774,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 8,
   },
   sectionHeading: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: '700',
     color: CAREDOSE_EXTENDED_COLORS.mainText,
   },
   unitTag: {
+    flexShrink: 0,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
@@ -1538,16 +1847,19 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   calculatedStockPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 8,
     backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
     borderWidth: 1,
     borderColor: '#C5E8D8',
     marginTop: 4,
+  },
+  calculatedSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   calculatedStockText: {
     flex: 1,
@@ -1555,40 +1867,78 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: CAREDOSE_EXTENDED_COLORS.primaryDark,
   },
-  priceScopeRow: {
+  calculatedPriceRow: {
     flexDirection: 'row',
-    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#D5EFE3',
   },
-  scopeChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
+  calculatedPriceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
   },
-  scopeChipActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
+  calculatedPriceText: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
   },
-  scopeChipText: {
+  calculatedRateText: {
+    flexShrink: 0,
     fontSize: 11,
     fontWeight: '600',
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
   },
-  scopeChipTextActive: {
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
+  calculatedPriceMissingText: {
+    fontSize: 11,
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+    paddingLeft: 20,
   },
-  resetPriceBtn: {
+  purchaseEstimateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
-    alignSelf: 'flex-start',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
+    borderWidth: 1,
+    borderColor: '#C5E8D8',
+    marginBottom: 10,
   },
-  resetPriceText: {
+  purchaseEstimateText: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 11,
     fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
+    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
+  },
+  useEstimateChip: {
+    flexShrink: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
+  },
+  useEstimateChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  successPriceNote: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
   },
 });

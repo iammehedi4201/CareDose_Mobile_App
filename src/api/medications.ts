@@ -58,11 +58,25 @@ export interface PatientMedicationDetailDto extends PatientMedicationDto {
   recentInventoryTransactions: Array<{
     id: string;
     type: string;
+    enteredQuantity: string | null;
+    enteredUnit: string | null;
+    baseUnit: string | null;
+    cataloguePackId: string | null;
     quantityDelta: string;
     balanceAfter: string;
     reason: string | null;
+    note: string | null;
     createdAt: string;
   }>;
+}
+
+export interface CreateInitialPurchasePayload {
+  purchaseDate?: string;
+  packCount?: number;
+  unitsPerPack?: number;
+  amountPaid: number;
+  vendor?: string;
+  note?: string;
 }
 
 export interface CreatePatientMedicationPayload {
@@ -72,9 +86,13 @@ export interface CreatePatientMedicationPayload {
   strength?: string;
   dosageForm?: string;
   manufacturer?: string;
-  personalInstructions: string;
+  personalInstructions?: string;
   startingStock?: number;
   stockUnit?: string;
+  enteredQuantity?: number;
+  enteredUnit?: string;
+  selectedPackId?: string;
+  purchaseDetails?: CreateInitialPurchasePayload;
   lowStockThreshold?: number;
 }
 

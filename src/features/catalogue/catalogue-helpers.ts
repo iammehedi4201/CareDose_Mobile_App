@@ -1,5 +1,11 @@
 import type { CatalogueBrandSummaryDto, CataloguePackDto } from '../../api/catalogue';
 import type { StatusVariant } from '../../components/StatusBadge';
+import {
+  extractMeteredDoses,
+  extractPackInfo,
+  extractVolumeMl,
+  extractWeightGm,
+} from '../medications/stock-calculator';
 
 export function formatMissingCatalogueValue(value?: string | null): string {
   const trimmed = value?.trim();
@@ -74,6 +80,317 @@ export function formatStripUnitsValue(
   }
 
   return `${count} ${noun}`;
+}
+
+export interface PackQuantityUnitDisplay {
+  label: string;
+  value: string;
+}
+
+function singularContainerNoun(unit: string): string {
+  switch (unit) {
+    case 'syringes':
+      return 'pre-filled syringe';
+    case 'ampoules':
+      return 'ampoule';
+    case 'vials':
+      return 'vial';
+    case 'bags':
+      return 'infusion bag';
+    case 'bottles':
+      return 'bottle';
+    case 'inhalers':
+      return 'inhaler';
+    case 'containers':
+      return 'container';
+    default:
+      return unit.replace(/s$/, '');
+  }
+}
+
+function formatMlOrLiter(ml: number): string {
+  if (ml >= 1000 && ml % 1000 === 0) {
+    return `${ml / 1000} L`;
+  }
+  return `${ml} ml`;
+}
+
+export function resolvePackQuantityUnit(
+  pack: CataloguePackDto | null | undefined,
+  dosageForm?: string | null,
+  allPacks: CataloguePackDto[] = [],
+  options: { includeStripsInPack?: boolean } = {},
+): PackQuantityUnitDisplay {
+  const { includeStripsInPack = true } = options;
+  const formLower = (dosageForm ?? '').trim().toLowerCase();
+  const pq = pack?.packQuantity?.trim() || null;
+  const info = extractPackInfo(dosageForm, pack ?? null, allPacks.length > 0 ? allPacks : pack ? [pack] : []);
+
+  if (info.strategy === 'tablet_capsule') {
+    const plural = info.baseUnit;
+    const singular = plural === 'capsules' ? 'capsule' : 'tablet';
+    if (info.stripUnits !== null) {
+      return {
+        label: getStripUnitsLabel(dosageForm),
+        value: formatStripUnitsValue(
+          info.stripUnits,
+          dosageForm,
+          includeStripsInPack ? info.packTotalUnits : null,
+        ),
+      };
+    }
+    if (info.packTotalUnits !== null) {
+      return {
+        label: 'Pack quantity',
+        value: `${info.packTotalUnits} ${info.packTotalUnits === 1 ? singular : plural} per pack`,
+      };
+    }
+    if (pq) {
+      return {
+        label: 'Quantity unit',
+        value: `Per ${singular} (${pq})`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: `Per ${singular} (sold by unit)`,
+    };
+  }
+
+  if (info.strategy === 'suppository') {
+    if (info.stripUnits !== null) {
+      return {
+        label: 'Pieces per strip',
+        value: formatStripUnitsValue(
+          info.stripUnits,
+          dosageForm,
+          includeStripsInPack ? info.packTotalUnits : null,
+        ),
+      };
+    }
+    if (info.packTotalUnits !== null) {
+      return {
+        label: 'Quantity unit',
+        value: `${info.packTotalUnits} ${info.packTotalUnits === 1 ? 'piece' : 'pieces'} per pack`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: 'Per piece',
+    };
+  }
+
+  if (info.strategy === 'liquid') {
+    if (pq && /\bsachet\b/i.test(pq)) {
+      return {
+        label: 'Sachet unit',
+        value: pq,
+      };
+    }
+    if (pq && /^\d+\s*x\s*\d+/i.test(pq) && info.packTotalUnits !== null) {
+      return {
+        label: 'Pack quantity',
+        value: `${info.packTotalUnits} ampoules / respules per pack`,
+      };
+    }
+    const metered = info.meteredDoses ?? extractMeteredDoses(pq);
+    if (metered !== null) {
+      return {
+        label: 'Doses / capacity',
+        value: `${metered} puffs per container`,
+      };
+    }
+    if (info.bottleVolumeMl !== null) {
+      const containerNoun = pq && /\bcontainer\b/i.test(pq) ? 'container' : 'bottle';
+      if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+        return {
+          label: containerNoun === 'container' ? 'Container volume' : 'Bottle volume',
+          value: `${formatMlOrLiter(info.bottleVolumeMl)} × ${info.packTotalUnits} ${containerNoun}s`,
+        };
+      }
+      return {
+        label: containerNoun === 'container' ? 'Container volume' : 'Bottle volume',
+        value: `${formatMlOrLiter(info.bottleVolumeMl)} per ${containerNoun}`,
+      };
+    }
+    const liquidGm = extractWeightGm(pq);
+    if (liquidGm !== null) {
+      const containerNoun = pq && /\bcontainer\b/i.test(pq) ? 'container' : 'bottle';
+      return {
+        label: 'Bottle weight',
+        value: `${liquidGm} gm per ${containerNoun}`,
+      };
+    }
+    if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+      return {
+        label: 'Pack quantity',
+        value: formLower.includes('nebul')
+          ? `${info.packTotalUnits} respules / ampoules per pack`
+          : `${info.packTotalUnits} units per pack`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: pq ?? 'In ml (per bottle)',
+    };
+  }
+
+  if (info.strategy === 'drops') {
+    if (info.bottleVolumeMl !== null) {
+      if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+        return {
+          label: 'Drop bottle volume',
+          value: `${formatMlOrLiter(info.bottleVolumeMl)} × ${info.packTotalUnits} bottles`,
+        };
+      }
+      return {
+        label: 'Drop bottle volume',
+        value: `${formatMlOrLiter(info.bottleVolumeMl)} per bottle`,
+      };
+    }
+    if (info.packTotalUnits !== null) {
+      return {
+        label: 'Pack quantity',
+        value: `${info.packTotalUnits} ${info.packTotalUnits === 1 ? 'bottle' : 'bottles'} per pack`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: 'Per drop bottle (ml)',
+    };
+  }
+
+  if (info.strategy === 'injection') {
+    const singular = singularContainerNoun(info.containerUnit ?? 'vials');
+    if (formLower.includes('infusion') && info.bottleVolumeMl !== null) {
+      if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+        return {
+          label: 'Infusion volume',
+          value: `${formatMlOrLiter(info.bottleVolumeMl)} × ${info.packTotalUnits} bags/bottles`,
+        };
+      }
+      return {
+        label: 'Infusion volume',
+        value: `${formatMlOrLiter(info.bottleVolumeMl)} per bag / bottle`,
+      };
+    }
+    if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+      const plural = info.containerUnit ?? 'vials';
+      return {
+        label: 'Injection pack',
+        value: `${info.packTotalUnits} ${plural} per pack`,
+      };
+    }
+    if (info.bottleVolumeMl !== null) {
+      return {
+        label: 'Injection unit',
+        value: `${formatMlOrLiter(info.bottleVolumeMl)} ${singular}`,
+      };
+    }
+    return {
+      label: 'Injection unit',
+      value: pq ? `Per ${singular} (${pq})` : `Per ${singular}`,
+    };
+  }
+
+  if (info.strategy === 'inhaler') {
+    if (info.meteredDoses !== null) {
+      return {
+        label: 'Inhaler doses',
+        value: `${info.meteredDoses} puffs / metered doses`,
+      };
+    }
+    const vol = extractVolumeMl(pq);
+    if (vol !== null) {
+      return {
+        label: 'Spray volume',
+        value: `${formatMlOrLiter(vol)} per bottle`,
+      };
+    }
+    if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+      return {
+        label: 'Pack quantity',
+        value: `${info.packTotalUnits} units per pack`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: pq ?? 'Per inhaler',
+    };
+  }
+
+  if (info.strategy === 'topical') {
+    const noun = info.containerUnit === 'containers' ? 'container' : 'tube';
+    if (info.tubeWeightGm !== null) {
+      return {
+        label: noun === 'container' ? 'Container weight' : 'Tube weight',
+        value: `${info.tubeWeightGm} gm per ${noun}`,
+      };
+    }
+    const vol = extractVolumeMl(pq);
+    if (vol !== null) {
+      return {
+        label: 'Container volume',
+        value: `${formatMlOrLiter(vol)} per ${noun}`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: pq ? `Per ${noun} (${pq})` : `Per ${noun}`,
+    };
+  }
+
+  if (info.strategy === 'sachet') {
+    if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+      return {
+        label: 'Sachet pack',
+        value: `${info.packTotalUnits} sachets per pack`,
+      };
+    }
+    const gm = extractWeightGm(pq);
+    if (gm !== null) {
+      return {
+        label: 'Sachet weight',
+        value: `${gm} gm per sachet`,
+      };
+    }
+    return {
+      label: 'Quantity unit',
+      value: pq ?? 'Per sachet',
+    };
+  }
+
+  // Other medical sundries / devices / shampoos / patches / test strips
+  const otherVol = extractVolumeMl(pq);
+  if (otherVol !== null) {
+    return {
+      label: 'Container volume',
+      value: `${formatMlOrLiter(otherVol)} per bottle`,
+    };
+  }
+  const otherGm = extractWeightGm(pq);
+  if (otherGm !== null) {
+    return {
+      label: 'Pack weight',
+      value: `${otherGm} gm`,
+    };
+  }
+  if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
+    if (formLower.includes('test strip')) {
+      return { label: 'Pack quantity', value: `${info.packTotalUnits} test strips per pack` };
+    }
+    if (formLower.includes('patch')) {
+      return { label: 'Pack quantity', value: `${info.packTotalUnits} patches per pack` };
+    }
+    if (formLower.includes('needle')) {
+      return { label: 'Pack quantity', value: `${info.packTotalUnits} needles per pack` };
+    }
+    return { label: 'Pack quantity', value: `${info.packTotalUnits} units per pack` };
+  }
+  return {
+    label: 'Quantity unit',
+    value: pq ?? 'Per unit',
+  };
 }
 
 export function formatPackSummary(pack: CataloguePackDto | null | undefined): string {

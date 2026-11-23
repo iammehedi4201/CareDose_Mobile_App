@@ -16,6 +16,7 @@ export interface PersonalMedicationRecord {
   stockRemaining: number;
   stockUnit: string;
   stripUnits?: number | null;
+  openingEntryText?: string | null;
   unitPriceText: string;
   totalStockPrice?: number | null;
   priceScopeLabel?: string | null;

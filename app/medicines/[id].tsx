@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -23,7 +23,12 @@ import {
   parseNonNegativeNumberInput,
   resolveMedicationStatusVariant,
 } from '../../src/features/medications/medication-helpers';
-import { formatBdtCurrency, formatStockWithUnit } from '../../src/features/medications/stock-calculator';
+import {
+  classifyDosageFormStrategy,
+  estimateCurrentStockValue,
+  formatBdtCurrency,
+  formatStockWithUnit,
+} from '../../src/features/medications/stock-calculator';
 import {
   formatStripUnitsValue,
   getStripUnitsLabel,
@@ -44,7 +49,7 @@ import { useResponsiveLayout } from '../../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../src/theme/tokens';
 
 export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, openSchedule } = useLocalSearchParams<{ id: string; openSchedule?: string }>();
   const router = useRouter();
   const layout = useResponsiveLayout();
   const {
@@ -95,6 +100,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const [editOpen, setEditOpen] = useState(false);
   const [updateStockOpen, setUpdateStockOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const handledOpenScheduleRef = useRef(false);
 
   // Secondary modal form states
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
@@ -131,10 +137,9 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
 
   const handleSaveEdit = async (): Promise<void> => {
     const errs = validateRequiredFields(
-      { medName, instructions, thresholdInput },
+      { medName, thresholdInput },
       {
         medName: 'Medicine name',
-        instructions: 'Personal instructions',
         thresholdInput: 'Low-stock threshold',
       },
     );
@@ -226,6 +231,26 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     setCreateDoseOpen(true);
   };
 
+  useEffect(() => {
+    if (openSchedule === '1' && medication && !handledOpenScheduleRef.current) {
+      handledOpenScheduleRef.current = true;
+      setErrors({});
+      setEditingScheduleId(null);
+      setDoseAmount(`1 ${inferSingleDoseUnitFromStockUnit(medication.stockUnit)}`);
+      setScheduleFrequency('Once daily');
+      setScheduledTime('08:00 AM');
+      setScheduleStartDate(getTodayLocalYmd());
+      setCreateDoseOpen(true);
+    }
+  }, [openSchedule, medication]);
+
+  const estimatedCurrentStockValue = estimateCurrentStockValue({
+    stockRemaining: medication.stockRemaining,
+    stockUnit: medication.stockUnit,
+    unitPriceText: medication.unitPriceText,
+    referencePackText: medication.referencePackText,
+  });
+
   return (
     <ScreenContainer
       title={medication.name}
@@ -300,10 +325,25 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
               {formatStripUnitsValue(medication.stripUnits, medication.dosageForm)}
             </Text>
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Quantity unit</Text>
+            <Text style={styles.infoValue}>
+              {classifyDosageFormStrategy(medication.dosageForm) === 'suppository'
+                ? 'Pieces'
+                : medication.stockUnit === 'ml'
+                  ? 'ml (bottle volume)'
+                  : medication.stockUnit}
+            </Text>
+          </View>
+        )}
         <View style={[styles.infoRow, styles.lastRow]}>
           <Text style={styles.infoLabel}>Instructions</Text>
-          <Text style={styles.infoValue}>{medication.instructions}</Text>
+          <Text style={styles.infoValue}>
+            {medication.instructions.trim().length > 0
+              ? medication.instructions
+              : 'Not set (optional)'}
+          </Text>
         </View>
       </View>
 
@@ -327,6 +367,12 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
               : ''}
           </Text>
         </View>
+        {medication.openingEntryText ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Opening stock entry</Text>
+            <Text style={styles.infoValue}>{medication.openingEntryText}</Text>
+          </View>
+        ) : null}
         <View style={[styles.infoRow, styles.lastRow]}>
           <View>
             <Text style={styles.infoLabel}>Low-stock alert at</Text>
@@ -349,16 +395,24 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       {/* Price Information Card */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Price information</Text>
+        {estimatedCurrentStockValue != null ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Estimated stock value</Text>
+            <Text style={styles.infoValue}>
+              ৳{formatBdtCurrency(estimatedCurrentStockValue)}
+            </Text>
+          </View>
+        ) : null}
         {medication.totalStockPrice != null ? (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Recorded stock value</Text>
+            <Text style={styles.infoLabel}>Actual amount paid</Text>
             <Text style={styles.infoValue}>
               ৳{formatBdtCurrency(medication.totalStockPrice)}
             </Text>
           </View>
         ) : null}
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Price &amp; unit rate</Text>
+          <Text style={styles.infoLabel}>Catalogue unit rate</Text>
           <Text style={styles.infoValue}>{medication.unitPriceText}</Text>
         </View>
         <View style={[styles.infoRow, styles.lastRow]}>
@@ -682,8 +736,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           label="Personal instructions"
           value={instructions}
           onChangeText={setInstructions}
-          required
-          errorMessage={errors.instructions}
+          placeholder="Optional notes or take after meal"
         />
         <FormField
           label="Low-stock threshold"

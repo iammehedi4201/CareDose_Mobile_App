@@ -15,7 +15,11 @@ import {
   MedFilter,
   resolveMedicationStatusVariant,
 } from '../src/features/medications/medication-helpers';
-import { formatStockWithUnit } from '../src/features/medications/stock-calculator';
+import {
+  estimateCurrentStockValue,
+  formatBdtCurrency,
+  formatStockWithUnit,
+} from '../src/features/medications/stock-calculator';
 import { useMedications } from '../src/features/medications/MedicationsContext';
 
 export default function MyMedicinesScreen(): React.JSX.Element {
@@ -78,19 +82,34 @@ export default function MyMedicinesScreen(): React.JSX.Element {
           }}
         />
       ) : (
-        filteredMeds.map((med) => (
-          <MedicineCard
-            key={med.id}
-            name={med.name}
-            genericName={med.genericName}
-            strength={med.strength}
-            dosageForm={med.dosageForm}
-            stockText={formatStockWithUnit(med.stockRemaining, med.stockUnit)}
-            rightSubtext={med.unitPriceText}
-            statusVariant={resolveMedicationStatusVariant(med)}
-            onPress={() => router.push(`/medicines/${med.id}`)}
-          />
-        ))
+        filteredMeds.map((med) => {
+          const estValue = estimateCurrentStockValue({
+            stockRemaining: med.stockRemaining,
+            stockUnit: med.stockUnit,
+            unitPriceText: med.unitPriceText,
+            referencePackText: med.referencePackText,
+          });
+          return (
+            <MedicineCard
+              key={med.id}
+              name={med.name}
+              genericName={med.genericName}
+              strength={med.strength}
+              dosageForm={med.dosageForm}
+              stockText={formatStockWithUnit(med.stockRemaining, med.stockUnit)}
+              rightSubtext={med.unitPriceText !== 'Not listed' ? med.unitPriceText : undefined}
+              priceText={
+                estValue != null
+                  ? `Est. ৳${formatBdtCurrency(estValue)}`
+                  : med.totalStockPrice != null
+                    ? `Paid ৳${formatBdtCurrency(med.totalStockPrice)}`
+                    : undefined
+              }
+              statusVariant={resolveMedicationStatusVariant(med)}
+              onPress={() => router.push(`/medicines/${med.id}`)}
+            />
+          );
+        })
       )}
 
       <AddMedicineModal

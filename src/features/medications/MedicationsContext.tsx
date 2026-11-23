@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { readSavedAuthSession } from '../../api/config';
+import { ApiRequestError, readSavedAuthSession } from '../../api/config';
 import {
   archivePatientMedication,
   createPatientMedication,
@@ -14,6 +14,7 @@ import {
   mapApiMedicationToRecord,
   PersonalMedicationRecord,
 } from './medication-helpers';
+import { formatUnitLabelForCount } from './stock-calculator';
 
 const STORAGE_KEY = 'caredose:personal-meds:v2';
 const LEGACY_STORAGE_KEYS = ['caredose:personal-meds:v1'];
@@ -26,15 +27,26 @@ export interface AddPersonalMedicationInput {
   strength?: string | null;
   dosageForm?: string | null;
   manufacturer?: string | null;
-  personalInstructions: string;
+  personalInstructions?: string;
   startingStock: number;
   stockUnit?: string;
+  enteredQuantity?: number;
+  enteredUnit?: string;
+  selectedPackId?: string | null;
   stripUnits?: number | null;
   lowStockThreshold: number;
   unitPriceText?: string;
   totalStockPrice?: number | null;
   priceScopeLabel?: string | null;
   referencePackText?: string | null;
+  purchaseDetails?: {
+    amountPaid: number;
+    purchaseDate?: string;
+    packCount?: number;
+    unitsPerPack?: number;
+    vendor?: string;
+    note?: string;
+  } | null;
 }
 
 export interface UpdatePersonalMedicationInput {
@@ -138,6 +150,15 @@ export function MedicationsProvider({
     async (input: AddPersonalMedicationInput): Promise<PersonalMedicationRecord> => {
       const form = input.dosageForm?.trim() || 'Tablet';
       const stockUnit = input.stockUnit?.trim() || inferStockUnit(form);
+      const cleanInstructions = (input.personalInstructions ?? '').trim();
+      const openingEntryText =
+        input.enteredQuantity != null && input.enteredUnit
+          ? formatUnitLabelForCount(input.enteredQuantity, input.enteredUnit) !==
+              formatUnitLabelForCount(input.startingStock, stockUnit) ||
+            input.enteredQuantity !== input.startingStock
+            ? `${input.enteredQuantity} ${input.enteredUnit} = ${input.startingStock} ${stockUnit}`
+            : `${input.enteredQuantity} ${input.enteredUnit}`
+          : null;
       const session = await readSavedAuthSession();
 
       if (session) {
@@ -152,9 +173,14 @@ export function MedicationsProvider({
               strength: input.strength ?? undefined,
               dosageForm: form,
               manufacturer: input.manufacturer ?? undefined,
-              personalInstructions: input.personalInstructions.trim(),
+              personalInstructions: cleanInstructions || undefined,
               startingStock: Math.max(0, input.startingStock),
               stockUnit,
+              enteredQuantity:
+                input.enteredQuantity !== undefined ? Math.max(0, input.enteredQuantity) : undefined,
+              enteredUnit: input.enteredUnit,
+              selectedPackId: input.selectedPackId ?? undefined,
+              purchaseDetails: input.purchaseDetails ?? undefined,
               lowStockThreshold: Math.max(0, input.lowStockThreshold),
             },
           );
@@ -166,6 +192,7 @@ export function MedicationsProvider({
             priceScopeLabel: input.priceScopeLabel ?? null,
             referencePackText: input.referencePackText ?? mapped.referencePackText,
             stripUnits: input.stripUnits ?? mapped.stripUnits ?? null,
+            openingEntryText,
           };
           setMedications((prev) => {
             const next = [merged, ...prev];
@@ -173,7 +200,10 @@ export function MedicationsProvider({
             return next;
           });
           return merged;
-        } catch {
+        } catch (err) {
+          if (err instanceof ApiRequestError && !err.isNetworkError) {
+            throw err;
+          }
           // Proceed with local save when offline
         }
       }
@@ -187,10 +217,11 @@ export function MedicationsProvider({
         strength: input.strength?.trim() || null,
         dosageForm: form,
         manufacturer: input.manufacturer ?? null,
-        instructions: input.personalInstructions.trim(),
+        instructions: cleanInstructions,
         stockRemaining: Math.max(0, input.startingStock),
         stockUnit,
         stripUnits: input.stripUnits ?? null,
+        openingEntryText,
         unitPriceText: input.unitPriceText ?? 'Not listed',
         totalStockPrice: input.totalStockPrice ?? null,
         priceScopeLabel: input.priceScopeLabel ?? null,

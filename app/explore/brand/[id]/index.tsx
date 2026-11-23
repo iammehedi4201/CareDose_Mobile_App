@@ -26,12 +26,10 @@ import {
   formatMissingCatalogueValue,
   formatPackSummary,
   formatPackWarningReason,
-  formatStripUnitsValue,
   formatUnitOrPackPrice,
-  getStripUnitsLabel,
-  isSolidDosageForm,
   OFFLINE_FALLBACK_CATALOGUE_BRANDS,
   resolveBrandBadge,
+  resolvePackQuantityUnit,
 } from '../../../../src/features/catalogue/catalogue-helpers';
 import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../../src/theme/tokens';
 
@@ -52,6 +50,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const loadAlternatives = useCallback(
@@ -86,6 +85,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       try {
         const detailRes = await getCatalogueBrandDetail(id, { forceRefresh });
         setBrand(detailRes);
+        setSelectedPackId(detailRes.packs[0]?.id ?? null);
       } catch (err) {
         const fallback = OFFLINE_FALLBACK_CATALOGUE_BRANDS.find(
           (b) => b.sourceId === id || b.id === id,
@@ -99,6 +99,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
             images: [],
             safetyNotice: 'Offline preview data. Start the CareDose backend to view live records.',
           });
+          setSelectedPackId(fallback.primaryPack?.id ?? null);
         } else {
           setErrorMessage(err instanceof Error ? err.message : 'Unable to load medicine details.');
         }
@@ -145,9 +146,20 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const initialMatchingBrands = allCandidateBrands.slice(0, INITIAL_ALTERNATIVES_LIMIT);
   const remainingMatchingCount = Math.max(0, allCandidateBrands.length - INITIAL_ALTERNATIVES_LIMIT);
   const isCombination = altGroups.some((g) => g.isCombination);
-  const primaryStripUnits =
-    brand.packs.find((p) => typeof p.stripUnits === 'number' && p.stripUnits > 0)?.stripUnits ??
-    null;
+  const activePack =
+    brand.packs.find((p) => p.id === selectedPackId) ?? brand.packs[0] ?? null;
+  const activeUnitDetails = resolvePackQuantityUnit(
+    activePack,
+    brand.dosageForm,
+    brand.packs,
+    { includeStripsInPack: false },
+  );
+  const activePackUnitDetails = resolvePackQuantityUnit(
+    activePack,
+    brand.dosageForm,
+    brand.packs,
+    { includeStripsInPack: true },
+  );
 
   return (
     <ScreenContainer
@@ -220,14 +232,10 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
           <Text style={styles.infoLabel}>Dosage form</Text>
           <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.dosageForm)}</Text>
         </View>
-        {isSolidDosageForm(brand.dosageForm) || primaryStripUnits !== null ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{getStripUnitsLabel(brand.dosageForm)}</Text>
-            <Text style={styles.infoValue}>
-              {formatStripUnitsValue(primaryStripUnits, brand.dosageForm)}
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>{activeUnitDetails.label}</Text>
+          <Text style={styles.infoValue}>{activeUnitDetails.value}</Text>
+        </View>
         <View style={[styles.infoRow, brand.releaseMarker ? null : styles.lastRow]}>
           <Text style={styles.infoLabel}>Manufacturer</Text>
           <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.manufacturer)}</Text>
@@ -244,7 +252,9 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       <View style={styles.sectionCard}>
         <View style={styles.cardHeader}>
           <View style={styles.packTitleCol}>
-            <Text style={styles.sectionTitle}>Pack &amp; price ({brand.packs.length})</Text>
+            <Text style={styles.sectionTitle}>
+              Pack &amp; price{brand.packs.length > 1 ? ` (${brand.packs.length} options)` : ''}
+            </Text>
             <Text style={styles.packSourceHint}>MedEx reference price (unverified)</Text>
           </View>
           {brand.hasPriceWarning ? (
@@ -252,58 +262,94 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
           ) : null}
         </View>
 
-        {brand.packs.length === 0 ? (
+        {!activePack ? (
           <Text style={styles.supportingEmpty}>No pack pricing records available in catalogue.</Text>
         ) : (
-          brand.packs.map((pack, idx) => (
-            <View
-              key={pack.id}
-              style={[
-                styles.packBlock,
-                idx === brand.packs.length - 1 ? styles.lastPackBlock : null,
-              ]}
-            >
+          <View>
+            {brand.packs.length > 1 ? (
+              <View style={styles.packSelectorWrap}>
+                <Text style={styles.packSelectorPrompt}>Select a pack size to inspect:</Text>
+                <View style={styles.packChipsGrid}>
+                  {brand.packs.map((pack) => {
+                    const isSelected = pack.id === activePack.id;
+                    const pricePreview = pack.packPrice
+                      ? formatCurrencyAmount(pack.packPrice, pack.currency)
+                      : pack.unitPrice
+                        ? `${formatCurrencyAmount(pack.unitPrice, pack.currency)}/unit`
+                        : 'Price N/A';
+                    return (
+                      <Pressable
+                        key={pack.id}
+                        accessibilityRole="button"
+                        onPress={() => setSelectedPackId(pack.id)}
+                        style={[styles.packChip, isSelected ? styles.packChipActive : null]}
+                      >
+                        <Text
+                          style={[
+                            styles.packChipTitle,
+                            isSelected ? styles.packChipTitleActive : null,
+                          ]}
+                        >
+                          {formatPackSummary(pack)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.packChipPrice,
+                            isSelected ? styles.packChipPriceActive : null,
+                          ]}
+                        >
+                          {pricePreview}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.selectedPackPanel}>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Pack size</Text>
-                <Text style={styles.infoValue}>{formatPackSummary(pack)}</Text>
+                <Text style={styles.infoValue}>{formatPackSummary(activePack)}</Text>
               </View>
-              {isSolidDosageForm(brand.dosageForm) || pack.stripUnits ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>{getStripUnitsLabel(brand.dosageForm)}</Text>
-                  <Text style={styles.infoValue}>
-                    {formatStripUnitsValue(pack.stripUnits, brand.dosageForm, pack.packUnits)}
-                  </Text>
-                </View>
-              ) : null}
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>{activePackUnitDetails.label}</Text>
+                <Text style={styles.infoValue}>{activePackUnitDetails.value}</Text>
+              </View>
               <View
                 style={[
                   styles.infoRow,
-                  !pack.unitPrice && pack.warnings.length === 0 ? styles.lastRow : null,
+                  !activePack.unitPrice && activePack.warnings.length === 0 ? styles.lastRow : null,
                 ]}
               >
                 <Text style={styles.infoLabel}>Pack price</Text>
                 <Text style={styles.infoValue}>
-                  {formatCurrencyAmount(pack.packPrice, pack.currency)}
+                  {formatCurrencyAmount(activePack.packPrice, activePack.currency)}
                 </Text>
               </View>
-              {pack.unitPrice ? (
-                <View style={[styles.infoRow, pack.warnings.length === 0 ? styles.lastRow : null]}>
+              {activePack.unitPrice ? (
+                <View
+                  style={[
+                    styles.infoRow,
+                    activePack.warnings.length === 0 ? styles.lastRow : null,
+                  ]}
+                >
                   <Text style={styles.infoLabel}>Unit price</Text>
                   <Text style={styles.infoValue}>
-                    {formatCurrencyAmount(pack.unitPrice, pack.currency)}
+                    {formatCurrencyAmount(activePack.unitPrice, activePack.currency)}
                   </Text>
                 </View>
               ) : null}
-              {pack.warnings.length > 0 ? (
+              {activePack.warnings.length > 0 ? (
                 <View style={styles.packWarningRow}>
                   <Feather name="alert-triangle" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
                   <Text style={styles.packWarningText}>
-                    {pack.warnings.map(formatPackWarningReason).join(' ')}
+                    {activePack.warnings.map(formatPackWarningReason).join(' ')}
                   </Text>
                 </View>
               ) : null}
             </View>
-          ))
+          </View>
         )}
       </View>
 
@@ -406,6 +452,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       <AddMedicineModal
         visible={addOpen}
         initialBrand={brand}
+        initialPackId={activePack?.id ?? null}
         onClose={() => setAddOpen(false)}
         onSaved={(created) => setToast(`${created.name} added to My Medicines.`)}
       />
@@ -511,16 +558,55 @@ const styles = StyleSheet.create({
     color: CAREDOSE_EXTENDED_COLORS.secondaryText,
     paddingVertical: 6,
   },
-  packBlock: {
-    paddingBottom: 8,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
+  packSelectorWrap: {
+    marginTop: 4,
+    marginBottom: 10,
   },
-  lastPackBlock: {
-    paddingBottom: 0,
-    marginBottom: 0,
-    borderBottomWidth: 0,
+  packSelectorPrompt: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+    marginBottom: 8,
+  },
+  packChipsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  packChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    minWidth: 104,
+  },
+  packChipActive: {
+    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
+    backgroundColor: '#EAF5F1',
+  },
+  packChipTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.mainText,
+  },
+  packChipTitleActive: {
+    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
+  },
+  packChipPrice: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
+  },
+  packChipPriceActive: {
+    color: CAREDOSE_EXTENDED_COLORS.primary,
+  },
+  selectedPackPanel: {
+    borderTopWidth: 1,
+    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
+    paddingTop: 4,
   },
   packWarningRow: {
     flexDirection: 'row',
