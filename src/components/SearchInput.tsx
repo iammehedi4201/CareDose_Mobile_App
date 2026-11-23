@@ -1,11 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import {
-  CAREDOSE_EXTENDED_COLORS,
-  CAREDOSE_RADIUS,
-  MIN_TOUCH_TARGET,
-} from '../theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 
 export interface SearchInputProps {
   value: string;
@@ -26,12 +22,12 @@ export function SearchInput({
   };
 
   return (
-    <View style={styles.container}>
+    <View className="min-h-[44px] flex-row items-center rounded-field border border-border bg-white pr-1 pl-3">
       <Feather
         name="search"
         size={16}
         color={CAREDOSE_EXTENDED_COLORS.secondaryText}
-        style={styles.searchIcon}
+        style={{ marginRight: 8 }}
       />
       <TextInput
         accessibilityLabel={placeholder}
@@ -39,7 +35,7 @@ export function SearchInput({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={CAREDOSE_EXTENDED_COLORS.mutedText}
-        style={styles.input}
+        className="flex-1 py-2 text-[13px] text-main"
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
@@ -49,7 +45,7 @@ export function SearchInput({
           accessibilityRole="button"
           accessibilityLabel="Clear search query"
           onPress={handleClear}
-          style={styles.clearButton}
+          className="min-h-[44px] min-w-[44px] items-center justify-center"
         >
           <Feather name="x-circle" size={16} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
         </Pressable>
@@ -57,32 +53,3 @@ export function SearchInput({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    borderRadius: CAREDOSE_RADIUS.field,
-    paddingLeft: 12,
-    paddingRight: 4,
-    minHeight: MIN_TOUCH_TARGET,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 13,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    paddingVertical: 8,
-  },
-  clearButton: {
-    minWidth: MIN_TOUCH_TARGET,
-    minHeight: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

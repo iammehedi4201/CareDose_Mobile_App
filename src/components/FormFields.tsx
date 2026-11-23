@@ -5,7 +5,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -16,11 +15,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
-import {
-  CAREDOSE_EXTENDED_COLORS,
-  CAREDOSE_RADIUS,
-  MIN_TOUCH_TARGET,
-} from '../theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 
 export function validateRequiredFields(
   values: Record<string, string | number | undefined | null>,
@@ -122,7 +117,7 @@ export function formatTimeString(date: Date): string {
 export function FormRow({ children }: { children: React.ReactNode }): React.JSX.Element {
   const layout = useResponsiveLayout();
   return (
-    <View style={layout.stackTwoCol ? styles.formRowStacked : styles.formRow}>
+    <View className={layout.stackTwoCol ? 'flex-col' : 'flex-row gap-2.5'}>
       {children}
     </View>
   );
@@ -131,7 +126,7 @@ export function FormRow({ children }: { children: React.ReactNode }): React.JSX.
 export function FormCol({ children }: { children: React.ReactNode }): React.JSX.Element {
   const layout = useResponsiveLayout();
   return (
-    <View style={layout.stackTwoCol ? styles.formColStacked : styles.formCol}>
+    <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
       {children}
     </View>
   );
@@ -164,11 +159,22 @@ export function FormField({
 }: FormFieldProps): React.JSX.Element {
   const [focused, setFocused] = useState(false);
 
+  const borderClass = errorMessage
+    ? focused
+      ? 'border-[1.5px] border-error'
+      : 'border border-error'
+    : focused
+      ? 'border-[1.5px] border-primary'
+      : 'border border-[#D6E3DC]';
+  const editableClass = editable
+    ? 'bg-background text-main'
+    : 'bg-[#EEF2F0] text-[#5A706B]';
+
   return (
-    <View style={styles.fieldWrapper}>
-      <Text style={styles.label}>
+    <View className="mb-3">
+      <Text className="text-[12px] font-semibold text-[#5A706B] mb-[5px]">
         {label}
-        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+        {required ? <Text className="text-error"> *</Text> : null}
       </Text>
       <TextInput
         accessibilityLabel={label}
@@ -178,21 +184,23 @@ export function FormField({
         placeholderTextColor={CAREDOSE_EXTENDED_COLORS.mutedText}
         keyboardType={keyboardType}
         multiline={multiline}
+        textAlignVertical={multiline ? 'top' : undefined}
         editable={editable}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        style={[
-          styles.input,
-          multiline ? styles.multilineInput : null,
-          focused ? styles.inputFocused : null,
-          errorMessage ? styles.inputError : null,
-          !editable ? styles.inputDisabled : null,
-        ]}
+        className={[
+          'min-h-[42px] rounded-field px-3 py-2 text-[13px]',
+          multiline ? 'min-h-[72px]' : '',
+          borderClass,
+          editableClass,
+        ]
+          .filter(Boolean)
+          .join(' ')}
       />
       {errorMessage ? (
-        <Text style={styles.errorText}>{errorMessage}</Text>
+        <Text className="mt-1 text-[11px] text-error font-medium">{errorMessage}</Text>
       ) : helperText ? (
-        <Text style={styles.helperText}>{helperText}</Text>
+        <Text className="mt-1 text-[11px] text-[#5A706B]">{helperText}</Text>
       ) : null}
     </View>
   );
@@ -224,26 +232,30 @@ export function SelectField({
   const [open, setOpen] = useState(false);
   const currentOption = options.find((o) => o.value === value);
 
+  const triggerBorderClass = errorMessage
+    ? open
+      ? 'border-[1.5px] border-error'
+      : 'border border-error'
+    : open
+      ? 'border-[1.5px] border-primary'
+      : 'border border-[#D6E3DC]';
+
   return (
-    <View style={styles.fieldWrapper}>
-      <Text style={styles.label}>
+    <View className="mb-3">
+      <Text className="text-[12px] font-semibold text-[#5A706B] mb-[5px]">
         {label}
-        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+        {required ? <Text className="text-error"> *</Text> : null}
       </Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${currentOption?.label ?? 'Select'}`}
         onPress={() => setOpen(true)}
-        style={[
-          styles.pickerTrigger,
-          open ? styles.inputFocused : null,
-          errorMessage ? styles.inputError : null,
-        ]}
+        className={`min-h-[42px] bg-background rounded-field px-[11px] flex-row items-center justify-between ${triggerBorderClass}`}
       >
-        <Text style={styles.pickerValueText} numberOfLines={1}>
+        <Text className="flex-1 text-[13px] font-medium text-main" numberOfLines={1}>
           {currentOption ? currentOption.label : 'Select'}
         </Text>
-        <View style={styles.chevronBadge}>
+        <View className="w-6 h-6 rounded-[7px] bg-mint items-center justify-center ml-1.5">
           <Feather
             name="chevron-down"
             size={15}
@@ -259,27 +271,27 @@ export function SelectField({
         animationType="fade"
         onRequestClose={() => setOpen(false)}
       >
-        <View style={styles.pickerBackdrop}>
+        <View className="flex-1 bg-[rgba(18,38,35,0.52)] justify-center items-center px-5">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close selection"
-            style={StyleSheet.absoluteFill}
+            className="absolute inset-0"
             onPress={() => setOpen(false)}
           />
-          <View style={styles.pickerCard}>
-            <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>{label}</Text>
+          <View className="w-full max-w-[380px] max-h-[70%] bg-white rounded-[20px] border border-border overflow-hidden shadow-lg">
+            <View className="flex-row items-center justify-between bg-background px-4 py-3 border-b border-border">
+              <Text className="text-[15px] font-bold text-main">{label}</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close selection"
                 onPress={() => setOpen(false)}
-                style={styles.pickerCloseBtn}
+                className="w-[30px] h-[30px] rounded-[15px] bg-white border border-border items-center justify-center"
               >
                 <Feather name="x" size={16} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
               </Pressable>
             </View>
 
-            <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
+            <ScrollView className="py-1.5" showsVerticalScrollIndicator={false}>
               {options.map((opt, idx) => {
                 const isSelected = opt.value === value;
                 const isLast = idx === options.length - 1;
@@ -291,30 +303,36 @@ export function SelectField({
                       onSelect(opt.value);
                       setOpen(false);
                     }}
-                    style={[
-                      styles.pickerOption,
-                      isSelected ? styles.pickerOptionActive : null,
-                      isLast ? styles.pickerOptionLast : null,
-                    ]}
+                    className={[
+                      'min-h-[46px] px-4 py-2.5 flex-row items-center justify-between',
+                      isSelected ? 'bg-mint' : '',
+                      isLast ? '' : 'border-b border-border',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   >
-                    <View style={styles.pickerOptionTextCol}>
+                    <View className="flex-1 pr-2.5">
                       <Text
-                        style={[
-                          styles.pickerOptionLabel,
-                          isSelected ? styles.pickerOptionLabelActive : null,
-                        ]}
+                        className={
+                          isSelected
+                            ? 'text-[14px] font-bold text-primary-dark'
+                            : 'text-[14px] font-medium text-main'
+                        }
                       >
                         {opt.label}
                       </Text>
                       {opt.subtitle ? (
-                        <Text style={styles.pickerOptionSub}>{opt.subtitle}</Text>
+                        <Text className="mt-0.5 text-[11px] text-[#5A706B]">
+                          {opt.subtitle}
+                        </Text>
                       ) : null}
                     </View>
                     <View
-                      style={[
-                        styles.radioCircle,
-                        isSelected ? styles.radioCircleActive : null,
-                      ]}
+                      className={`w-[22px] h-[22px] rounded-full border-[1.5px] items-center justify-center ${
+                        isSelected
+                          ? 'bg-primary border-primary'
+                          : 'border-[#C5D6CE] bg-white'
+                      }`}
                     >
                       {isSelected ? (
                         <Feather name="check" size={12} color="#FFFFFF" />
@@ -328,7 +346,9 @@ export function SelectField({
         </View>
       </Modal>
 
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {errorMessage ? (
+        <Text className="mt-1 text-[11px] text-error font-medium">{errorMessage}</Text>
+      ) : null}
     </View>
   );
 }
@@ -382,35 +402,36 @@ export function DateField({
   };
 
   return (
-    <View style={styles.fieldWrapper}>
-      <Text style={styles.label}>
+    <View className="mb-3">
+      <Text className="text-[12px] font-semibold text-[#5A706B] mb-[5px]">
         {label}
-        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+        {required ? <Text className="text-error"> *</Text> : null}
       </Text>
 
       <View
-        style={[
-          styles.pickerTrigger,
-          errorMessage ? styles.inputError : null,
-        ]}
+        className={`min-h-[42px] bg-background border rounded-field px-[11px] flex-row items-center justify-between ${
+          errorMessage ? 'border-error' : 'border-[#D6E3DC]'
+        }`}
       >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${label}: ${displayText || placeholder}`}
           onPress={handleOpen}
-          style={styles.pickerMainTap}
+          className="flex-1 flex-row items-center py-2"
         >
-          <Feather
-            name="calendar"
-            size={15}
-            color={CAREDOSE_EXTENDED_COLORS.primary}
-            style={styles.leadingIcon}
-          />
+          <View className="mr-2">
+            <Feather
+              name="calendar"
+              size={15}
+              color={CAREDOSE_EXTENDED_COLORS.primary}
+            />
+          </View>
           <Text
-            style={[
-              styles.pickerValueText,
-              !displayText ? styles.placeholderText : null,
-            ]}
+            className={
+              displayText
+                ? 'flex-1 text-[13px] font-medium text-main'
+                : 'flex-1 text-[13px] font-normal text-[#7D928D]'
+            }
             numberOfLines={1}
           >
             {displayText || placeholder}
@@ -422,7 +443,7 @@ export function DateField({
             accessibilityRole="button"
             accessibilityLabel={`Clear ${label}`}
             onPress={() => onChangeDate('')}
-            style={styles.clearIconBtn}
+            className="w-[26px] h-[26px] rounded-full bg-[#E5EFEA] items-center justify-center ml-1.5"
           >
             <Feather name="x" size={14} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
           </Pressable>
@@ -446,12 +467,15 @@ export function DateField({
           animationType="fade"
           onRequestClose={() => setShowPicker(false)}
         >
-          <View style={styles.pickerBackdrop}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPicker(false)} />
-            <View style={styles.pickerCard}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>{label}</Text>
-                <Pressable onPress={() => setShowPicker(false)} style={styles.pickerCloseBtn}>
+          <View className="flex-1 bg-[rgba(18,38,35,0.52)] justify-center items-center px-5">
+            <Pressable className="absolute inset-0" onPress={() => setShowPicker(false)} />
+            <View className="w-full max-w-[380px] max-h-[70%] bg-white rounded-[20px] border border-border overflow-hidden shadow-lg">
+              <View className="flex-row items-center justify-between bg-background px-4 py-3 border-b border-border">
+                <Text className="text-[15px] font-bold text-main">{label}</Text>
+                <Pressable
+                  onPress={() => setShowPicker(false)}
+                  className="w-[30px] h-[30px] rounded-[15px] bg-white border border-border items-center justify-center"
+                >
                   <Feather name="x" size={16} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
                 </Pressable>
               </View>
@@ -463,27 +487,33 @@ export function DateField({
                   onChange={handlePickerChange}
                 />
               ) : (
-                <View style={styles.webDateBox}>
-                  <Text style={styles.webDateCurrent}>
+                <View className="p-[18px] items-center">
+                  <Text className="text-[18px] font-bold text-main mb-3.5">
                     {formatDisplayDate(value || formatIsoDateString(new Date()))}
                   </Text>
-                  <View style={styles.webDateActions}>
-                    <Pressable onPress={() => adjustDays(-1)} style={styles.webStepBtn}>
-                      <Text style={styles.webStepText}>-1 Day</Text>
+                  <View className="flex-row gap-2.5">
+                    <Pressable
+                      onPress={() => adjustDays(-1)}
+                      className="px-3.5 py-2 rounded-[10px] bg-mint border border-[#C5E8D8]"
+                    >
+                      <Text className="text-[12px] font-semibold text-primary-dark">-1 Day</Text>
                     </Pressable>
                     <Pressable
                       onPress={() => onChangeDate(formatIsoDateString(new Date()))}
-                      style={styles.webStepBtn}
+                      className="px-3.5 py-2 rounded-[10px] bg-mint border border-[#C5E8D8]"
                     >
-                      <Text style={styles.webStepText}>Today</Text>
+                      <Text className="text-[12px] font-semibold text-primary-dark">Today</Text>
                     </Pressable>
-                    <Pressable onPress={() => adjustDays(1)} style={styles.webStepBtn}>
-                      <Text style={styles.webStepText}>+1 Day</Text>
+                    <Pressable
+                      onPress={() => adjustDays(1)}
+                      className="px-3.5 py-2 rounded-[10px] bg-mint border border-[#C5E8D8]"
+                    >
+                      <Text className="text-[12px] font-semibold text-primary-dark">+1 Day</Text>
                     </Pressable>
                   </View>
                 </View>
               )}
-              <View style={styles.iosPickerFooter}>
+              <View className="px-4 py-3 border-t border-border items-end">
                 <Pressable
                   onPress={() => {
                     if (Platform.OS === 'ios') {
@@ -491,9 +521,9 @@ export function DateField({
                     }
                     setShowPicker(false);
                   }}
-                  style={styles.pickerDoneBtn}
+                  className="px-5 py-[9px] rounded-[10px] bg-primary"
                 >
-                  <Text style={styles.pickerDoneText}>Done</Text>
+                  <Text className="text-white text-[13px] font-semibold">Done</Text>
                 </Pressable>
               </View>
             </View>
@@ -501,7 +531,9 @@ export function DateField({
         </Modal>
       ) : null}
 
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {errorMessage ? (
+        <Text className="mt-1 text-[11px] text-error font-medium">{errorMessage}</Text>
+      ) : null}
     </View>
   );
 }
@@ -551,32 +583,33 @@ export function TimeField({
   };
 
   return (
-    <View style={styles.fieldWrapper}>
-      <Text style={styles.label}>
+    <View className="mb-3">
+      <Text className="text-[12px] font-semibold text-[#5A706B] mb-[5px]">
         {label}
-        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+        {required ? <Text className="text-error"> *</Text> : null}
       </Text>
 
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value || placeholder}`}
         onPress={handleOpen}
-        style={[
-          styles.pickerTrigger,
-          errorMessage ? styles.inputError : null,
-        ]}
+        className={`min-h-[42px] bg-background border rounded-field px-[11px] flex-row items-center justify-between ${
+          errorMessage ? 'border-error' : 'border-[#D6E3DC]'
+        }`}
       >
-        <Feather
-          name="clock"
-          size={15}
-          color={CAREDOSE_EXTENDED_COLORS.primary}
-          style={styles.leadingIcon}
-        />
+        <View className="mr-2">
+          <Feather
+            name="clock"
+            size={15}
+            color={CAREDOSE_EXTENDED_COLORS.primary}
+          />
+        </View>
         <Text
-          style={[
-            styles.pickerValueText,
-            !value ? styles.placeholderText : null,
-          ]}
+          className={
+            value
+              ? 'flex-1 text-[13px] font-medium text-main'
+              : 'flex-1 text-[13px] font-normal text-[#7D928D]'
+          }
           numberOfLines={1}
         >
           {value || placeholder}
@@ -601,12 +634,15 @@ export function TimeField({
           animationType="fade"
           onRequestClose={() => setShowPicker(false)}
         >
-          <View style={styles.pickerBackdrop}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPicker(false)} />
-            <View style={styles.pickerCard}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>{label}</Text>
-                <Pressable onPress={() => setShowPicker(false)} style={styles.pickerCloseBtn}>
+          <View className="flex-1 bg-[rgba(18,38,35,0.52)] justify-center items-center px-5">
+            <Pressable className="absolute inset-0" onPress={() => setShowPicker(false)} />
+            <View className="w-full max-w-[380px] max-h-[70%] bg-white rounded-[20px] border border-border overflow-hidden shadow-lg">
+              <View className="flex-row items-center justify-between bg-background px-4 py-3 border-b border-border">
+                <Text className="text-[15px] font-bold text-main">{label}</Text>
+                <Pressable
+                  onPress={() => setShowPicker(false)}
+                  className="w-[30px] h-[30px] rounded-[15px] bg-white border border-border items-center justify-center"
+                >
                   <Feather name="x" size={16} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
                 </Pressable>
               </View>
@@ -619,29 +655,37 @@ export function TimeField({
                   onChange={handlePickerChange}
                 />
               ) : (
-                <View style={styles.webDateBox}>
-                  <Text style={styles.webDateCurrent}>{value || '09:00 AM'}</Text>
-                  <View style={styles.webDateActions}>
-                    <Pressable onPress={() => adjustMinutes(-30)} style={styles.webStepBtn}>
-                      <Text style={styles.webStepText}>-30m</Text>
+                <View className="p-[18px] items-center">
+                  <Text className="text-[18px] font-bold text-main mb-3.5">
+                    {value || formatTimeString(iosDraft)}
+                  </Text>
+                  <View className="flex-row gap-2.5">
+                    <Pressable
+                      onPress={() => adjustMinutes(-30)}
+                      className="px-3.5 py-2 rounded-[10px] bg-mint border border-[#C5E8D8]"
+                    >
+                      <Text className="text-[12px] font-semibold text-primary-dark">-30m</Text>
                     </Pressable>
-                    <Pressable onPress={() => adjustMinutes(30)} style={styles.webStepBtn}>
-                      <Text style={styles.webStepText}>+30m</Text>
+                    <Pressable
+                      onPress={() => adjustMinutes(30)}
+                      className="px-3.5 py-2 rounded-[10px] bg-mint border border-[#C5E8D8]"
+                    >
+                      <Text className="text-[12px] font-semibold text-primary-dark">+30m</Text>
                     </Pressable>
                   </View>
                 </View>
               )}
-              <View style={styles.iosPickerFooter}>
+              <View className="px-4 py-3 border-t border-border items-end">
                 <Pressable
                   onPress={() => {
-                    if (Platform.OS === 'ios') {
+                    if (Platform.OS === 'ios' || !value) {
                       onChangeTime(formatTimeString(iosDraft));
                     }
                     setShowPicker(false);
                   }}
-                  style={styles.pickerDoneBtn}
+                  className="px-5 py-[9px] rounded-[10px] bg-primary"
                 >
-                  <Text style={styles.pickerDoneText}>Done</Text>
+                  <Text className="text-white text-[13px] font-semibold">Done</Text>
                 </Pressable>
               </View>
             </View>
@@ -649,7 +693,9 @@ export function TimeField({
         </Modal>
       ) : null}
 
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {errorMessage ? (
+        <Text className="mt-1 text-[11px] text-error font-medium">{errorMessage}</Text>
+      ) : null}
     </View>
   );
 }
@@ -668,10 +714,12 @@ export function ToggleField({
   onValueChange,
 }: ToggleFieldProps): React.JSX.Element {
   return (
-    <View style={styles.toggleRow}>
-      <View style={styles.toggleTextCol}>
-        <Text style={styles.toggleLabel}>{label}</Text>
-        {description ? <Text style={styles.toggleDescription}>{description}</Text> : null}
+    <View className="min-h-[44px] flex-row items-center justify-between py-2">
+      <View className="flex-1 pr-3">
+        <Text className="text-[13px] font-semibold text-main">{label}</Text>
+        {description ? (
+          <Text className="mt-0.5 text-[11px] text-[#5A706B]">{description}</Text>
+        ) : null}
       </View>
       <Switch
         accessibilityLabel={label}
@@ -686,277 +734,3 @@ export function ToggleField({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  formRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  formRowStacked: {
-    flexDirection: 'column',
-  },
-  formCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  formColStacked: {
-    width: '100%',
-  },
-  fieldWrapper: {
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    marginBottom: 5,
-  },
-  requiredStar: {
-    color: CAREDOSE_EXTENDED_COLORS.error,
-  },
-  input: {
-    minHeight: 42,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: '#D6E3DC',
-    borderRadius: CAREDOSE_RADIUS.field,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  multilineInput: {
-    minHeight: 72,
-    textAlignVertical: 'top',
-  },
-  inputFocused: {
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-    borderWidth: 1.5,
-  },
-  inputError: {
-    borderColor: CAREDOSE_EXTENDED_COLORS.error,
-  },
-  inputDisabled: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.neutralSurface,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  errorText: {
-    marginTop: 4,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.error,
-    fontWeight: '500',
-  },
-  helperText: {
-    marginTop: 4,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  pickerTrigger: {
-    minHeight: 42,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: '#D6E3DC',
-    borderRadius: CAREDOSE_RADIUS.field,
-    paddingHorizontal: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pickerMainTap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  leadingIcon: {
-    marginRight: 8,
-  },
-  pickerValueText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  placeholderText: {
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
-    fontWeight: '400',
-  },
-  clearIconBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#E5EFEA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-  },
-  chevronBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-  },
-  pickerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(18, 38, 35, 0.52)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  pickerCard: {
-    width: '100%',
-    maxWidth: 380,
-    maxHeight: '70%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    overflow: 'hidden',
-    elevation: 14,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  pickerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  pickerCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pickerList: {
-    paddingVertical: 6,
-  },
-  pickerOption: {
-    minHeight: 46,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  pickerOptionLast: {
-    borderBottomWidth: 0,
-  },
-  pickerOptionActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-  },
-  pickerOptionTextCol: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  pickerOptionLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  pickerOptionLabelActive: {
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  pickerOptionSub: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: '#C5D6CE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  radioCircleActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  webDateBox: {
-    padding: 18,
-    alignItems: 'center',
-  },
-  webDateCurrent: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 14,
-  },
-  webDateActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  webStepBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-  },
-  webStepText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  iosPickerFooter: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
-    alignItems: 'flex-end',
-  },
-  pickerDoneBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  pickerDoneText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  toggleRow: {
-    minHeight: MIN_TOUCH_TARGET,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  toggleTextCol: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  toggleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  toggleDescription: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-});

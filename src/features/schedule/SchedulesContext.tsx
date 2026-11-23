@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { readSavedAuthSession } from '../../api/config';
+import { ApiRequestError, readSavedAuthSession } from '../../api/config';
 import {
   createMedicationSchedule,
   DailyDosesResponseDto,
@@ -29,12 +29,17 @@ import {
   expandLocalScheduleOccurrencesForRange,
   filterLocalDoseHistory,
   inferSingleDoseUnitFromStockUnit,
+  isDuplicateScheduleDefinition,
   LocalDoseEventRecord,
   LocalScheduleRecord,
   mapApiScheduleToLocal,
   normalizeScheduleFrequencyCode,
   normalizeTimeTo24Hour,
 } from './dose-rules';
+import {
+  cancelScheduleNotifications,
+  syncScheduleNotifications,
+} from './notifications';
 
 const SCHEDULES_STORAGE_KEY = 'caredose:schedules:v2';
 const DOSE_EVENTS_STORAGE_KEY = 'caredose:dose-events:v2';
@@ -46,6 +51,8 @@ export interface CreateScheduleInput {
   doseAmount: number;
   doseUnit?: string;
   frequency: string;
+  intervalHours?: number | null;
+  weekdays?: number[];
   scheduledTimes: string[];
   startDateYmd: string;
   endDateYmd?: string | null;
@@ -57,6 +64,8 @@ export interface UpdateScheduleInput {
   doseAmount?: number;
   doseUnit?: string;
   frequency?: string;
+  intervalHours?: number | null;
+  weekdays?: number[];
   scheduledTimes?: string[];
   startDateYmd?: string;
   endDateYmd?: string | null;
@@ -256,9 +265,33 @@ export function SchedulesProvider({
         ...new Set(input.scheduledTimes.map(normalizeTimeTo24Hour)),
       ].sort();
       const freqCode = normalizeScheduleFrequencyCode(input.frequency);
+      const resolvedInterval =
+        freqCode === 'EVERY_X_HOURS' || freqCode === 'EVERY_8_HOURS'
+          ? (input.intervalHours ?? 8)
+          : null;
+      const resolvedWeekdays =
+        freqCode === 'SELECTED_WEEKDAYS'
+          ? [...new Set(input.weekdays ?? [])].sort((a, b) => a - b)
+          : [];
       const resolvedUnit =
         input.doseUnit?.trim() ||
         inferSingleDoseUnitFromStockUnit(med?.stockUnit);
+
+      if (
+        isDuplicateScheduleDefinition(schedules, {
+          patientMedicationId: input.patientMedicationId,
+          frequency: freqCode,
+          intervalHours: resolvedInterval,
+          weekdays: resolvedWeekdays,
+          scheduledTimes: normalizedTimes,
+          startDateYmd: input.startDateYmd,
+          endDateYmd: input.endDateYmd,
+        })
+      ) {
+        throw new Error(
+          'An active schedule for this medicine with matching times and frequency already exists.',
+        );
+      }
 
       const session = await readSavedAuthSession();
       if (session && UUID_PREFIX_RE.test(input.patientMedicationId)) {
@@ -270,11 +303,13 @@ export function SchedulesProvider({
               doseAmount: input.doseAmount,
               doseUnit: resolvedUnit,
               frequency: freqCode,
+              intervalHours: resolvedInterval,
+              weekdays: resolvedWeekdays,
               scheduledTimes: normalizedTimes,
               startDate: input.startDateYmd,
               endDate: input.endDateYmd || null,
               instructions: input.instructions?.trim() || null,
-              remindersEnabled: input.remindersEnabled ?? true,
+              remindersEnabled: Boolean(input.remindersEnabled),
             },
           );
           const mapped = mapApiScheduleToLocal(created);
@@ -283,8 +318,12 @@ export function SchedulesProvider({
             void persistSchedules(next);
             return next;
           });
+          void syncScheduleNotifications(mapped, med?.name ?? 'Medicine');
           return mapped;
-        } catch {
+        } catch (err) {
+          if (err instanceof ApiRequestError && !err.isNetworkError) {
+            throw err;
+          }
           // Proceed with local save when offline
         }
       }
@@ -295,11 +334,13 @@ export function SchedulesProvider({
         doseAmount: input.doseAmount,
         doseUnit: resolvedUnit,
         frequency: freqCode,
+        intervalHours: resolvedInterval,
+        weekdays: resolvedWeekdays,
         scheduledTimes: normalizedTimes,
         startDateYmd: input.startDateYmd,
         endDateYmd: input.endDateYmd?.trim() ? input.endDateYmd.trim() : null,
         instructions: input.instructions?.trim() || null,
-        remindersEnabled: input.remindersEnabled ?? true,
+        remindersEnabled: Boolean(input.remindersEnabled),
         status: 'ACTIVE',
       };
 
@@ -308,9 +349,10 @@ export function SchedulesProvider({
         void persistSchedules(next);
         return next;
       });
+      void syncScheduleNotifications(localSchedule, med?.name ?? 'Medicine');
       return localSchedule;
     },
-    [getMedicationById, persistSchedules],
+    [getMedicationById, persistSchedules, schedules],
   );
 
   const updateScheduleById = useCallback(
@@ -318,15 +360,31 @@ export function SchedulesProvider({
       scheduleId: string,
       updates: UpdateScheduleInput,
     ): Promise<LocalScheduleRecord | null> => {
+      const nextFreq = updates.frequency
+        ? normalizeScheduleFrequencyCode(updates.frequency)
+        : undefined;
+      const nextInterval =
+        nextFreq !== undefined
+          ? nextFreq === 'EVERY_X_HOURS' || nextFreq === 'EVERY_8_HOURS'
+            ? (updates.intervalHours ?? 8)
+            : null
+          : updates.intervalHours;
+      const nextWeekdays =
+        nextFreq !== undefined
+          ? nextFreq === 'SELECTED_WEEKDAYS'
+            ? [...new Set(updates.weekdays ?? [])].sort((a, b) => a - b)
+            : []
+          : updates.weekdays;
+
       const session = await readSavedAuthSession();
       if (session && UUID_PREFIX_RE.test(scheduleId)) {
         try {
           const updatedRemote = await updateSchedule(scheduleId, session.token, {
             doseAmount: updates.doseAmount,
             doseUnit: updates.doseUnit,
-            frequency: updates.frequency
-              ? normalizeScheduleFrequencyCode(updates.frequency)
-              : undefined,
+            frequency: nextFreq,
+            intervalHours: nextInterval,
+            weekdays: nextWeekdays,
             scheduledTimes: updates.scheduledTimes?.map(normalizeTimeTo24Hour),
             startDate: updates.startDateYmd,
             endDate: updates.endDateYmd,
@@ -340,8 +398,13 @@ export function SchedulesProvider({
             void persistSchedules(next);
             return next;
           });
+          const medName = getMedicationById(mapped.patientMedicationId)?.name ?? 'Medicine';
+          void syncScheduleNotifications(mapped, medName);
           return mapped;
-        } catch {
+        } catch (err) {
+          if (err instanceof ApiRequestError && !err.isNetworkError) {
+            throw err;
+          }
           // Fall back to local state update
         }
       }
@@ -350,13 +413,24 @@ export function SchedulesProvider({
       setSchedules((prev) => {
         const next = prev.map((s) => {
           if (s.id !== scheduleId) return s;
+          const resolvedFreq = nextFreq ?? s.frequency;
           updatedItem = {
             ...s,
             doseAmount: updates.doseAmount ?? s.doseAmount,
             doseUnit: updates.doseUnit ?? s.doseUnit,
-            frequency: updates.frequency
-              ? normalizeScheduleFrequencyCode(updates.frequency)
-              : s.frequency,
+            frequency: resolvedFreq,
+            intervalHours:
+              nextInterval !== undefined
+                ? nextInterval
+                : resolvedFreq === 'EVERY_X_HOURS' || resolvedFreq === 'EVERY_8_HOURS'
+                  ? (s.intervalHours ?? 8)
+                  : null,
+            weekdays:
+              nextWeekdays !== undefined
+                ? nextWeekdays
+                : resolvedFreq === 'SELECTED_WEEKDAYS'
+                  ? (s.weekdays ?? [])
+                  : [],
             scheduledTimes: updates.scheduledTimes
               ? [...new Set(updates.scheduledTimes.map(normalizeTimeTo24Hour))].sort()
               : s.scheduledTimes,
@@ -375,9 +449,14 @@ export function SchedulesProvider({
         void persistSchedules(next);
         return next;
       });
+      if (updatedItem) {
+        const resolved: LocalScheduleRecord = updatedItem;
+        const medName = getMedicationById(resolved.patientMedicationId)?.name ?? 'Medicine';
+        void syncScheduleNotifications(resolved, medName);
+      }
       return updatedItem;
     },
-    [persistSchedules],
+    [getMedicationById, persistSchedules],
   );
 
   const deleteScheduleById = useCallback(
@@ -390,6 +469,7 @@ export function SchedulesProvider({
           // Continue with local deletion
         }
       }
+      void cancelScheduleNotifications(scheduleId);
       setSchedules((prev) => {
         const next = prev.filter((s) => s.id !== scheduleId);
         void persistSchedules(next);

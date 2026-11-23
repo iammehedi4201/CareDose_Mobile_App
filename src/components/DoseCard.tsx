@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 import { StatusBadge, StatusVariant } from './StatusBadge';
 
 export interface DoseCardProps {
@@ -32,32 +32,37 @@ export function DoseCard({
     strength && strength.trim().length > 0 ? `${medicineName} ${strength.trim()}` : medicineName;
 
   return (
-    <View style={[styles.card, { padding: layout.cardPadding }]}>
-      <View style={styles.topRow}>
-        <View style={styles.iconCircle}>
+    <View
+      className="mb-2.5 rounded-card border border-border bg-white"
+      style={{ padding: layout.cardPadding }}
+    >
+      <View className="flex-row items-start">
+        <View className="mt-0.5 mr-2.5 h-[34px] w-[34px] items-center justify-center rounded-full bg-mint">
           <Feather name="clock" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
         </View>
-        <View style={styles.infoCol}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>{titleText}</Text>
+        <View className="flex-1 min-w-0">
+          <View className="flex-row items-start justify-between gap-2">
+            <Text className="flex-1 min-w-0 text-sm font-semibold text-main">{titleText}</Text>
             <StatusBadge variant={status} />
           </View>
-          <Text style={styles.instruction}>{doseInstruction}</Text>
-          <Text style={styles.timeText}>{scheduledTime}</Text>
+          <Text className="mt-[3px] text-xs text-[#5A706B]">{doseInstruction}</Text>
+          <Text className="mt-[3px] text-[11px] font-semibold text-primary">
+            {scheduledTime}
+          </Text>
         </View>
       </View>
 
       {!isCompleted && (onMarkTaken || onSkip) ? (
-        <View style={styles.actionsRow}>
+        <View className="mt-3 flex-row gap-2.5">
           {onMarkTaken ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Mark ${titleText} as taken`}
               disabled={actionLoading}
               onPress={onMarkTaken}
-              style={styles.takenBtn}
+              className="min-h-[40px] flex-1 items-center justify-center rounded-[10px] border border-border bg-white px-2.5 py-2"
             >
-              <Text style={styles.takenBtnText}>Taken</Text>
+              <Text className="text-xs font-semibold text-primary">Taken</Text>
             </Pressable>
           ) : null}
           {onSkip ? (
@@ -66,9 +71,9 @@ export function DoseCard({
               accessibilityLabel={`Skip ${titleText}`}
               disabled={actionLoading}
               onPress={onSkip}
-              style={styles.skipBtn}
+              className="min-h-[40px] flex-1 items-center justify-center rounded-[10px] border border-border bg-white px-2.5 py-2"
             >
-              <Text style={styles.skipBtnText}>Skip</Text>
+              <Text className="text-xs font-semibold text-[#5A706B]">Skip</Text>
             </Pressable>
           ) : null}
         </View>
@@ -76,95 +81,3 @@ export function DoseCard({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  iconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
-  },
-  infoCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  title: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  instruction: {
-    marginTop: 3,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  timeText: {
-    marginTop: 3,
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  actionsRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  takenBtn: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  takenBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  skipBtn: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  skipBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-});

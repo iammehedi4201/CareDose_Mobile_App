@@ -1,6 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { CAREDOSE_EXTENDED_COLORS, MIN_TOUCH_TARGET } from '../theme/tokens';
+import { Pressable, ScrollView, Text } from 'react-native';
 
 export interface FilterChipOption<T extends string = string> {
   key: T;
@@ -23,7 +22,7 @@ export function FilterChips<T extends string = string>({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
+      contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
     >
       {options.map((opt) => {
         const isSelected = opt.key === selectedKey;
@@ -36,12 +35,15 @@ export function FilterChips<T extends string = string>({
             accessibilityLabel={displayLabel}
             accessibilityState={{ selected: isSelected }}
             onPress={() => onSelect(opt.key)}
-            style={[
-              styles.chip,
-              isSelected ? styles.chipActive : styles.chipInactive,
-            ]}
+            className={`min-h-[38px] items-center justify-center rounded-full border px-3.5 py-2 ${
+              isSelected ? 'border-primary bg-primary' : 'border-border bg-white'
+            }`}
           >
-            <Text style={[styles.chipText, isSelected ? styles.textActive : styles.textInactive]}>
+            <Text
+              className={`text-xs font-semibold ${
+                isSelected ? 'text-white' : 'text-main'
+              }`}
+            >
               {displayLabel}
             </Text>
           </Pressable>
@@ -50,39 +52,3 @@ export function FilterChips<T extends string = string>({
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
-  },
-  chip: {
-    minHeight: MIN_TOUCH_TARGET - 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  chipInactive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  textActive: {
-    color: '#FFFFFF',
-  },
-  textInactive: {
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-});

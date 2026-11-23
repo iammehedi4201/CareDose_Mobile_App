@@ -17,6 +17,8 @@ export interface LocalScheduleRecord {
   doseAmount: number;
   doseUnit: string;
   frequency: string;
+  intervalHours?: number | null;
+  weekdays?: number[];
   scheduledTimes: string[];
   startDateYmd: string;
   endDateYmd: string | null;
@@ -44,11 +46,24 @@ const FREQUENCY_LABEL_TO_CODE: Record<string, string> = {
   'once daily': 'DAILY',
   twice_daily: 'TWICE_DAILY',
   'twice daily': 'TWICE_DAILY',
+  three_times_daily: 'THREE_TIMES_DAILY',
+  'three times daily': 'THREE_TIMES_DAILY',
+  '3 times daily': 'THREE_TIMES_DAILY',
+  thrice_daily: 'THREE_TIMES_DAILY',
+  custom_times: 'CUSTOM_TIMES',
+  'custom times': 'CUSTOM_TIMES',
+  custom: 'CUSTOM_TIMES',
+  every_x_hours: 'EVERY_X_HOURS',
+  'every x hours': 'EVERY_X_HOURS',
   every_8_hours: 'EVERY_8_HOURS',
   'every 8 hours': 'EVERY_8_HOURS',
   alternate_days: 'ALTERNATE_DAYS',
   every_2_days: 'ALTERNATE_DAYS',
+  'every 2 days': 'ALTERNATE_DAYS',
   'alternate days': 'ALTERNATE_DAYS',
+  selected_weekdays: 'SELECTED_WEEKDAYS',
+  'selected weekdays': 'SELECTED_WEEKDAYS',
+  weekdays: 'SELECTED_WEEKDAYS',
   weekly: 'WEEKLY',
   as_needed: 'AS_NEEDED',
   'as needed': 'AS_NEEDED',
@@ -57,11 +72,25 @@ const FREQUENCY_LABEL_TO_CODE: Record<string, string> = {
 const FREQUENCY_CODE_TO_LABEL: Record<string, string> = {
   DAILY: 'Once daily',
   TWICE_DAILY: 'Twice daily',
+  THREE_TIMES_DAILY: 'Three times daily',
+  CUSTOM_TIMES: 'Custom times',
+  EVERY_X_HOURS: 'Every X hours',
   EVERY_8_HOURS: 'Every 8 hours',
   ALTERNATE_DAYS: 'Alternate days',
+  SELECTED_WEEKDAYS: 'Selected weekdays',
   WEEKLY: 'Weekly',
   AS_NEEDED: 'As needed',
 };
+
+export const WEEKDAY_OPTIONS = [
+  { value: 1, short: 'Mon', label: 'Monday' },
+  { value: 2, short: 'Tue', label: 'Tuesday' },
+  { value: 3, short: 'Wed', label: 'Wednesday' },
+  { value: 4, short: 'Thu', label: 'Thursday' },
+  { value: 5, short: 'Fri', label: 'Friday' },
+  { value: 6, short: 'Sat', label: 'Saturday' },
+  { value: 0, short: 'Sun', label: 'Sunday' },
+] as const;
 
 const UNIT_CANONICAL_MAP: Record<string, string> = {
   tablet: 'tablet',
@@ -129,12 +158,19 @@ export function buildScheduledTimesForFrequency(
   primaryTime: string,
   frequency: string,
   secondaryTime?: string,
+  extraTimes: string[] = [],
 ): string[] {
   const first = normalizeTimeTo24Hour(primaryTime);
   const code = normalizeScheduleFrequencyCode(frequency);
   if (code === 'TWICE_DAILY') {
     const second = normalizeTimeTo24Hour(secondaryTime || '08:00 PM');
     return [...new Set([first, second])].sort();
+  }
+  if (code === 'THREE_TIMES_DAILY' || code === 'CUSTOM_TIMES') {
+    const combined = [first, ...(secondaryTime ? [secondaryTime] : []), ...extraTimes]
+      .filter((t) => t.trim().length > 0)
+      .map(normalizeTimeTo24Hour);
+    return [...new Set(combined)].sort();
   }
   if (code === 'EVERY_8_HOURS') {
     const [hStr, mStr] = first.split(':');
@@ -150,12 +186,214 @@ export function buildScheduledTimesForFrequency(
   return [first];
 }
 
+export function findDuplicateTimes(times: string[]): boolean {
+  const nonEmpty = times.map((t) => t.trim()).filter(Boolean);
+  const normalized = nonEmpty.map(normalizeTimeTo24Hour);
+  return new Set(normalized).size !== normalized.length;
+}
+
+export function adaptDefaultDoseUnit(
+  dosageForm?: string | null,
+  stockUnit?: string | null,
+): string {
+  const form = (dosageForm ?? '').trim().toLowerCase();
+  const stock = (stockUnit ?? '').trim().toLowerCase();
+
+  if (form.includes('capsule')) return 'capsules';
+  if (form.includes('tablet')) return 'tablets';
+  if (form.includes('drop') || form.includes('ophthalmic') || form.includes('otic')) {
+    return 'drops';
+  }
+  if (form.includes('syrup') || form.includes('suspension') || form.includes('solution') || form.includes('elixir')) {
+    return 'mL';
+  }
+  if (form.includes('suppository') || form.includes('pessary')) return 'pieces';
+  if (form.includes('inhaler') || form.includes('mdi') || form.includes('spray')) return 'puffs';
+  if (form.includes('sachet') || form.includes('powder') || form.includes('granules')) return 'sachets';
+  if (form.includes('cream') || form.includes('ointment') || form.includes('gel')) return 'applications';
+  if (form.includes('injection') || form.includes('infusion')) {
+    if (stock === 'ampoules' || stock === 'ampoule') return 'ampoules';
+    if (stock === 'syringes' || stock === 'syringe') return 'syringes';
+    if (stock === 'pens' || stock === 'pen') return 'pens';
+    if (stock === 'cartridges' || stock === 'cartridge') return 'cartridges';
+    if (stock === 'ml') return 'mL';
+    return 'vials';
+  }
+
+  if (stock === 'ml') return 'mL';
+  if (stock === 'capsules') return 'capsules';
+  if (stock === 'pieces') return 'pieces';
+  if (stock === 'bottle' || stock === 'bottles') return 'drops';
+  if (stock === 'vials' || stock === 'ampoules' || stock === 'syringes' || stock === 'sachets' || stock === 'puffs') {
+    return stock;
+  }
+  return 'tablets';
+}
+
+export function getDoseUnitOptions(
+  dosageForm?: string | null,
+  stockUnit?: string | null,
+): Array<{ label: string; value: string }> {
+  const primary = adaptDefaultDoseUnit(dosageForm, stockUnit);
+  const form = (dosageForm ?? '').trim().toLowerCase();
+
+  if (form.includes('injection') || form.includes('infusion')) {
+    const candidates = [primary, 'mL', 'vials', 'ampoules', 'syringes', 'units'];
+    const seen = new Set<string>();
+    return candidates
+      .filter((c) => {
+        const key = c.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((u) => ({ label: u, value: u }));
+  }
+
+  if (primary === 'drops') {
+    return [
+      { label: 'drops', value: 'drops' },
+      { label: 'mL', value: 'mL' },
+    ];
+  }
+
+  if (primary === 'mL') {
+    return [
+      { label: 'mL', value: 'mL' },
+      { label: 'drops', value: 'drops' },
+    ];
+  }
+
+  if (primary === 'applications') {
+    return [
+      { label: 'applications', value: 'applications' },
+      { label: 'gm', value: 'gm' },
+      { label: 'tubes', value: 'tubes' },
+    ];
+  }
+
+  return [{ label: primary, value: primary }];
+}
+
+export function formatDoseAmountDisplay(amount: number | string, doseUnit: string): string {
+  const num = Number(amount);
+  const cleanNum = Number.isFinite(num)
+    ? Number.isInteger(num)
+      ? String(num)
+      : String(Number(num.toFixed(2)))
+    : String(amount);
+  const trimmedUnit = doseUnit.trim();
+  const singularMap: Record<string, string> = {
+    tablets: 'tablet',
+    capsules: 'capsule',
+    pieces: 'piece',
+    drops: 'drop',
+    vials: 'vial',
+    ampoules: 'ampoule',
+    syringes: 'syringe',
+    pens: 'pen',
+    cartridges: 'cartridge',
+    bags: 'bag',
+    puffs: 'puff',
+    sachets: 'sachet',
+    applications: 'application',
+    tubes: 'tube',
+    units: 'unit',
+  };
+  if (num === 1 && singularMap[trimmedUnit.toLowerCase()]) {
+    return `${cleanNum} ${singularMap[trimmedUnit.toLowerCase()]}`;
+  }
+  return `${cleanNum} ${trimmedUnit}`;
+}
+
+export function formatRecurrenceSummary(sched: {
+  frequency: string;
+  intervalHours?: number | null;
+  weekdays?: number[];
+}): string {
+  const code = normalizeScheduleFrequencyCode(sched.frequency);
+  if (code === 'EVERY_X_HOURS' || code === 'EVERY_8_HOURS') {
+    return `Every ${sched.intervalHours ?? 8} hours`;
+  }
+  if (code === 'SELECTED_WEEKDAYS') {
+    const days = Array.isArray(sched.weekdays) ? sched.weekdays : [];
+    const labels = WEEKDAY_OPTIONS.filter((w) => days.includes(w.value)).map((w) => w.short);
+    return labels.length > 0 ? `Weekdays (${labels.join(', ')})` : 'Selected weekdays';
+  }
+  return formatFrequencyLabel(code);
+}
+
+export function isDuplicateScheduleDefinition(
+  existingSchedules: LocalScheduleRecord[],
+  candidate: {
+    patientMedicationId: string;
+    frequency: string;
+    intervalHours?: number | null;
+    weekdays?: number[];
+    scheduledTimes: string[];
+    startDateYmd: string;
+    endDateYmd?: string | null;
+  },
+  excludeScheduleId?: string | null,
+): boolean {
+  const candFreq = normalizeScheduleFrequencyCode(candidate.frequency);
+  const candInterval =
+    candFreq === 'EVERY_X_HOURS' || candFreq === 'EVERY_8_HOURS'
+      ? (candidate.intervalHours ?? 8)
+      : null;
+  const candWeekdays =
+    candFreq === 'SELECTED_WEEKDAYS'
+      ? [...new Set(candidate.weekdays ?? [])].sort((a, b) => a - b)
+      : [];
+  const candTimes = [...new Set(candidate.scheduledTimes.map(normalizeTimeTo24Hour))].sort();
+  const candEnd = candidate.endDateYmd?.trim() || null;
+
+  return existingSchedules.some((s) => {
+    if (excludeScheduleId && s.id === excludeScheduleId) return false;
+    if (s.status !== 'ACTIVE') return false;
+    if (s.patientMedicationId !== candidate.patientMedicationId) return false;
+
+    const exFreq = normalizeScheduleFrequencyCode(s.frequency);
+    if (exFreq !== candFreq) return false;
+
+    const exInterval =
+      exFreq === 'EVERY_X_HOURS' || exFreq === 'EVERY_8_HOURS'
+        ? (s.intervalHours ?? 8)
+        : null;
+    if (exInterval !== candInterval) return false;
+
+    const exDays =
+      exFreq === 'SELECTED_WEEKDAYS'
+        ? [...new Set(s.weekdays ?? [])].sort((a, b) => a - b)
+        : [];
+    if (
+      exDays.length !== candWeekdays.length ||
+      exDays.some((d, idx) => d !== candWeekdays[idx])
+    ) {
+      return false;
+    }
+
+    const exTimes = [...new Set(s.scheduledTimes.map(normalizeTimeTo24Hour))].sort();
+    if (
+      exTimes.length !== candTimes.length ||
+      exTimes.some((t, idx) => t !== candTimes[idx])
+    ) {
+      return false;
+    }
+
+    const exEnd = s.endDateYmd?.trim() || null;
+    const startsAfterEx = exEnd !== null && candidate.startDateYmd > exEnd;
+    const endsBeforeEx = candEnd !== null && candEnd < s.startDateYmd;
+    return !startsAfterEx && !endsBeforeEx;
+  });
+}
+
 export const DOSE_DUE_LEAD_MS = 15 * 60_000;
 export const DOSE_GRACE_PERIOD_MS = 60 * 60_000;
 
 export function normalizeScheduleFrequencyCode(raw?: string | null): string {
   const key = (raw ?? '').trim().toLowerCase();
-  return FREQUENCY_LABEL_TO_CODE[key] ?? 'DAILY';
+  return FREQUENCY_LABEL_TO_CODE[key] ?? (raw ?? 'DAILY').trim().toUpperCase();
 }
 
 export function formatFrequencyLabel(code?: string | null): string {
@@ -365,7 +603,57 @@ export function isLocalScheduleActiveOnDate(
   if (delta < 0) return false;
   if (freq === 'ALTERNATE_DAYS') return delta % 2 === 0;
   if (freq === 'WEEKLY') return delta % 7 === 0;
+  if (freq === 'SELECTED_WEEKDAYS') {
+    const allowed = Array.isArray(schedule.weekdays) ? schedule.weekdays : [];
+    if (allowed.length === 0) return false;
+    const [y, m, d] = ymd.split('-').map(Number);
+    const weekday = new Date(Date.UTC(y, (m || 1) - 1, d || 1)).getUTCDay();
+    return allowed.includes(weekday);
+  }
   return true;
+}
+
+export function getLocalScheduleTimesForDate(
+  schedule: LocalScheduleRecord,
+  ymd: string,
+): string[] {
+  if (!isLocalScheduleActiveOnDate(schedule, ymd)) {
+    return [];
+  }
+  const freq = normalizeScheduleFrequencyCode(schedule.frequency);
+  const baseTimes = [
+    ...new Set(schedule.scheduledTimes.map(normalizeTimeTo24Hour)),
+  ].sort();
+  if (baseTimes.length === 0) {
+    return [];
+  }
+
+  if (
+    freq === 'EVERY_X_HOURS' ||
+    (freq === 'EVERY_8_HOURS' && baseTimes.length === 1)
+  ) {
+    const stepHours = schedule.intervalHours ?? 8;
+    const stepMins = Math.max(1, stepHours) * 60;
+    const [hStr, mStr] = baseTimes[0].split(':');
+    const firstMin = Number(hStr) * 60 + Number(mStr);
+    const diff = diffYmdDays(schedule.startDateYmd, ymd);
+    const dayStartMin = diff * 1440;
+    const dayEndMin = (diff + 1) * 1440;
+    const kStart = Math.max(0, Math.ceil((dayStartMin - firstMin) / stepMins));
+
+    const expanded = new Set<string>();
+    for (let k = kStart; ; k += 1) {
+      const absMin = firstMin + k * stepMins;
+      if (absMin >= dayEndMin) break;
+      const minOfDay = absMin - dayStartMin;
+      const hh = Math.floor(minOfDay / 60);
+      const mm = minOfDay % 60;
+      expanded.add(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+    }
+    return [...expanded].sort();
+  }
+
+  return baseTimes;
 }
 
 export function computeDoseDisplayStatus(
@@ -398,6 +686,8 @@ export function mapApiScheduleToLocal(dto: MedicationScheduleDto): LocalSchedule
     doseAmount: Number(dto.doseAmount) || 1,
     doseUnit: dto.doseUnit,
     frequency: dto.frequency,
+    intervalHours: dto.intervalHours ?? null,
+    weekdays: Array.isArray(dto.weekdays) ? dto.weekdays : [],
     scheduledTimes: dto.scheduledTimes,
     startDateYmd: dto.startDateYmd,
     endDateYmd: dto.endDateYmd,
@@ -422,23 +712,26 @@ export function expandLocalScheduleOccurrencesForRange(
   for (let i = 0; i < daysCount; i += 1) {
     const ymd = addDaysYmd(startYmd, i);
     const items: ScheduledDoseItemDto[] = [];
+    const seenKeys = new Set<string>();
 
     for (const sched of schedules) {
       const med = medMap.get(sched.patientMedicationId);
       if (!med || med.archived) continue;
-      if (!isLocalScheduleActiveOnDate(sched, ymd)) continue;
 
-      const sortedTimes = [...new Set(sched.scheduledTimes.map(normalizeTimeTo24Hour))].sort();
+      const sortedTimes = getLocalScheduleTimesForDate(sched, ymd);
+      if (sortedTimes.length === 0) continue;
+
       for (const time24 of sortedTimes) {
         const dt = buildLocalOccurrenceDate(ymd, time24);
         const scheduledFor = dt.toISOString();
         const occurrenceKey = `${sched.id}:${scheduledFor}`;
+        if (seenKeys.has(occurrenceKey)) continue;
+        seenKeys.add(occurrenceKey);
+
         const recorded = eventMap.get(occurrenceKey);
 
-        const amountText = Number.isInteger(sched.doseAmount)
-          ? String(sched.doseAmount)
-          : String(Number(sched.doseAmount.toFixed(2)));
-        const note = (sched.instructions || med.instructions || '').trim();
+        const formattedAmountUnit = formatDoseAmountDisplay(sched.doseAmount, sched.doseUnit);
+        const note = (sched.instructions ?? '').trim();
 
         items.push({
           occurrenceKey,
@@ -451,8 +744,8 @@ export function expandLocalScheduleOccurrencesForRange(
           doseAmount: Number(sched.doseAmount).toFixed(2),
           doseUnit: sched.doseUnit,
           doseInstruction: note
-            ? `${amountText} ${sched.doseUnit} · ${note}`
-            : `${amountText} ${sched.doseUnit}`,
+            ? `${formattedAmountUnit} · ${note}`
+            : formattedAmountUnit,
           scheduledDateYmd: ymd,
           scheduledTime24: time24,
           scheduledTime12: format24To12Hour(time24),

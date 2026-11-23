@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   ConfirmDialog,
@@ -13,7 +13,6 @@ import {
 } from '../src/components';
 import { useMedications } from '../src/features/medications/MedicationsContext';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 export default function SettingsScreen(): React.JSX.Element {
   const router = useRouter();
@@ -52,8 +51,8 @@ export default function SettingsScreen(): React.JSX.Element {
     >
       <SuccessToast message={toast} />
 
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Reminders</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <Text className="text-[15px] font-semibold text-main mb-2">Reminders</Text>
         <ToggleField
           label="Notifications"
           value={notificationsEnabled}
@@ -77,8 +76,8 @@ export default function SettingsScreen(): React.JSX.Element {
         />
       </View>
 
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Units & Profile</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <Text className="text-[15px] font-semibold text-main mb-2">Units & Profile</Text>
         <SelectField
           label="Glucose unit"
           value={glucoseUnit}
@@ -112,13 +111,13 @@ export default function SettingsScreen(): React.JSX.Element {
         />
       </View>
 
-      <View style={[styles.sectionCard, styles.dangerCard]}>
-        <Text style={styles.dangerTitle}>Demo Data</Text>
-        <Text style={styles.dangerBody}>
+      <View className="bg-[#FDECEC] rounded-card border border-[#F3C1BE] p-4 mb-3.5">
+        <Text className="text-[15px] font-bold text-error">Demo Data</Text>
+        <Text className="mt-1 text-[12px] text-main leading-[17px]">
           Restore fictional sample medicines, schedules, readings, purchases, and dose history to
           their initial preview state.
         </Text>
-        <View style={styles.dangerBtnWrap}>
+        <View className="mt-3">
           <DestructiveButton
             fullWidth
             label="Reset demo data"
@@ -140,38 +139,3 @@ export default function SettingsScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 16,
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 8,
-  },
-  dangerCard: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.errorSurface,
-    borderColor: '#F3C1BE',
-  },
-  dangerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.error,
-  },
-  dangerBody: {
-    marginTop: 4,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    lineHeight: 17,
-  },
-  dangerBtnWrap: {
-    marginTop: 12,
-  },
-});

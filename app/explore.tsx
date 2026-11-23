@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
@@ -27,7 +27,7 @@ import {
   resolveBrandBadge,
 } from '../src/features/catalogue/catalogue-helpers';
 import { useResponsiveLayout } from '../src/theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
 
 type DosageFilter = 'all' | 'tablet' | 'capsule' | 'syrup' | 'injection';
 
@@ -207,6 +207,8 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
     setManufacturerFilter(null);
   };
 
+  const categoryCardSizeClass = layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0';
+
   return (
     <ScreenContainer title="Explore Medicines">
       <SearchInput
@@ -215,7 +217,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         placeholder="Search brand, generic, strength or manufacturer"
       />
 
-      <View style={styles.filterWrap}>
+      <View className="mt-2 mb-3">
         <FilterChips
           options={[
             { key: 'all', label: 'All' },
@@ -230,137 +232,131 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
       </View>
 
       {manufacturerFilter ? (
-        <View style={styles.activeMfrPillRow}>
-          <Text style={styles.activeMfrText}>
+        <View className="flex-row items-center justify-between gap-2.5 bg-mint rounded-field border border-[#C5E8D8] px-3 py-2 mb-3">
+          <Text className="flex-1 min-w-0 text-[12px] font-semibold text-main">
             Manufacturer filter: {manufacturerFilter}
           </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => setManufacturerFilter(null)}
-            style={styles.clearMfrBtn}
+            className="shrink-0 px-2 py-1"
           >
-            <Text style={styles.clearMfrText}>Clear</Text>
+            <Text className="text-[12px] font-bold text-primary">Clear</Text>
           </Pressable>
         </View>
       ) : null}
 
       {/* Feature Info Banner */}
-      <View style={styles.infoBanner}>
-        <View style={styles.infoIconCircle}>
+      <View className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-3.5">
+        <View className="w-9 h-9 rounded-[10px] bg-white items-center justify-center mr-2.5 shrink-0">
           <Feather name="book-open" size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
         </View>
-        <View style={styles.infoTextCol}>
-          <Text style={styles.infoTitle}>Bangladesh Medicine Directory</Text>
-          <Text style={styles.infoBody}>{brandsCountLabel} · Reference (unverified)</Text>
+        <View className="flex-1 min-w-0">
+          <Text className="text-[13px] font-bold text-main">Bangladesh Medicine Directory</Text>
+          <Text className="mt-0.5 text-[12px] text-[#5A706B]">
+            {brandsCountLabel} · Reference (unverified)
+          </Text>
         </View>
-        <View style={styles.infoBadge}>
-          <Text style={styles.infoBadgeText}>i</Text>
+        <View className="w-6 h-6 rounded-full bg-primary items-center justify-center ml-2 shrink-0">
+          <Text className="text-white text-[12px] font-bold">i</Text>
         </View>
       </View>
 
       {offlineFallback ? (
-        <View style={styles.offlineBanner}>
+        <View className="flex-row items-center gap-2 bg-[#FDF5E6] border border-[#F3D9A4] rounded-field px-3 py-2 mb-3.5">
           <Feather name="wifi-off" size={14} color={CAREDOSE_EXTENDED_COLORS.warning} />
-          <Text style={styles.offlineBannerText}>
+          <Text className="flex-1 min-w-0 text-[11px] font-semibold text-warning">
             Showing offline sample records. Start the backend server to search the full catalogue.
           </Text>
         </View>
       ) : null}
 
       {/* Popular Searches */}
-      <Text style={styles.sectionHeading}>Popular Searches</Text>
-      <View style={styles.popularChipsWrap}>
+      <Text className="text-[15px] font-semibold text-main mb-2">Popular Searches</Text>
+      <View className="flex-row flex-wrap gap-2 mb-4">
         {POPULAR_SEARCHES.map((term) => (
           <Pressable
             key={term}
             accessibilityRole="button"
             onPress={() => setQuery(term)}
-            style={styles.popularChip}
+            className="bg-white border border-border rounded-full px-3 py-1.5"
           >
-            <Text style={styles.popularChipText}>{term}</Text>
+            <Text className="text-[12px] text-main font-medium">{term}</Text>
           </Pressable>
         ))}
       </View>
 
       {/* Browse by Category */}
-      <Text style={styles.sectionHeading}>Browse by Category</Text>
-      <View style={[styles.categoryGrid, { gap: layout.gridGap }]}>
+      <Text className="text-[15px] font-semibold text-main mb-2">Browse by Category</Text>
+      <View className="mb-4" style={{ gap: layout.gridGap }}>
         <View
-          style={[
-            layout.stackTwoCol ? styles.categoryRowStacked : styles.categoryRow,
-            { gap: layout.gridGap },
-          ]}
+          className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
+          style={{ gap: layout.gridGap }}
         >
           <Pressable
             accessibilityRole="button"
             onPress={() => setGenericSheetOpen(true)}
-            style={[styles.categoryCard, layout.stackTwoCol ? styles.categoryCardFull : null]}
+            className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
           >
-            <View style={styles.catIconBox}>
+            <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
               <Feather name="disc" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
             </View>
-            <View style={styles.catTextCol}>
-              <Text style={styles.categoryTitle}>By Generic</Text>
-              <Text style={styles.categorySub}>{genericsSubtitle}</Text>
+            <View className="flex-1 min-w-0">
+              <Text className="text-[12px] font-semibold text-main">By Generic</Text>
+              <Text className="mt-[1px] text-[11px] text-[#5A706B]">{genericsSubtitle}</Text>
             </View>
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
             onPress={() => setManufacturerFilter('Square')}
-            style={[styles.categoryCard, layout.stackTwoCol ? styles.categoryCardFull : null]}
+            className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
           >
-            <View style={styles.catIconBox}>
+            <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
               <Feather name="briefcase" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
             </View>
-            <View style={styles.catTextCol}>
-              <Text style={styles.categoryTitle}>By Manufacturer</Text>
-              <Text style={styles.categorySub}>{mfrSubtitle}</Text>
+            <View className="flex-1 min-w-0">
+              <Text className="text-[12px] font-semibold text-main">By Manufacturer</Text>
+              <Text className="mt-[1px] text-[11px] text-[#5A706B]">{mfrSubtitle}</Text>
             </View>
           </Pressable>
         </View>
 
         <View
-          style={[
-            layout.stackTwoCol ? styles.categoryRowStacked : styles.categoryRow,
-            { gap: layout.gridGap },
-          ]}
+          className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
+          style={{ gap: layout.gridGap }}
         >
           <Pressable
             accessibilityRole="button"
             onPress={() => setFormFilter('tablet')}
-            style={[styles.categoryCard, layout.stackTwoCol ? styles.categoryCardFull : null]}
+            className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
           >
-            <View style={styles.catIconBox}>
+            <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
               <Feather name="box" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
             </View>
-            <View style={styles.catTextCol}>
-              <Text style={styles.categoryTitle}>By Form</Text>
-              <Text style={styles.categorySub}>Tablet, Syrup &amp; more</Text>
+            <View className="flex-1 min-w-0">
+              <Text className="text-[12px] font-semibold text-main">By Form</Text>
+              <Text className="mt-[1px] text-[11px] text-[#5A706B]">Tablet, Syrup &amp; more</Text>
             </View>
           </Pressable>
 
           <View
-            style={[
-              styles.categoryCard,
-              styles.categoryCardDisabled,
-              layout.stackTwoCol ? styles.categoryCardFull : null,
-            ]}
+            className={`flex-row items-center bg-[#EEF2F0] opacity-75 border border-border rounded-field p-3 ${categoryCardSizeClass}`}
           >
-            <View style={[styles.catIconBox, styles.catIconDisabled]}>
+            <View className="w-8 h-8 rounded-[8px] bg-[#E2E8E5] items-center justify-center mr-2.5">
               <Feather name="lock" size={15} color={CAREDOSE_EXTENDED_COLORS.mutedText} />
             </View>
-            <View style={styles.catTextCol}>
-              <Text style={styles.categoryTitleDisabled}>By Condition</Text>
-              <Text style={styles.categorySub}>Unavailable</Text>
+            <View className="flex-1 min-w-0">
+              <Text className="text-[12px] font-semibold text-[#5A706B]">By Condition</Text>
+              <Text className="mt-[1px] text-[11px] text-[#5A706B]">Unavailable</Text>
             </View>
           </View>
         </View>
       </View>
 
       {/* Catalogue Results Header */}
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsTitle}>
+      <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+        <Text className="text-[15px] font-semibold text-main flex-1 min-w-0">
           {isFiltered
             ? `Results (${totalCount.toLocaleString()})${refreshing ? ' · Updating...' : ''}`
             : `Catalogue Directory (${totalCount.toLocaleString()})${refreshing ? ' · Updating...' : ''}`}
@@ -368,10 +364,10 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         {isFiltered ? (
           <Pressable
             accessibilityRole="button"
-            style={styles.seeAllBtn}
+            className="shrink-0 py-0.5 pl-1"
             onPress={handleResetFilters}
           >
-            <Text style={styles.seeAllText}>Reset</Text>
+            <Text className="text-[12px] font-semibold text-primary">Reset</Text>
           </Pressable>
         ) : null}
       </View>
@@ -409,7 +405,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
           })}
 
           {hasMore && nextCursor ? (
-            <View style={styles.loadMoreWrap}>
+            <View className="mt-1.5 mb-3">
               <SecondaryButton
                 fullWidth
                 label={loadingMore ? 'Loading more...' : 'Load more brands'}
@@ -434,7 +430,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
           onChangeText={setGenericQuery}
           placeholder="Search generic name (e.g. Paracetamol, Metformin)"
         />
-        <View style={styles.genericListWrap}>
+        <View className="mt-3 gap-2">
           {genericsLoading ? (
             <LoadingSkeleton rows={3} />
           ) : genericItems.length === 0 ? (
@@ -456,11 +452,13 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
                   setGenericSheetOpen(false);
                   router.push(`/explore/generic/${g.sourceId}`);
                 }}
-                style={styles.genericRow}
+                className="flex-row items-center justify-between gap-2.5 bg-background border border-border rounded-field px-3 py-2.5"
               >
-                <View style={styles.genericTextCol}>
-                  <Text style={styles.genericName}>{g.name}</Text>
-                  <Text style={styles.genericCount}>{g.brandsCount} brands</Text>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[14px] font-semibold text-main">{g.name}</Text>
+                  <Text className="mt-0.5 text-[12px] text-[#5A706B]">
+                    {g.brandsCount} brands
+                  </Text>
                 </View>
                 <Feather
                   name="chevron-right"
@@ -475,254 +473,3 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  filterWrap: {
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  activeMfrPillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.field,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  activeMfrText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  clearMfrBtn: {
-    flexShrink: 0,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  clearMfrText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    padding: 14,
-    marginBottom: 14,
-  },
-  infoIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    flexShrink: 0,
-  },
-  infoTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  infoTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  infoBody: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  infoBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    flexShrink: 0,
-  },
-  infoBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-    borderRadius: CAREDOSE_RADIUS.field,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 14,
-  },
-  offlineBannerText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 8,
-  },
-  popularChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  popularChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  popularChipText: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    fontWeight: '500',
-  },
-  categoryGrid: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  categoryRowStacked: {
-    flexDirection: 'column',
-    gap: 8,
-  },
-  categoryCard: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    borderRadius: CAREDOSE_RADIUS.field,
-    padding: 12,
-  },
-  categoryCardFull: {
-    flex: undefined,
-    width: '100%',
-  },
-  categoryCardDisabled: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.neutralSurface,
-    opacity: 0.75,
-  },
-  catIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  catIconDisabled: {
-    backgroundColor: '#E2E8E5',
-  },
-  catTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  categoryTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  categoryTitleDisabled: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  categorySub: {
-    marginTop: 1,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  resultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 8,
-  },
-  resultsTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    flex: 1,
-    minWidth: 0,
-  },
-  seeAllBtn: {
-    flexShrink: 0,
-    paddingVertical: 2,
-    paddingLeft: 4,
-  },
-  seeAllText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  loadMoreWrap: {
-    marginTop: 6,
-    marginBottom: 12,
-  },
-  genericListWrap: {
-    marginTop: 12,
-    gap: 8,
-  },
-  genericRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    borderRadius: CAREDOSE_RADIUS.field,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  genericTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  genericName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  genericCount: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-});

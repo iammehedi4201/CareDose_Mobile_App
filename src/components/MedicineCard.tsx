@@ -1,8 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../theme/tokens';
 import { MedicineFormThumbnail } from './MedicineFormThumbnail';
 import { StatusBadge, StatusVariant } from './StatusBadge';
 
@@ -78,10 +77,11 @@ export function MedicineCard({
       accessibilityLabel={`${name}, ${metaLine}`}
       disabled={!onPress}
       onPress={onPress}
-      style={[styles.card, { padding: layout.cardPadding }]}
+      className="mb-2.5 rounded-card border border-border bg-white"
+      style={{ padding: layout.cardPadding }}
     >
-      <View style={styles.topRow}>
-        <View style={styles.thumbCol}>
+      <View className="flex-row items-start">
+        <View className="mr-3 shrink-0">
           <MedicineFormThumbnail
             size="card"
             dosageForm={dosageForm}
@@ -90,41 +90,51 @@ export function MedicineCard({
           />
         </View>
 
-        <View style={styles.mainCol}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={2}>
+        <View className="flex-1 min-w-0">
+          <View className="flex-row items-start justify-between gap-2">
+            <Text className="flex-1 min-w-0 text-sm font-semibold text-main" numberOfLines={2}>
               {name}
             </Text>
-            {stockText ? <Text style={styles.stockText}>{stockText}</Text> : null}
+            {stockText ? (
+              <Text className="shrink-0 text-right text-[13px] font-bold text-main">
+                {stockText}
+              </Text>
+            ) : null}
           </View>
 
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText} numberOfLines={2}>
+          <View className="mt-[3px] flex-row flex-wrap items-start justify-between gap-1.5">
+            <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={2}>
               {metaLine}
             </Text>
-            {rightSubtext ? <Text style={styles.rightSubtext}>{rightSubtext}</Text> : null}
+            {rightSubtext ? (
+              <Text className="shrink-0 text-[11px] font-medium text-[#5A706B]">
+                {rightSubtext}
+              </Text>
+            ) : null}
           </View>
 
           {manufacturer ? (
-            <Text style={styles.manufacturerText} numberOfLines={1}>
+            <Text className="mt-[3px] text-[11.5px] font-medium text-primary-dark" numberOfLines={1}>
               {manufacturer}
             </Text>
           ) : null}
 
           {secondaryNote ? (
-            <Text style={styles.noteText} numberOfLines={2}>
+            <Text className="mt-1 text-xs text-main" numberOfLines={2}>
               {secondaryNote}
             </Text>
           ) : null}
 
           {showStatusBadge || priceText ? (
-            <View style={styles.bottomRow}>
+            <View className="mt-2.5 flex-row flex-wrap items-center justify-between gap-2">
               {showStatusBadge ? (
                 <StatusBadge variant={statusVariant} label={statusLabel} />
               ) : (
                 <View />
               )}
-              {priceText ? <Text style={styles.priceText}>{priceText}</Text> : null}
+              {priceText ? (
+                <Text className="shrink text-xs font-semibold text-[#5A706B]">{priceText}</Text>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -132,91 +142,3 @@ export function MedicineCard({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  thumbCol: {
-    marginRight: 12,
-    flexShrink: 0,
-  },
-  mainCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  title: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  stockText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    flexShrink: 0,
-    textAlign: 'right',
-  },
-  metaRow: {
-    marginTop: 3,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  metaText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  rightSubtext: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    fontWeight: '500',
-    flexShrink: 0,
-  },
-  manufacturerText: {
-    marginTop: 3,
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  noteText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  bottomRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  priceText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    flexShrink: 1,
-  },
-});

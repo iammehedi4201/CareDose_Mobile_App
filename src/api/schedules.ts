@@ -10,6 +10,8 @@ export interface MedicationScheduleDto {
   doseAmount: string;
   doseUnit: string;
   frequency: string;
+  intervalHours: number | null;
+  weekdays: number[];
   scheduledTimes: string[];
   scheduledTimes12h: string[];
   startDate: string;
@@ -122,6 +124,8 @@ export interface CreateMedicationSchedulePayload {
   doseAmount?: number;
   doseUnit?: string;
   frequency?: string;
+  intervalHours?: number | null;
+  weekdays?: number[];
   scheduledTimes: string[];
   startDate: string;
   endDate?: string | null;
@@ -133,6 +137,8 @@ export interface UpdateMedicationSchedulePayload {
   doseAmount?: number;
   doseUnit?: string;
   frequency?: string;
+  intervalHours?: number | null;
+  weekdays?: number[];
   scheduledTimes?: string[];
   startDate?: string;
   endDate?: string | null;

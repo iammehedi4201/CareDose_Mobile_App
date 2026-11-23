@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   AddMedicineModal,
@@ -54,7 +54,7 @@ export default function MyMedicinesScreen(): React.JSX.Element {
         placeholder="Search name, brand or generic"
       />
 
-      <View style={styles.filterWrap}>
+      <View className="mt-2 mb-2.5">
         <FilterChips
           options={[
             { key: 'all', label: 'All' },
@@ -120,10 +120,3 @@ export default function MyMedicinesScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  filterWrap: {
-    marginTop: 8,
-    marginBottom: 10,
-  },
-});

@@ -3,12 +3,11 @@ import {
   ActivityIndicator,
   Pressable,
   StyleProp,
-  StyleSheet,
   Text,
   View,
   ViewStyle,
 } from 'react-native';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS, MIN_TOUCH_TARGET } from '../theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 
 export interface ActionButtonProps {
   label: string;
@@ -19,6 +18,7 @@ export interface ActionButtonProps {
   fullWidth?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
+  className?: string;
   leftIcon?: React.ReactNode;
 }
 
@@ -35,6 +35,7 @@ export function PrimaryButton({
   fullWidth = false,
   accessibilityLabel,
   style,
+  className = '',
   leftIcon,
 }: ActionButtonProps): React.JSX.Element {
   const interactive = isButtonInteractive(disabled, loading);
@@ -50,26 +51,23 @@ export function PrimaryButton({
           onPress();
         }
       }}
-      style={[
-        styles.base,
-        compact ? styles.compact : null,
-        fullWidth ? styles.fullWidth : null,
-        {
-          backgroundColor: !interactive
-            ? '#9BBFB7'
-            : CAREDOSE_EXTENDED_COLORS.primary,
-        },
-        style,
-      ]}
+      className={`flex-row items-center justify-center rounded-field ${
+        compact ? 'min-h-[40px] px-2.5 py-2' : 'min-h-[44px] px-3.5 py-2.5'
+      } ${fullWidth ? 'w-full' : ''} ${
+        interactive ? 'bg-primary' : 'bg-[#9BBFB7]'
+      } ${className}`.trim()}
+      style={style}
     >
       {loading ? (
         <ActivityIndicator size="small" color="#FFFFFF" />
       ) : (
-        <View style={styles.contentRow}>
-          {leftIcon ? <View style={styles.iconSlot}>{leftIcon}</View> : null}
+        <View className="min-w-0 shrink flex-row items-center justify-center">
+          {leftIcon ? <View className="mr-1.5">{leftIcon}</View> : null}
           <Text
             numberOfLines={1}
-            style={[styles.primaryText, compact ? styles.compactText : null]}
+            className={`shrink text-center font-semibold text-white ${
+              compact ? 'text-xs' : 'text-[13px]'
+            }`}
           >
             {label}
           </Text>
@@ -88,6 +86,7 @@ export function SecondaryButton({
   fullWidth = false,
   accessibilityLabel,
   style,
+  className = '',
   leftIcon,
 }: ActionButtonProps): React.JSX.Element {
   const interactive = isButtonInteractive(disabled, loading);
@@ -103,29 +102,21 @@ export function SecondaryButton({
           onPress();
         }
       }}
-      style={[
-        styles.base,
-        styles.secondaryBase,
-        compact ? styles.compact : null,
-        fullWidth ? styles.fullWidth : null,
-        {
-          backgroundColor: '#FFFFFF',
-          borderColor: !interactive
-            ? CAREDOSE_EXTENDED_COLORS.border
-            : CAREDOSE_EXTENDED_COLORS.border,
-          opacity: !interactive ? 0.55 : 1,
-        },
-        style,
-      ]}
+      className={`flex-row items-center justify-center rounded-field border border-border bg-white ${
+        compact ? 'min-h-[40px] px-2.5 py-2' : 'min-h-[44px] px-3.5 py-2.5'
+      } ${fullWidth ? 'w-full' : ''} ${interactive ? 'opacity-100' : 'opacity-55'} ${className}`.trim()}
+      style={style}
     >
       {loading ? (
         <ActivityIndicator size="small" color={CAREDOSE_EXTENDED_COLORS.primary} />
       ) : (
-        <View style={styles.contentRow}>
-          {leftIcon ? <View style={styles.iconSlot}>{leftIcon}</View> : null}
+        <View className="min-w-0 shrink flex-row items-center justify-center">
+          {leftIcon ? <View className="mr-1.5">{leftIcon}</View> : null}
           <Text
             numberOfLines={1}
-            style={[styles.secondaryText, compact ? styles.compactText : null]}
+            className={`shrink text-center font-semibold text-main ${
+              compact ? 'text-xs' : 'text-[13px]'
+            }`}
           >
             {label}
           </Text>
@@ -144,6 +135,7 @@ export function DestructiveButton({
   fullWidth = false,
   accessibilityLabel,
   style,
+  className = '',
   leftIcon,
 }: ActionButtonProps): React.JSX.Element {
   const interactive = isButtonInteractive(disabled, loading);
@@ -159,26 +151,23 @@ export function DestructiveButton({
           onPress();
         }
       }}
-      style={[
-        styles.base,
-        compact ? styles.compact : null,
-        fullWidth ? styles.fullWidth : null,
-        {
-          backgroundColor: !interactive
-            ? '#E2A6A3'
-            : CAREDOSE_EXTENDED_COLORS.error,
-        },
-        style,
-      ]}
+      className={`flex-row items-center justify-center rounded-field ${
+        compact ? 'min-h-[40px] px-2.5 py-2' : 'min-h-[44px] px-3.5 py-2.5'
+      } ${fullWidth ? 'w-full' : ''} ${
+        interactive ? 'bg-error' : 'bg-[#E2A6A3]'
+      } ${className}`.trim()}
+      style={style}
     >
       {loading ? (
         <ActivityIndicator size="small" color="#FFFFFF" />
       ) : (
-        <View style={styles.contentRow}>
-          {leftIcon ? <View style={styles.iconSlot}>{leftIcon}</View> : null}
+        <View className="min-w-0 shrink flex-row items-center justify-center">
+          {leftIcon ? <View className="mr-1.5">{leftIcon}</View> : null}
           <Text
             numberOfLines={1}
-            style={[styles.primaryText, compact ? styles.compactText : null]}
+            className={`shrink text-center font-semibold text-white ${
+              compact ? 'text-xs' : 'text-[13px]'
+            }`}
           >
             {label}
           </Text>
@@ -187,54 +176,3 @@ export function DestructiveButton({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: CAREDOSE_RADIUS.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  compact: {
-    minHeight: 40,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  fullWidth: {
-    width: '100%',
-  },
-  secondaryBase: {
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  contentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  iconSlot: {
-    marginRight: 6,
-  },
-  primaryText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  secondaryText: {
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    fontSize: 13,
-    fontWeight: '600',
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  compactText: {
-    fontSize: 12,
-  },
-});

@@ -71,6 +71,11 @@ function collectElements(node: unknown, out: ElementMatch[] = []): ElementMatch[
   return out;
 }
 
+function hasClass(el: ElementMatch, token: string): boolean {
+  const raw = typeof el.props.className === 'string' ? el.props.className : '';
+  return raw.split(/\s+/).includes(token);
+}
+
 const REQUIRED_VIEWPORTS = [320, 360, 375, 390, 414, 430, 768] as const;
 
 afterEach(() => {
@@ -94,7 +99,7 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(tablet.maxContentWidth).toBe(VIEWPORT_BREAKPOINTS.tabletMaxContentWidth);
   });
 
-  it('stacks FormRow vertically on 320px and keeps 2 columns side-by-side at >= 360px with minWidth: 0', () => {
+  it('stacks FormRow vertically on 320px and keeps 2 columns side-by-side at >= 360px with min-w-0', () => {
     __setMockWindowWidth(320);
     const compactEls = collectElements(
       FormRow({
@@ -110,8 +115,8 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         ],
       }),
     );
-    expect(compactEls[0].style.flexDirection).toBe('column');
-    expect(compactEls[1].style.flex).toBeUndefined();
+    expect(hasClass(compactEls[0], 'flex-col')).toBe(true);
+    expect(hasClass(compactEls[1], 'flex-1')).toBe(false);
 
     for (const width of [360, 375, 390, 414, 430, 768]) {
       __setMockWindowWidth(width);
@@ -129,9 +134,9 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
           ],
         }),
       );
-      expect(wideEls[0].style.flexDirection).toBe('row');
-      expect(wideEls[1].style.flex).toBe(1);
-      expect(wideEls[1].style.minWidth).toBe(0);
+      expect(hasClass(wideEls[0], 'flex-row')).toBe(true);
+      expect(hasClass(wideEls[1], 'flex-1')).toBe(true);
+      expect(hasClass(wideEls[1], 'min-w-0')).toBe(true);
     }
   });
 
@@ -156,8 +161,8 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       const navEls = collectElements(BottomNavigation({}));
 
       expect(headerEls.some((e) => e.props.numberOfLines === 1)).toBe(true);
-      expect(headerEls.some((e) => e.style.minWidth === 0)).toBe(true);
-      expect(headerEls.some((e) => e.style.flexShrink === 0)).toBe(true);
+      expect(headerEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
+      expect(headerEls.some((e) => hasClass(e, 'shrink-0'))).toBe(true);
 
       const hasPaddingMatch = scrollScreenEls.some(
         (e) => e.style.paddingHorizontal === expected.screenPadding,
@@ -196,8 +201,8 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         onPress: vi.fn(),
       }),
     );
-    expect(medEls.some((e) => e.style.minWidth === 0)).toBe(true);
-    expect(medEls.some((e) => e.style.flexWrap === 'wrap')).toBe(true);
+    expect(medEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
+    expect(medEls.some((e) => hasClass(e, 'flex-wrap'))).toBe(true);
     expect(medEls.some((e) => e.style.padding === 12)).toBe(true);
 
     const doseEls = collectElements(
@@ -211,13 +216,13 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         onSkip: vi.fn(),
       }),
     );
-    expect(doseEls.some((e) => e.style.minWidth === 0)).toBe(true);
-    expect(doseEls.some((e) => e.style.minHeight === 40)).toBe(true);
+    expect(doseEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
+    expect(doseEls.some((e) => hasClass(e, 'min-h-[40px]'))).toBe(true);
 
     const badgeEls = collectElements(
       StatusBadge({ variant: 'unverified', label: 'Long Custom Status Badge' }),
     );
-    expect(badgeEls[0].style.maxWidth).toBe('100%');
+    expect(hasClass(badgeEls[0], 'max-w-full')).toBe(true);
     expect(badgeEls[1].props.numberOfLines).toBe(1);
 
     const primaryBtnEls = collectElements(
@@ -226,12 +231,12 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     const secondaryBtnEls = collectElements(
       SecondaryButton({ label: 'Cancel', compact: true, onPress: vi.fn() }),
     );
-    expect(primaryBtnEls[0].style.minHeight).toBe(40);
-    expect(primaryBtnEls[0].style.paddingHorizontal).toBe(10);
-    expect(secondaryBtnEls[0].style.minHeight).toBe(40);
-    expect(secondaryBtnEls[0].style.paddingHorizontal).toBe(10);
+    expect(hasClass(primaryBtnEls[0], 'min-h-[40px]')).toBe(true);
+    expect(hasClass(primaryBtnEls[0], 'px-2.5')).toBe(true);
+    expect(hasClass(secondaryBtnEls[0], 'min-h-[40px]')).toBe(true);
+    expect(hasClass(secondaryBtnEls[0], 'px-2.5')).toBe(true);
     expect(primaryBtnEls.some((e) => e.type === 'Text' && e.props.numberOfLines === 1)).toBe(true);
-    expect(primaryBtnEls.some((e) => e.style.minWidth === 0)).toBe(true);
+    expect(primaryBtnEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
 
     // Enlarged system fontScale on a 360px device stacks 2-column form rows automatically
     __setMockWindowWidth(360, 812, 1.15);
@@ -249,7 +254,7 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         ],
       }),
     );
-    expect(scaledFormEls[0].style.flexDirection).toBe('column');
+    expect(hasClass(scaledFormEls[0], 'flex-col')).toBe(true);
   });
 
   it('bounds BottomSheet, ConfirmDialog, and FeedbackStates within viewport padding and maxWidth', () => {
@@ -302,10 +307,10 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     const errorEls = collectElements(ErrorState({ message: 'Network error', onRetry: vi.fn() }));
     const skeletonEls = collectElements(LoadingSkeleton({ rows: 2 }));
 
-    expect(toastEls.some((e) => e.type === 'Text' && e.style.minWidth === 0)).toBe(true);
+    expect(toastEls.some((e) => e.type === 'Text' && hasClass(e, 'min-w-0'))).toBe(true);
     expect(emptyEls[0].style.padding).toBe(16);
     expect(errorEls[0].style.padding).toBe(16);
     expect(skeletonEls.some((e) => e.style.padding === 12)).toBe(true);
-    expect(skeletonEls.some((e) => e.style.minWidth === 0)).toBe(true);
+    expect(skeletonEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   DateField,
@@ -20,7 +20,6 @@ import {
 } from '../src/features/schedule/dose-rules';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 type HistoryFilter = 'all' | 'taken' | 'skipped';
 
@@ -95,25 +94,25 @@ export default function DoseHistoryScreen(): React.JSX.Element {
       }
     >
       {activeMedFilter ? (
-        <View style={styles.medFilterBanner}>
-          <Text style={styles.medFilterText} numberOfLines={1}>
+        <View className="flex-row items-center justify-between gap-2.5 bg-mint rounded-field border border-[#C5E8D8] px-3 py-2 mb-2.5">
+          <Text className="flex-1 min-w-0 text-[12px] font-semibold text-main" numberOfLines={1}>
             Filtered to: {filteredMed?.name ?? 'Selected medicine'}
           </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => setActiveMedFilter(null)}
-            style={styles.clearFilterBtn}
+            className="shrink-0 px-2 py-1"
           >
-            <Text style={styles.clearFilterText}>Show all</Text>
+            <Text className="text-[12px] font-bold text-primary">Show all</Text>
           </Pressable>
         </View>
       ) : null}
 
-      <View style={layout.stackTwoCol ? styles.dateRangeStacked : styles.dateRangeRow}>
-        <View style={layout.stackTwoCol ? styles.dateColFull : styles.dateCol}>
+      <View className={layout.stackTwoCol ? 'flex-col' : 'flex-row gap-2.5'}>
+        <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
           <DateField label="From" value={fromDate} onChangeDate={setFromDate} allowClear />
         </View>
-        <View style={layout.stackTwoCol ? styles.dateColFull : styles.dateCol}>
+        <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
           <DateField label="To" value={toDate} onChangeDate={setToDate} allowClear />
         </View>
       </View>
@@ -150,10 +149,13 @@ export default function DoseHistoryScreen(): React.JSX.Element {
                 ? `${item.medicineName} ${item.strength}`
                 : item.medicineName;
             return (
-              <View key={item.id} style={styles.rowCard}>
-                <View style={styles.rowTextCol}>
-                  <Text style={styles.medName}>{labelName}</Text>
-                  <Text style={styles.metaText}>
+              <View
+                key={item.id}
+                className="flex-row items-center justify-between gap-2.5 bg-white rounded-card border border-border p-3.5 mt-2.5"
+              >
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[14px] font-semibold text-main">{labelName}</Text>
+                  <Text className="mt-0.5 text-[12px] text-[#5A706B]">
                     {formatHistoryDateLabel(item.scheduledDateYmd)} · {item.scheduledTime12}
                   </Text>
                 </View>
@@ -163,7 +165,7 @@ export default function DoseHistoryScreen(): React.JSX.Element {
           })}
 
           {hasMore && nextCursor ? (
-            <View style={styles.loadMoreWrap}>
+            <View className="mt-3">
               <SecondaryButton
                 fullWidth
                 loading={loadingMore}
@@ -177,79 +179,3 @@ export default function DoseHistoryScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  medFilterBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.field,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 10,
-  },
-  medFilterText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  clearFilterBtn: {
-    flexShrink: 0,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  clearFilterText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  dateRangeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  dateRangeStacked: {
-    flexDirection: 'column',
-  },
-  dateCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  dateColFull: {
-    width: '100%',
-  },
-  rowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginTop: 10,
-  },
-  rowTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  medName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  metaText: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  loadMoreWrap: {
-    marginTop: 12,
-  },
-});

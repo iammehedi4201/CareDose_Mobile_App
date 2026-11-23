@@ -1,22 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   BottomSheet,
   ConfirmDialog,
   DateField,
   EmptyState,
-  FormCol,
   FormField,
-  FormRow,
   MedicineCard,
   PrimaryButton,
+  ScheduleModal,
   ScreenContainer,
   SecondaryButton,
   SelectField,
   StatusBadge,
   SuccessToast,
-  TimeField,
   validateRequiredFields,
 } from '../../src/components';
 import {
@@ -36,17 +34,14 @@ import {
 } from '../../src/features/catalogue/catalogue-helpers';
 import { useMedications } from '../../src/features/medications/MedicationsContext';
 import {
-  buildScheduledTimesForFrequency,
   format24To12Hour,
-  formatFrequencyLabel,
+  formatDoseAmountDisplay,
   formatHistoryDateLabel,
-  getTodayLocalYmd,
-  inferSingleDoseUnitFromStockUnit,
-  parseDoseAmountInput,
+  formatRecurrenceSummary,
+  LocalScheduleRecord,
 } from '../../src/features/schedule/dose-rules';
 import { useSchedules } from '../../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../../src/theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../src/theme/tokens';
 
 export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const { id, openSchedule } = useLocalSearchParams<{ id: string; openSchedule?: string }>();
@@ -62,8 +57,6 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const {
     schedules,
     doseEvents,
-    createSchedule,
-    updateScheduleById,
   } = useSchedules();
 
   const medication = id ? getMedicationById(id) : undefined;
@@ -103,11 +96,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const handledOpenScheduleRef = useRef(false);
 
   // Secondary modal form states
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const [doseAmount, setDoseAmount] = useState('1 tablet');
-  const [scheduleFrequency, setScheduleFrequency] = useState('Once daily');
-  const [scheduledTime, setScheduledTime] = useState('08:00 AM');
-  const [scheduleStartDate, setScheduleStartDate] = useState(getTodayLocalYmd());
+  const [editingSchedule, setEditingSchedule] = useState<LocalScheduleRecord | null>(null);
   const [purchaseDate, setPurchaseDate] = useState('2026-11-21');
   const [packCount, setPackCount] = useState('1');
   const [unitsPerPack, setUnitsPerPack] = useState('30');
@@ -215,19 +204,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     target?: (typeof medSchedules)[number],
   ): void => {
     setErrors({});
-    if (target) {
-      setEditingScheduleId(target.id);
-      setDoseAmount(`${target.doseAmount} ${target.doseUnit}`);
-      setScheduleFrequency(formatFrequencyLabel(target.frequency));
-      setScheduledTime(format24To12Hour(target.scheduledTimes[0] ?? '08:00'));
-      setScheduleStartDate(target.startDateYmd);
-    } else {
-      setEditingScheduleId(null);
-      setDoseAmount(`1 ${inferSingleDoseUnitFromStockUnit(medication.stockUnit)}`);
-      setScheduleFrequency('Once daily');
-      setScheduledTime('08:00 AM');
-      setScheduleStartDate(getTodayLocalYmd());
-    }
+    setEditingSchedule(target ?? null);
     setCreateDoseOpen(true);
   };
 
@@ -235,11 +212,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     if (openSchedule === '1' && medication && !handledOpenScheduleRef.current) {
       handledOpenScheduleRef.current = true;
       setErrors({});
-      setEditingScheduleId(null);
-      setDoseAmount(`1 ${inferSingleDoseUnitFromStockUnit(medication.stockUnit)}`);
-      setScheduleFrequency('Once daily');
-      setScheduledTime('08:00 AM');
-      setScheduleStartDate(getTodayLocalYmd());
+      setEditingSchedule(null);
       setCreateDoseOpen(true);
     }
   }, [openSchedule, medication]);
@@ -268,67 +241,80 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
 
       {/* Top Contextual Actions matching Reference Sheet */}
       <View
-        style={
-          layout.stackTwoCol
-            ? [styles.topActionStacked, { gap: layout.gridGap }]
-            : [styles.topActionRow, { gap: layout.gridGap }]
-        }
+        className={layout.stackTwoCol ? 'flex-col mb-3.5' : 'flex-row mb-3.5'}
+        style={{ gap: layout.gridGap }}
       >
         <PrimaryButton
           compact
           fullWidth={layout.stackTwoCol}
           label="Create Dose"
           onPress={() => openDoseScheduleModal()}
-          style={layout.stackTwoCol ? undefined : styles.halfBtn}
+          className={layout.stackTwoCol ? '' : 'flex-1 min-w-0'}
         />
         <SecondaryButton
           compact
           fullWidth={layout.stackTwoCol}
           label="Record Purchase"
           onPress={() => setPurchaseOpen(true)}
-          style={layout.stackTwoCol ? undefined : styles.halfBtn}
+          className={layout.stackTwoCol ? '' : 'flex-1 min-w-0'}
         />
       </View>
 
       {/* Medicine Information Card */}
-      <View style={styles.sectionCard}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.sectionTitle}>Medicine information</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+          <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+            Medicine information
+          </Text>
           <StatusBadge variant={statusVariant} />
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Brand name</Text>
-          <Text style={styles.infoValue}>{medication.name}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Brand name</Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
+            {medication.name}
+          </Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Generic name</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Generic name</Text>
           {medication.genericName ? (
             <Pressable accessibilityRole="button" onPress={handleOpenGeneric}>
-              <Text style={styles.linkText}>{medication.genericName}</Text>
+              <Text className="text-[12px] font-semibold text-primary shrink-0">
+                {medication.genericName}
+              </Text>
             </Pressable>
           ) : (
-            <Text style={styles.infoValue}>Not available</Text>
+            <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
+              Not available
+            </Text>
           )}
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Strength</Text>
-          <Text style={styles.infoValue}>{medication.strength || 'Not available'}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Strength</Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
+            {medication.strength || 'Not available'}
+          </Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Form</Text>
-          <Text style={styles.infoValue}>{medication.dosageForm}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Form</Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
+            {medication.dosageForm}
+          </Text>
         </View>
         {isSolidDosageForm(medication.dosageForm) && medication.stripUnits ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{getStripUnitsLabel(medication.dosageForm)}</Text>
-            <Text style={styles.infoValue}>
+          <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+              {getStripUnitsLabel(medication.dosageForm)}
+            </Text>
+            <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
               {formatStripUnitsValue(medication.stripUnits, medication.dosageForm)}
             </Text>
           </View>
         ) : (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Quantity unit</Text>
-            <Text style={styles.infoValue}>
+          <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+              Quantity unit
+            </Text>
+            <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
               {classifyDosageFormStrategy(medication.dosageForm) === 'suppository'
                 ? 'Pieces'
                 : medication.stockUnit === 'ml'
@@ -337,9 +323,9 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
             </Text>
           </View>
         )}
-        <View style={[styles.infoRow, styles.lastRow]}>
-          <Text style={styles.infoLabel}>Instructions</Text>
-          <Text style={styles.infoValue}>
+        <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Instructions</Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
             {medication.instructions.trim().length > 0
               ? medication.instructions
               : 'Not set (optional)'}
@@ -348,19 +334,21 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Stock Information Card */}
-      <View style={styles.sectionCard}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.sectionTitle}>Stock information</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+          <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+            Stock information
+          </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => setUpdateStockOpen(true)}
           >
-            <Text style={styles.linkText}>Adjust stock</Text>
+            <Text className="text-[12px] font-semibold text-primary shrink-0">Adjust stock</Text>
           </Pressable>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Current stock</Text>
-          <Text style={styles.infoValue}>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Current stock</Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
             {formatStockWithUnit(medication.stockRemaining, medication.stockUnit)}
             {medication.stripUnits && medication.stockRemaining > 0 && medication.stripUnits > 1
               ? ` (${(medication.stockRemaining / medication.stripUnits).toFixed(1).replace(/\.0$/, '')} strips)`
@@ -368,14 +356,18 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           </Text>
         </View>
         {medication.openingEntryText ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Opening stock entry</Text>
-            <Text style={styles.infoValue}>{medication.openingEntryText}</Text>
+          <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+              Opening stock entry
+            </Text>
+            <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
+              {medication.openingEntryText}
+            </Text>
           </View>
         ) : null}
-        <View style={[styles.infoRow, styles.lastRow]}>
+        <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
           <View>
-            <Text style={styles.infoLabel}>Low-stock alert at</Text>
+            <Text className="text-[12px] text-[#5A706B]">Low-stock alert at</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -383,96 +375,109 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
                 setEditOpen(true);
               }}
             >
-              <Text style={styles.linkText}>Edit alert</Text>
+              <Text className="text-[12px] font-semibold text-primary shrink-0">Edit alert</Text>
             </Pressable>
           </View>
-          <Text style={styles.infoValue}>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
             {formatStockWithUnit(medication.lowStockThreshold, medication.stockUnit)}
           </Text>
         </View>
       </View>
 
       {/* Price Information Card */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Price information</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+          Price information
+        </Text>
         {estimatedCurrentStockValue != null ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Estimated stock value</Text>
-            <Text style={styles.infoValue}>
+          <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+              Estimated stock value
+            </Text>
+            <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
               ৳{formatBdtCurrency(estimatedCurrentStockValue)}
             </Text>
           </View>
         ) : null}
         {medication.totalStockPrice != null ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Actual amount paid</Text>
-            <Text style={styles.infoValue}>
+          <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+              Actual amount paid
+            </Text>
+            <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
               ৳{formatBdtCurrency(medication.totalStockPrice)}
             </Text>
           </View>
         ) : null}
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Catalogue unit rate</Text>
-          <Text style={styles.infoValue}>{medication.unitPriceText}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+            Catalogue unit rate
+          </Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
+            {medication.unitPriceText}
+          </Text>
         </View>
-        <View style={[styles.infoRow, styles.lastRow]}>
-          <Text style={styles.infoLabel}>Reference pack</Text>
-          <Text style={styles.infoValue}>
+        <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Reference pack</Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">
             {medication.referencePackText ?? 'Not available'}
           </Text>
         </View>
       </View>
 
       {/* Previous Purchases Section */}
-      <View style={styles.sectionCard}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.sectionTitle}>Previous purchases</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+          <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+            Previous purchases
+          </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push('/purchases')}
           >
-            <Text style={styles.linkText}>See all</Text>
+            <Text className="text-[12px] font-semibold text-primary shrink-0">See all</Text>
           </Pressable>
         </View>
-        <View style={[styles.infoRow, styles.lastRow]}>
-          <Text style={styles.infoLabel}>25 Oct 2026 · 30 tablets</Text>
-          <Text style={styles.infoValue}>৳555</Text>
+        <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+            25 Oct 2026 · 30 tablets
+          </Text>
+          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">৳555</Text>
         </View>
       </View>
 
       {/* Schedule Section */}
-      <View style={styles.sectionCard}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.sectionTitle}>Schedule</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+          <Text className="text-[15px] font-semibold text-main shrink min-w-0">Schedule</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => openDoseScheduleModal(medSchedules[0])}
           >
-            <Text style={styles.linkText}>
+            <Text className="text-[12px] font-semibold text-primary shrink-0">
               {medSchedules.length > 0 ? 'Edit' : 'Add'}
             </Text>
           </Pressable>
         </View>
         {medSchedules.length === 0 ? (
-          <View style={[styles.infoRow, styles.lastRow]}>
-            <Text style={styles.infoLabel}>No active schedule saved yet.</Text>
+          <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
+            <Text className="text-[12px] text-[#5A706B]">No active schedule saved yet.</Text>
           </View>
         ) : (
           medSchedules.map((sched, idx) => (
             <View
               key={sched.id}
-              style={[
-                styles.infoRow,
-                idx === medSchedules.length - 1 ? styles.lastRow : null,
-              ]}
+              className={`flex-row items-center justify-between py-2 gap-4 ${
+                idx === medSchedules.length - 1 ? 'pb-0.5' : 'border-b border-border'
+              }`}
             >
-              <View style={styles.scheduleTextCol}>
-                <Text style={styles.scheduleTimeText}>
+              <View className="flex-1 min-w-0 pr-2">
+                <Text className="text-[13px] font-semibold text-main">
                   {sched.scheduledTimes.map(format24To12Hour).join(' · ')}
                 </Text>
-                <Text style={styles.infoLabel}>
-                  {formatFrequencyLabel(sched.frequency)} · {sched.doseAmount}{' '}
-                  {sched.doseUnit}
+                <Text className="text-[12px] text-[#5A706B]">
+                  {formatRecurrenceSummary(sched)} ·{' '}
+                  {formatDoseAmountDisplay(sched.doseAmount, sched.doseUnit)}
                 </Text>
               </View>
               <StatusBadge
@@ -485,30 +490,33 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Recent Dose History */}
-      <View style={styles.sectionCard}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.sectionTitle}>Recent dose history</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+          <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+            Recent dose history
+          </Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push(`/history?medicationId=${medication.id}`)}
           >
-            <Text style={styles.linkText}>See all</Text>
+            <Text className="text-[12px] font-semibold text-primary shrink-0">See all</Text>
           </Pressable>
         </View>
         {recentMedHistory.length === 0 ? (
-          <View style={[styles.infoRow, styles.lastRow]}>
-            <Text style={styles.infoLabel}>No recorded doses for this medicine yet.</Text>
+          <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
+            <Text className="text-[12px] text-[#5A706B]">
+              No recorded doses for this medicine yet.
+            </Text>
           </View>
         ) : (
           recentMedHistory.map((ev, idx) => (
             <View
               key={ev.id}
-              style={[
-                styles.infoRow,
-                idx === recentMedHistory.length - 1 ? styles.lastRow : null,
-              ]}
+              className={`flex-row items-center justify-between py-2 gap-4 ${
+                idx === recentMedHistory.length - 1 ? 'pb-0.5' : 'border-b border-border'
+              }`}
             >
-              <Text style={styles.infoLabel}>
+              <Text className="text-[12px] text-[#5A706B]">
                 {formatHistoryDateLabel(ev.scheduledDateYmd)} ·{' '}
                 {format24To12Hour(ev.scheduledTime24)}
               </Text>
@@ -519,8 +527,10 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Alternative Brands Comparison Preview */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Alternative brands</Text>
+      <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
+        <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+          Alternative brands
+        </Text>
         <Pressable
           accessibilityRole="button"
           onPress={() =>
@@ -529,11 +539,11 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
               : router.push('/alternatives')
           }
         >
-          <Text style={styles.linkText}>Compare all</Text>
+          <Text className="text-[12px] font-semibold text-primary shrink-0">Compare all</Text>
         </Pressable>
       </View>
-      <View style={styles.warningBox}>
-        <Text style={styles.warningText}>
+      <View className="bg-[#FDF5E6] rounded-field border border-[#F3D9A4] p-2.5 mb-2.5">
+        <Text className="text-[11px] text-warning font-semibold">
           Possible matches only. Ask a doctor or pharmacist before changing brands.
         </Text>
       </View>
@@ -549,14 +559,14 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           onPress={() => router.push('/explore/brand/103')}
         />
       ) : (
-        <View style={styles.sectionCard}>
-          <Text style={styles.infoLabel}>
+        <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+          <Text className="text-[12px] text-[#5A706B] leading-[17px]">
             {medication.catalogueBrandId
               ? 'View potential matching brands sharing the same generic, strength, and dosage form.'
               : 'Open Compare all to review matching brands by generic, strength, and form.'}
           </Text>
           {medication.catalogueBrandId ? (
-            <View style={styles.loadMoreWrap}>
+            <View className="mt-1 mb-2.5">
               <SecondaryButton
                 fullWidth
                 label="Load More matching brands"
@@ -569,7 +579,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
         </View>
       )}
 
-      <View style={styles.archiveWrap}>
+      <View className="my-2.5">
         <SecondaryButton
           fullWidth
           label={medication.archived ? 'Restore Medicine to Active' : 'Archive Medicine'}
@@ -586,86 +596,19 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Create / Edit Dose Modal */}
-      <BottomSheet
+      <ScheduleModal
         visible={createDoseOpen}
-        title={editingScheduleId ? 'Edit Dose / Schedule' : 'Create Dose / Schedule'}
-        subtitle={medication.name}
-        iconName="clock"
-        onClose={() => setCreateDoseOpen(false)}
-        onSubmit={() => {
-          const parsedDose = parseDoseAmountInput(
-            doseAmount,
-            inferSingleDoseUnitFromStockUnit(medication.stockUnit),
-          );
-          if (!parsedDose) {
-            setErrors({ doseAmount: 'Enter a valid positive dose amount.' });
-            return;
-          }
-          const times = buildScheduledTimesForFrequency(scheduledTime, scheduleFrequency);
-          const savePromise = editingScheduleId
-            ? updateScheduleById(editingScheduleId, {
-                doseAmount: parsedDose.amount,
-                doseUnit: parsedDose.unit,
-                frequency: scheduleFrequency,
-                scheduledTimes: times,
-                startDateYmd: scheduleStartDate,
-              })
-            : createSchedule({
-                patientMedicationId: medication.id,
-                doseAmount: parsedDose.amount,
-                doseUnit: parsedDose.unit,
-                frequency: scheduleFrequency,
-                scheduledTimes: times,
-                startDateYmd: scheduleStartDate,
-                instructions: medication.instructions,
-                remindersEnabled: true,
-              });
-          void savePromise.then(() => {
-            setCreateDoseOpen(false);
-            setErrors({});
-            setToast('Schedule saved.');
-          });
+        initialMedicationId={medication.id}
+        lockMedicineSelection
+        editingSchedule={editingSchedule}
+        onClose={() => {
+          setCreateDoseOpen(false);
+          setEditingSchedule(null);
         }}
-        submitLabel="Save schedule"
-      >
-        <FormRow>
-          <FormCol>
-            <FormField
-              label="Dose amount"
-              value={doseAmount}
-              onChangeText={setDoseAmount}
-              required
-              errorMessage={errors.doseAmount}
-            />
-          </FormCol>
-          <FormCol>
-            <TimeField
-              label="Scheduled time"
-              value={scheduledTime}
-              onChangeTime={setScheduledTime}
-              required
-            />
-          </FormCol>
-        </FormRow>
-        <SelectField
-          label="Frequency"
-          value={scheduleFrequency}
-          options={[
-            { label: 'Once daily', value: 'Once daily' },
-            { label: 'Twice daily', value: 'Twice daily' },
-            { label: 'Every 8 hours', value: 'Every 8 hours' },
-            { label: 'Alternate days', value: 'Alternate days' },
-          ]}
-          onSelect={setScheduleFrequency}
-          required
-        />
-        <DateField
-          label="Start date"
-          value={scheduleStartDate}
-          onChangeDate={setScheduleStartDate}
-          required
-        />
-      </BottomSheet>
+        onSaved={(_, isEdit) => {
+          setToast(isEdit ? 'Dose schedule updated.' : 'Dose schedule saved.');
+        }}
+      />
 
       {/* Record Purchase Modal */}
       <BottomSheet
@@ -805,114 +748,3 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  topActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  topActionStacked: {
-    flexDirection: 'column',
-    gap: 8,
-    marginBottom: 14,
-  },
-  halfBtn: {
-    flex: 1,
-    minWidth: 0,
-  },
-  scheduleTextCol: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 8,
-  },
-  scheduleTimeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 16,
-    marginBottom: 14,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 8,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
-    gap: 16,
-  },
-  lastRow: {
-    borderBottomWidth: 0,
-    paddingBottom: 2,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    flexShrink: 0,
-    maxWidth: '46%',
-  },
-  infoValue: {
-    flex: 1,
-    minWidth: 0,
-    textAlign: 'right',
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  linkText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-    flexShrink: 0,
-  },
-  warningBox: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderRadius: CAREDOSE_RADIUS.field,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-    padding: 10,
-    marginBottom: 10,
-  },
-  warningText: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-    fontWeight: '600',
-  },
-  archiveWrap: {
-    marginVertical: 10,
-  },
-  loadMoreWrap: {
-    marginTop: 4,
-    marginBottom: 10,
-  },
-});

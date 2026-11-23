@@ -1,8 +1,8 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, PrimaryTabKey } from '../theme/tokens';
+import { PrimaryTabKey } from '../theme/tokens';
 import { AppHeader, AppHeaderProps } from './AppHeader';
 import { BottomNavigation } from './BottomNavigation';
 
@@ -26,7 +26,7 @@ export function ScreenContainer({
   const layout = useResponsiveLayout();
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom', 'left', 'right']}>
       <AppHeader
         title={title}
         eyebrow={eyebrow}
@@ -38,36 +38,34 @@ export function ScreenContainer({
 
       {scrollable ? (
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingHorizontal: layout.screenPadding,
-              paddingTop: layout.screenPadding,
-              paddingBottom: 28,
-            },
-          ]}
+          className="flex-1"
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: layout.screenPadding,
+            paddingTop: layout.screenPadding,
+            paddingBottom: 28,
+          }}
           keyboardShouldPersistTaps="handled"
         >
           <View
-            style={[
-              styles.innerWrapper,
+            className="w-full"
+            style={
               layout.maxContentWidth
                 ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-                : null,
-            ]}
+                : undefined
+            }
           >
             {children}
           </View>
         </ScrollView>
       ) : (
         <View
+          className="flex-1 w-full"
           style={[
-            styles.staticContent,
             { padding: layout.screenPadding },
             layout.maxContentWidth
               ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-              : null,
+              : undefined,
           ]}
         >
           {children}
@@ -78,23 +76,3 @@ export function ScreenContainer({
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  innerWrapper: {
-    width: '100%',
-  },
-  staticContent: {
-    flex: 1,
-    width: '100%',
-  },
-});

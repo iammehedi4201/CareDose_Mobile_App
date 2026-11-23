@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
@@ -29,7 +29,7 @@ import {
 } from '../src/features/schedule/dose-rules';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
 
 const HOME_PERIODS: SchedulePeriodGroupDto[] = [
   'Morning',
@@ -98,53 +98,81 @@ export default function HomeScreen(): React.JSX.Element {
       <SuccessToast message={toastMessage} />
 
       {/* Today's progress card */}
-      <View style={[styles.sectionCard, { padding: layout.cardPadding }]}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={[styles.sectionTitle, styles.headerTitleFlex]}>Today&apos;s progress</Text>
+      <View
+        className="bg-white rounded-card border border-border mb-3.5"
+        style={{ padding: layout.cardPadding }}
+      >
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="text-[16px] font-semibold text-main flex-1 min-w-0">
+            Today&apos;s progress
+          </Text>
           <Pressable
             accessibilityRole="button"
-            style={styles.linkBtn}
+            className="shrink-0 py-0.5 pl-1"
             onPress={() => router.push('/schedule')}
           >
-            <Text style={styles.linkText}>View schedule</Text>
+            <Text className="text-[12px] font-semibold text-primary">View schedule</Text>
           </Pressable>
         </View>
 
-        <View style={styles.progressTextRow}>
+        <View className="flex-row items-center gap-1.5 mt-1.5">
           <Feather name="check-circle" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
-          <Text style={styles.supportingText}>
+          <Text className="text-[12px] text-[#5A706B]">
             {completedCount} of {totalScheduled} doses completed
           </Text>
         </View>
 
-        <View style={[styles.statsGrid, { gap: layout.gridGap }]}>
-          <View style={[styles.statBox, layout.isCompact ? styles.statBoxCompact : null]}>
-            <Text style={styles.statNumber}>{totalScheduled}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Scheduled</Text>
+        <View className="mt-3.5 flex-row" style={{ gap: layout.gridGap }}>
+          <View
+            className={`flex-1 min-w-0 bg-background rounded-field border border-border py-2.5 ${
+              layout.isCompact ? 'px-1.5' : 'px-2.5'
+            }`}
+          >
+            <Text className="text-[18px] font-bold text-main">{totalScheduled}</Text>
+            <Text className="mt-0.5 text-[11px] text-[#5A706B]" numberOfLines={1}>
+              Scheduled
+            </Text>
           </View>
-          <View style={[styles.statBox, layout.isCompact ? styles.statBoxCompact : null]}>
-            <Text style={styles.statNumber}>{completedCount}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Taken</Text>
+          <View
+            className={`flex-1 min-w-0 bg-background rounded-field border border-border py-2.5 ${
+              layout.isCompact ? 'px-1.5' : 'px-2.5'
+            }`}
+          >
+            <Text className="text-[18px] font-bold text-main">{completedCount}</Text>
+            <Text className="mt-0.5 text-[11px] text-[#5A706B]" numberOfLines={1}>
+              Taken
+            </Text>
           </View>
-          <View style={[styles.statBox, layout.isCompact ? styles.statBoxCompact : null]}>
-            <Text style={styles.statNumber}>{remainingCount}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>Remaining</Text>
+          <View
+            className={`flex-1 min-w-0 bg-background rounded-field border border-border py-2.5 ${
+              layout.isCompact ? 'px-1.5' : 'px-2.5'
+            }`}
+          >
+            <Text className="text-[18px] font-bold text-main">{remainingCount}</Text>
+            <Text className="mt-0.5 text-[11px] text-[#5A706B]" numberOfLines={1}>
+              Remaining
+            </Text>
           </View>
         </View>
       </View>
 
       {/* Next dose card — strictly nearest upcoming or due dose */}
       {nextDose ? (
-        <View style={[styles.sectionCard, styles.mintCard, { padding: layout.cardPadding }]}>
-          <Text style={styles.eyebrowMint}>NEXT DOSE</Text>
-          <View style={styles.nextDoseRow}>
-            <View style={styles.nextDoseInfo}>
-              <Text style={styles.nextDoseTitle}>
+        <View
+          className="bg-mint rounded-card border border-[#C5E8D8] mb-3.5"
+          style={{ padding: layout.cardPadding }}
+        >
+          <Text className="text-[10px] font-bold tracking-[0.7px] text-primary-dark">
+            NEXT DOSE
+          </Text>
+          <View className="mt-1.5 flex-row items-center justify-between">
+            <View className="flex-1 min-w-0">
+              <Text className="text-[16px] font-bold text-main mb-0.5">
                 {nextDose.strength
                   ? `${nextDose.medicineName} ${nextDose.strength}`
                   : nextDose.medicineName}
               </Text>
-              <Text style={styles.supportingText}>
+              <Text className="text-[12px] text-[#5A706B]">
                 {nextDose.doseInstruction} · {nextDose.scheduledTime12}
               </Text>
             </View>
@@ -152,12 +180,12 @@ export default function HomeScreen(): React.JSX.Element {
               accessibilityRole="button"
               accessibilityLabel="Add dose schedule"
               onPress={() => router.push('/schedule')}
-              style={styles.nextDosePlusCircle}
+              className="w-[30px] h-[30px] rounded-full bg-white items-center justify-center ml-2.5 shrink-0"
             >
               <Feather name="plus" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
             </Pressable>
           </View>
-          <View style={styles.nextDoseBtnWrap}>
+          <View className="mt-3">
             <PrimaryButton
               fullWidth
               label="✓ Mark as Taken"
@@ -169,14 +197,16 @@ export default function HomeScreen(): React.JSX.Element {
       ) : null}
 
       {/* Today's schedule section */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, styles.headerTitleFlex]}>Today&apos;s schedule</Text>
+      <View className="flex-row items-center justify-between gap-3 mb-2.5 mt-1">
+        <Text className="text-[16px] font-semibold text-main flex-1 min-w-0">
+          Today&apos;s schedule
+        </Text>
         <Pressable
           accessibilityRole="button"
-          style={styles.linkBtn}
+          className="shrink-0 py-0.5 pl-1"
           onPress={() => router.push('/schedule')}
         >
-          <Text style={styles.linkText}>See all</Text>
+          <Text className="text-[12px] font-semibold text-primary">See all</Text>
         </Pressable>
       </View>
 
@@ -194,10 +224,12 @@ export default function HomeScreen(): React.JSX.Element {
           if (periodDoses.length === 0) return null;
           return (
             <React.Fragment key={period}>
-              <View style={styles.periodHeaderRow}>
-                <Text style={[styles.periodTitle, styles.headerTitleFlex]}>{period}</Text>
-                <View style={styles.countChip}>
-                  <Text style={styles.countChipText}>
+              <View className="flex-row items-center justify-between gap-2.5 mb-2 mt-1">
+                <Text className="text-[14px] font-bold text-main flex-1 min-w-0">
+                  {period}
+                </Text>
+                <View className="bg-[#EEF2F0] px-2.5 py-[3px] rounded-full shrink-0">
+                  <Text className="text-[11px] font-semibold text-[#5A706B]">
                     {periodDoses.length} {periodDoses.length === 1 ? 'dose' : 'doses'}
                   </Text>
                 </View>
@@ -221,16 +253,16 @@ export default function HomeScreen(): React.JSX.Element {
       )}
 
       {/* Low stock & medicine supplies snapshot */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, styles.headerTitleFlex]}>
+      <View className="flex-row items-center justify-between gap-3 mb-2.5 mt-1">
+        <Text className="text-[16px] font-semibold text-main flex-1 min-w-0">
           Medicine supplies ({lowStockMeds.length} low stock)
         </Text>
         <Pressable
           accessibilityRole="button"
-          style={styles.linkBtn}
+          className="shrink-0 py-0.5 pl-1"
           onPress={() => router.push('/medicines')}
         >
-          <Text style={styles.linkText}>Manage</Text>
+          <Text className="text-[12px] font-semibold text-primary">Manage</Text>
         </Pressable>
       </View>
 
@@ -250,26 +282,31 @@ export default function HomeScreen(): React.JSX.Element {
 
       {/* Latest health reading & expenses shortcuts */}
       <View
-        style={[
-          layout.stackTwoCol ? styles.twoColStacked : styles.twoColRow,
-          { gap: layout.gridGap },
-        ]}
+        className={layout.stackTwoCol ? 'flex-col mt-1' : 'flex-row items-stretch mt-1'}
+        style={{ gap: layout.gridGap }}
       >
         <View
-          style={[
-            styles.sectionCard,
-            layout.stackTwoCol ? null : styles.halfCard,
-            { padding: layout.effectiveWidth < 400 ? 12 : layout.cardPadding },
-          ]}
+          className={
+            layout.stackTwoCol
+              ? 'bg-white rounded-card border border-border mb-3.5'
+              : 'flex-1 min-w-0 justify-between bg-white rounded-card border border-border mb-3.5'
+          }
+          style={{ padding: layout.effectiveWidth < 400 ? 12 : layout.cardPadding }}
         >
           <View>
-            <Text style={layout.stackTwoCol ? styles.sectionTitle : styles.halfCardTitle}>
+            <Text
+              className={
+                layout.stackTwoCol
+                  ? 'text-[16px] font-semibold text-main'
+                  : 'text-[15px] font-semibold text-main'
+              }
+            >
               Latest glucose
             </Text>
-            <Text style={styles.highlightNumber}>106 mg/dL</Text>
-            <Text style={styles.supportingText}>Fasting · 07:30 AM</Text>
+            <Text className="mt-1.5 text-[19px] font-bold text-primary">106 mg/dL</Text>
+            <Text className="text-[12px] text-[#5A706B]">Fasting · 07:30 AM</Text>
           </View>
-          <View style={styles.cardActionTop}>
+          <View className="mt-3">
             <SecondaryButton
               compact
               fullWidth
@@ -280,20 +317,27 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
 
         <View
-          style={[
-            styles.sectionCard,
-            layout.stackTwoCol ? null : styles.halfCard,
-            { padding: layout.effectiveWidth < 400 ? 12 : layout.cardPadding },
-          ]}
+          className={
+            layout.stackTwoCol
+              ? 'bg-white rounded-card border border-border mb-3.5'
+              : 'flex-1 min-w-0 justify-between bg-white rounded-card border border-border mb-3.5'
+          }
+          style={{ padding: layout.effectiveWidth < 400 ? 12 : layout.cardPadding }}
         >
           <View>
-            <Text style={layout.stackTwoCol ? styles.sectionTitle : styles.halfCardTitle}>
+            <Text
+              className={
+                layout.stackTwoCol
+                  ? 'text-[16px] font-semibold text-main'
+                  : 'text-[15px] font-semibold text-main'
+              }
+            >
               Monthly spend
             </Text>
-            <Text style={styles.highlightNumber}>৳ 720</Text>
-            <Text style={styles.supportingText}>This month</Text>
+            <Text className="mt-1.5 text-[19px] font-bold text-primary">৳ 720</Text>
+            <Text className="text-[12px] text-[#5A706B]">This month</Text>
           </View>
-          <View style={styles.cardActionTop}>
+          <View className="mt-3">
             <SecondaryButton
               compact
               fullWidth
@@ -324,179 +368,3 @@ export default function HomeScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 16,
-    marginBottom: 14,
-  },
-  mintCard: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderColor: '#C5E8D8',
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerTitleFlex: {
-    flex: 1,
-    minWidth: 0,
-  },
-  linkBtn: {
-    flexShrink: 0,
-    paddingVertical: 2,
-    paddingLeft: 4,
-  },
-  progressTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  supportingText: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  statsGrid: {
-    marginTop: 14,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statBox: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderRadius: CAREDOSE_RADIUS.field,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-  },
-  statBoxCompact: {
-    paddingHorizontal: 6,
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  statLabel: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  eyebrowMint: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.7,
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  nextDoseRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  nextDoseInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  nextDosePlusCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-    flexShrink: 0,
-  },
-  nextDoseTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 2,
-  },
-  nextDoseBtnWrap: {
-    marginTop: 12,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  periodHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  periodTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  countChip: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.neutralSurface,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    flexShrink: 0,
-  },
-  countChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  linkText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  twoColRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 10,
-    marginTop: 4,
-  },
-  twoColStacked: {
-    flexDirection: 'column',
-    gap: 10,
-    marginTop: 4,
-  },
-  halfCard: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'space-between',
-  },
-  halfCardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  highlightNumber: {
-    marginTop: 6,
-    fontSize: 19,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  cardActionTop: {
-    marginTop: 12,
-  },
-});

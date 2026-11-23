@@ -1,12 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ScreenContainer } from '../src/components';
 import {
   CAREDOSE_EXTENDED_COLORS,
-  CAREDOSE_RADIUS,
-  MIN_TOUCH_TARGET,
   SECONDARY_PROFILE_DESTINATIONS,
 } from '../src/theme/tokens';
 
@@ -24,18 +22,18 @@ export default function ProfileScreen(): React.JSX.Element {
           accessibilityRole="button"
           accessibilityLabel={`${dest.label}: ${dest.subtitle}`}
           onPress={() => router.push(dest.route)}
-          style={styles.menuRow}
+          className="min-h-[62px] flex-row items-center bg-white rounded-card border border-border px-3.5 py-3 mb-2.5"
         >
-          <View style={styles.menuIconCircle}>
+          <View className="w-[38px] h-[38px] rounded-full bg-mint items-center justify-center mr-3">
             <Feather
               name={dest.icon as keyof typeof Feather.glyphMap}
               size={18}
               color={CAREDOSE_EXTENDED_COLORS.primary}
             />
           </View>
-          <View style={styles.menuTextCol}>
-            <Text style={styles.menuLabel}>{dest.label}</Text>
-            <Text style={styles.menuSubtitle}>{dest.subtitle}</Text>
+          <View className="flex-1 min-w-0 pr-2">
+            <Text className="text-[14px] font-semibold text-main">{dest.label}</Text>
+            <Text className="mt-0.5 text-[12px] text-[#5A706B]">{dest.subtitle}</Text>
           </View>
           <Feather
             name="chevron-right"
@@ -44,46 +42,6 @@ export default function ProfileScreen(): React.JSX.Element {
           />
         </Pressable>
       ))}
-
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  menuRow: {
-    minHeight: MIN_TOUCH_TARGET + 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-  },
-  menuIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  menuTextCol: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 8,
-  },
-  menuLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  menuSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-});

@@ -1,11 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import { useResponsiveLayout } from '../theme/responsive';
 import {
   CAREDOSE_EXTENDED_COLORS,
-  MIN_TOUCH_TARGET,
   PRIMARY_BOTTOM_TABS,
   PrimaryTabKey,
   resolveActiveBottomTab,
@@ -22,14 +21,18 @@ export function BottomNavigation({ activeTabOverride }: BottomNavigationProps): 
   const activeKey = activeTabOverride ?? resolveActiveBottomTab(pathname);
 
   return (
-    <View accessibilityRole="tablist" collapsable={false} style={styles.bar}>
+    <View
+      accessibilityRole="tablist"
+      collapsable={false}
+      className="z-10 border-t border-border bg-white px-1 pt-1.5 pb-2.5"
+    >
       <View
-        style={[
-          styles.barInner,
+        className="w-full flex-row items-center justify-around"
+        style={
           layout.maxContentWidth
             ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-            : null,
-        ]}
+            : undefined
+        }
       >
         {PRIMARY_BOTTOM_TABS.map((tab) => {
           const isActive = tab.key === activeKey;
@@ -49,14 +52,11 @@ export function BottomNavigation({ activeTabOverride }: BottomNavigationProps): 
                   }
                 }
               }}
-              style={styles.tabItem}
+              className="flex-1 min-w-0 min-h-[44px] items-center justify-center px-0.5"
             >
               <View
-                style={[
-                  styles.iconPill,
-                  { paddingHorizontal: layout.tabPillPaddingX },
-                  isActive ? styles.iconPillActive : null,
-                ]}
+                className={`mb-0.5 rounded-full py-[5px] ${isActive ? 'bg-mint' : ''}`}
+                style={{ paddingHorizontal: layout.tabPillPaddingX }}
               >
                 <Feather
                   name={tab.icon as keyof typeof Feather.glyphMap}
@@ -70,10 +70,9 @@ export function BottomNavigation({ activeTabOverride }: BottomNavigationProps): 
               </View>
               <Text
                 numberOfLines={1}
-                style={[
-                  styles.label,
-                  isActive ? styles.labelActive : styles.labelInactive,
-                ]}
+                className={`text-[11px] ${
+                  isActive ? 'font-semibold text-primary' : 'font-medium text-[#5A706B]'
+                }`}
               >
                 {tab.label}
               </Text>
@@ -84,48 +83,3 @@ export function BottomNavigation({ activeTabOverride }: BottomNavigationProps): 
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  bar: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
-    paddingTop: 6,
-    paddingBottom: 10,
-    paddingHorizontal: 4,
-    zIndex: 10,
-  },
-  barInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  tabItem: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  iconPill: {
-    paddingVertical: 5,
-    borderRadius: 999,
-    marginBottom: 2,
-  },
-  iconPillActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  labelActive: {
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  labelInactive: {
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    fontWeight: '500',
-  },
-});

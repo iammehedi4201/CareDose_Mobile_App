@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -20,7 +20,7 @@ import {
   OFFLINE_FALLBACK_CATALOGUE_BRANDS,
   resolveBrandBadge,
 } from '../../../src/features/catalogue/catalogue-helpers';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../src/theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../../../src/theme/tokens';
 
 export default function GenericDetailsScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -117,21 +117,25 @@ export default function GenericDetailsScreen(): React.JSX.Element {
       subtitle="Generic · Catalogue brands"
       onBack={() => router.push('/explore')}
     >
-      <View style={styles.summaryCard}>
-        <View style={styles.iconCircle}>
+      <View className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-4">
+        <View className="w-[38px] h-[38px] rounded-full bg-white items-center justify-center mr-3 shrink-0">
           <Feather name="disc" size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
         </View>
-        <View style={styles.summaryTextCol}>
-          <Text style={styles.summaryTitle}>{genericName}</Text>
-          <Text style={styles.summarySub}>
+        <View className="flex-1 min-w-0">
+          <Text className="text-[15px] font-bold text-main">{genericName}</Text>
+          <Text className="mt-0.5 text-[12px] text-[#5A706B]">
             {totalCount.toLocaleString()} brand records linked in the imported catalogue
           </Text>
         </View>
       </View>
 
-      <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>Associated brands</Text>
-        <Text style={styles.countText}>{totalCount.toLocaleString()} brands</Text>
+      <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2.5">
+        <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+          Associated brands
+        </Text>
+        <Text className="text-[12px] text-[#5A706B] shrink-0">
+          {totalCount.toLocaleString()} brands
+        </Text>
       </View>
 
       {brands.length === 0 ? (
@@ -163,7 +167,7 @@ export default function GenericDetailsScreen(): React.JSX.Element {
           })}
 
           {hasMore && nextCursor ? (
-            <View style={styles.loadMoreWrap}>
+            <View className="mt-1.5 mb-2.5">
               <SecondaryButton
                 fullWidth
                 label={loadingMore ? 'Loading more...' : 'Load more brands'}
@@ -175,84 +179,11 @@ export default function GenericDetailsScreen(): React.JSX.Element {
         </>
       )}
 
-      <View style={styles.warningBox}>
-        <Text style={styles.warningText}>{warningNotice}</Text>
+      <View className="bg-[#FDF5E6] rounded-field border border-[#F3D9A4] p-3 my-2.5">
+        <Text className="text-[11px] text-warning font-semibold leading-4">
+          {warningNotice}
+        </Text>
       </View>
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  summaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    padding: 14,
-    marginBottom: 16,
-  },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    flexShrink: 0,
-  },
-  summaryTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  summaryTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  summarySub: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  countText: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    flexShrink: 0,
-  },
-  loadMoreWrap: {
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  warningBox: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderRadius: CAREDOSE_RADIUS.field,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-    padding: 12,
-    marginVertical: 10,
-  },
-  warningText: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-});

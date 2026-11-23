@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   EmptyState,
@@ -19,7 +19,6 @@ import {
   formatUnitOrPackPrice,
   resolveBrandBadge,
 } from '../../../../src/features/catalogue/catalogue-helpers';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../../src/theme/tokens';
 
 const INITIAL_PREVIEW_COUNT = 3;
 
@@ -97,9 +96,13 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
       subtitle={subtitle}
       onBack={() => router.push(`/explore/brand/${id ?? ''}`)}
     >
-      <View style={styles.warningCard}>
-        <Text style={styles.warningTitle}>Pharmacist / Doctor Review Required</Text>
-        <Text style={styles.warningBody}>{warningNotice}</Text>
+      <View className="bg-[#FDF5E6] rounded-card border border-[#F3D9A4] p-3 mb-3">
+        <Text className="text-[12.5px] font-bold text-warning">
+          Pharmacist / Doctor Review Required
+        </Text>
+        <Text className="mt-0.5 text-[11.5px] text-main leading-4">
+          {warningNotice}
+        </Text>
       </View>
 
       <SearchInput
@@ -109,7 +112,7 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
       />
 
       {remainingCandidates.length > 0 ? (
-        <View style={styles.filterWrap}>
+        <View className="mt-2.5">
           <FilterChips
             options={[
               { key: 'remaining', label: `Remaining (${remainingCandidates.length})` },
@@ -121,15 +124,15 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
         </View>
       ) : null}
 
-      <View style={styles.countHeaderRow}>
-        <Text style={styles.countTitle}>
+      <View className="flex-row items-center justify-between gap-2.5 mt-3 mb-2">
+        <Text className="flex-1 min-w-0 text-[14px] font-semibold text-main">
           {query.trim().length > 0
             ? `Matching results (${filteredBrands.length})`
             : scopeFilter === 'remaining' && remainingCandidates.length > 0
               ? `Remaining alternative brands (${filteredBrands.length})`
               : `All matching brands (${filteredBrands.length})`}
         </Text>
-        <Text style={styles.sourceLabel}>MedEx (unverified)</Text>
+        <Text className="text-[11px] text-[#7D928D] shrink-0">MedEx (unverified)</Text>
       </View>
 
       {loading ? (
@@ -186,48 +189,3 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  warningCard: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-    padding: 12,
-    marginBottom: 12,
-  },
-  warningTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-  },
-  warningBody: {
-    marginTop: 2,
-    fontSize: 11.5,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    lineHeight: 16,
-  },
-  filterWrap: {
-    marginTop: 10,
-  },
-  countHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  countTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  sourceLabel: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
-    flexShrink: 0,
-  },
-});

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -31,7 +31,7 @@ import {
   resolveBrandBadge,
   resolvePackQuantityUnit,
 } from '../../../../src/features/catalogue/catalogue-helpers';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../../../../src/theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../../../../src/theme/tokens';
 
 const INITIAL_ALTERNATIVES_LIMIT = 3;
 
@@ -170,35 +170,37 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       <SuccessToast message={toast} />
 
       {/* Top Hero + Dosage Form Thumbnail / Packaging Photo + Primary CTA */}
-      <View style={styles.heroCard}>
-        <View style={styles.heroTopRow}>
+      <View className="bg-mint rounded-card border border-[#C5E8D8] p-4 mb-3.5">
+        <View className="flex-row items-center gap-3">
           <MedicineFormThumbnail
             size="hero"
             dosageForm={brand.dosageForm}
             imageUrl={primaryImage?.imageUrl}
             accessibilityLabel={`${brand.name} ${brand.dosageForm ?? 'medicine'}`}
           />
-          <View style={styles.heroTextCol}>
-            <Text style={styles.heroName}>{brand.name}</Text>
+          <View className="flex-1 min-w-0">
+            <Text className="text-[17px] font-bold text-main">{brand.name}</Text>
             {brand.generic ? (
-              <Text style={styles.heroGeneric} numberOfLines={1}>
+              <Text className="mt-0.5 text-[13px] font-semibold text-primary-dark" numberOfLines={1}>
                 {brand.generic.name}
               </Text>
             ) : null}
-            <Text style={styles.heroMeta}>{formatMissingCatalogueValue(brand.manufacturer)}</Text>
-            <Text style={styles.sourceCaption}>
+            <Text className="mt-0.5 text-[12px] text-[#5A706B]">
+              {formatMissingCatalogueValue(brand.manufacturer)}
+            </Text>
+            <Text className="mt-1 text-[11px] text-[#7D928D]">
               MedEx reference data (unverified)
             </Text>
           </View>
         </View>
 
         {primaryImage ? (
-          <Text style={styles.imageNotice}>
+          <Text className="mt-2 text-[11px] text-[#5A706B]">
             Photo source: {primaryImage.sourceName} · Unverified match · Permission unrecorded
           </Text>
         ) : null}
 
-        <View style={styles.heroActionWrap}>
+        <View className="mt-3.5">
           <PrimaryButton
             fullWidth
             label="+ Add to My Medicines"
@@ -208,54 +210,76 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Catalogue Details */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Medicine details</Text>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <Text className="text-[15px] font-semibold text-main mb-0.5">Medicine details</Text>
 
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Generic</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Generic</Text>
           {brand.generic ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
             >
-              <Text style={styles.linkText}>{brand.generic.name}</Text>
+              <Text className="text-[13px] font-semibold text-primary shrink-0">
+                {brand.generic.name}
+              </Text>
             </Pressable>
           ) : (
-            <Text style={styles.infoValue}>Not available</Text>
+            <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+              Not available
+            </Text>
           )}
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Strength</Text>
-          <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.strength)}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Strength</Text>
+          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+            {formatMissingCatalogueValue(brand.strength)}
+          </Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Dosage form</Text>
-          <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.dosageForm)}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Dosage form</Text>
+          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+            {formatMissingCatalogueValue(brand.dosageForm)}
+          </Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{activeUnitDetails.label}</Text>
-          <Text style={styles.infoValue}>{activeUnitDetails.value}</Text>
+        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+            {activeUnitDetails.label}
+          </Text>
+          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+            {activeUnitDetails.value}
+          </Text>
         </View>
-        <View style={[styles.infoRow, brand.releaseMarker ? null : styles.lastRow]}>
-          <Text style={styles.infoLabel}>Manufacturer</Text>
-          <Text style={styles.infoValue}>{formatMissingCatalogueValue(brand.manufacturer)}</Text>
+        <View
+          className={`flex-row items-center justify-between py-2 gap-3 ${
+            brand.releaseMarker ? 'border-b border-border' : 'pb-0.5'
+          }`}
+        >
+          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Manufacturer</Text>
+          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+            {formatMissingCatalogueValue(brand.manufacturer)}
+          </Text>
         </View>
         {brand.releaseMarker ? (
-          <View style={[styles.infoRow, styles.lastRow]}>
-            <Text style={styles.infoLabel}>Release marker</Text>
-            <Text style={styles.infoValue}>{brand.releaseMarker}</Text>
+          <View className="flex-row items-center justify-between py-2 pb-0.5 gap-3">
+            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+              Release marker
+            </Text>
+            <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+              {brand.releaseMarker}
+            </Text>
           </View>
         ) : null}
       </View>
 
       {/* Pack & Pricing Details */}
-      <View style={styles.sectionCard}>
-        <View style={styles.cardHeader}>
-          <View style={styles.packTitleCol}>
-            <Text style={styles.sectionTitle}>
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+        <View className="flex-row items-center justify-between flex-wrap gap-2 mb-2">
+          <View className="flex-1 min-w-0">
+            <Text className="text-[15px] font-semibold text-main mb-0.5">
               Pack &amp; price{brand.packs.length > 1 ? ` (${brand.packs.length} options)` : ''}
             </Text>
-            <Text style={styles.packSourceHint}>MedEx reference price (unverified)</Text>
+            <Text className="text-[11px] text-[#7D928D]">MedEx reference price (unverified)</Text>
           </View>
           {brand.hasPriceWarning ? (
             <StatusBadge variant="low_stock" label="Price warning" />
@@ -263,13 +287,17 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         </View>
 
         {!activePack ? (
-          <Text style={styles.supportingEmpty}>No pack pricing records available in catalogue.</Text>
+          <Text className="text-[12px] text-[#5A706B] py-1.5">
+            No pack pricing records available in catalogue.
+          </Text>
         ) : (
           <View>
             {brand.packs.length > 1 ? (
-              <View style={styles.packSelectorWrap}>
-                <Text style={styles.packSelectorPrompt}>Select a pack size to inspect:</Text>
-                <View style={styles.packChipsGrid}>
+              <View className="mt-1 mb-2.5">
+                <Text className="text-[11px] font-semibold text-[#5A706B] mb-2">
+                  Select a pack size to inspect:
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
                   {brand.packs.map((pack) => {
                     const isSelected = pack.id === activePack.id;
                     const pricePreview = pack.packPrice
@@ -282,21 +310,23 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
                         key={pack.id}
                         accessibilityRole="button"
                         onPress={() => setSelectedPackId(pack.id)}
-                        style={[styles.packChip, isSelected ? styles.packChipActive : null]}
+                        className={`px-3 py-2 rounded-[10px] border min-w-[104px] ${
+                          isSelected
+                            ? 'border-primary bg-[#EAF5F1]'
+                            : 'border-[#CBD5E1] bg-[#F8FAFC]'
+                        }`}
                       >
                         <Text
-                          style={[
-                            styles.packChipTitle,
-                            isSelected ? styles.packChipTitleActive : null,
-                          ]}
+                          className={`text-[12px] font-semibold ${
+                            isSelected ? 'text-primary-dark' : 'text-main'
+                          }`}
                         >
                           {formatPackSummary(pack)}
                         </Text>
                         <Text
-                          style={[
-                            styles.packChipPrice,
-                            isSelected ? styles.packChipPriceActive : null,
-                          ]}
+                          className={`mt-0.5 text-[11px] font-semibold ${
+                            isSelected ? 'text-primary' : 'text-[#5A706B]'
+                          }`}
                         >
                           {pricePreview}
                         </Text>
@@ -307,43 +337,53 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
               </View>
             ) : null}
 
-            <View style={styles.selectedPackPanel}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Pack size</Text>
-                <Text style={styles.infoValue}>{formatPackSummary(activePack)}</Text>
+            <View className="border-t border-border pt-1">
+              <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
+                <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Pack size</Text>
+                <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+                  {formatPackSummary(activePack)}
+                </Text>
               </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>{activePackUnitDetails.label}</Text>
-                <Text style={styles.infoValue}>{activePackUnitDetails.value}</Text>
+              <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
+                <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+                  {activePackUnitDetails.label}
+                </Text>
+                <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
+                  {activePackUnitDetails.value}
+                </Text>
               </View>
               <View
-                style={[
-                  styles.infoRow,
-                  !activePack.unitPrice && activePack.warnings.length === 0 ? styles.lastRow : null,
-                ]}
+                className={`flex-row items-center justify-between py-2 gap-3 ${
+                  !activePack.unitPrice && activePack.warnings.length === 0
+                    ? 'pb-0.5'
+                    : 'border-b border-border'
+                }`}
               >
-                <Text style={styles.infoLabel}>Pack price</Text>
-                <Text style={styles.infoValue}>
+                <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+                  Pack price
+                </Text>
+                <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
                   {formatCurrencyAmount(activePack.packPrice, activePack.currency)}
                 </Text>
               </View>
               {activePack.unitPrice ? (
                 <View
-                  style={[
-                    styles.infoRow,
-                    activePack.warnings.length === 0 ? styles.lastRow : null,
-                  ]}
+                  className={`flex-row items-center justify-between py-2 gap-3 ${
+                    activePack.warnings.length === 0 ? 'pb-0.5' : 'border-b border-border'
+                  }`}
                 >
-                  <Text style={styles.infoLabel}>Unit price</Text>
-                  <Text style={styles.infoValue}>
+                  <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
+                    Unit price
+                  </Text>
+                  <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
                     {formatCurrencyAmount(activePack.unitPrice, activePack.currency)}
                   </Text>
                 </View>
               ) : null}
               {activePack.warnings.length > 0 ? (
-                <View style={styles.packWarningRow}>
+                <View className="flex-row items-start gap-1.5 bg-[#FDF5E6] p-2 rounded-[8px] mt-1.5">
                   <Feather name="alert-triangle" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
-                  <Text style={styles.packWarningText}>
+                  <Text className="flex-1 min-w-0 text-[11px] text-warning font-semibold">
                     {activePack.warnings.map(formatPackWarningReason).join(' ')}
                   </Text>
                 </View>
@@ -354,12 +394,12 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Potential Matching Brands — Initially 3 + "Load More" to Searchable Alternatives Screen */}
-      <View style={styles.sectionHeaderRow}>
-        <View style={styles.matchingTitleCol}>
-          <Text style={styles.sectionTitle}>
+      <View className="flex-row items-center justify-between gap-2.5 mb-2">
+        <View className="flex-1 min-w-0">
+          <Text className="text-[15px] font-semibold text-main mb-0.5">
             Potential matching brands{!altLoading ? ` (${allCandidateBrands.length})` : ''}
           </Text>
-          <Text style={styles.matchingSubtitle}>
+          <Text className="text-[11px] text-[#5A706B] mt-[1px]">
             Same generic, {brand.strength ?? 'strength'} · {brand.dosageForm ?? 'form'}
           </Text>
         </View>
@@ -368,14 +408,16 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
             accessibilityRole="button"
             onPress={() => router.push(`/explore/brand/${brand.sourceId}/alternatives`)}
           >
-            <Text style={styles.linkText}>See all</Text>
+            <Text className="text-[13px] font-semibold text-primary shrink-0">See all</Text>
           </Pressable>
         ) : brand.generic && brand.sameGenericBrandsCount ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
           >
-            <Text style={styles.linkText}>All {brand.sameGenericBrandsCount} generic brands</Text>
+            <Text className="text-[13px] font-semibold text-primary shrink-0">
+              All {brand.sameGenericBrandsCount} generic brands
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -394,9 +436,9 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
           description="No other imported catalogue brands share this exact generic, strength, and dosage form."
         />
       ) : (
-        <View style={styles.altGroupWrap}>
+        <View className="mb-1">
           {isCombination ? (
-            <Text style={styles.comboNote}>
+            <Text className="text-[11px] font-semibold text-[#5A706B] mb-1.5">
               Combination product · {brand.strength ?? 'Multiple ingredients'} · {brand.dosageForm}
             </Text>
           ) : null}
@@ -422,7 +464,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
           })}
 
           {remainingMatchingCount > 0 ? (
-            <View style={styles.loadMoreAltWrap}>
+            <View className="mt-1 mb-2.5">
               <SecondaryButton
                 fullWidth
                 label={`Load More (${remainingMatchingCount} remaining)`}
@@ -436,7 +478,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       {brand.generic &&
       typeof brand.sameGenericBrandsCount === 'number' &&
       brand.sameGenericBrandsCount > allCandidateBrands.length + 1 ? (
-        <View style={styles.viewGenericWrap}>
+        <View className="mt-1 mb-2.5">
           <SecondaryButton
             fullWidth
             label={`View all ${brand.sameGenericBrandsCount.toLocaleString()} ${brand.generic.name} brands (all strengths & forms)`}
@@ -445,8 +487,10 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         </View>
       ) : null}
 
-      <View style={styles.warningBox}>
-        <Text style={styles.warningText}>{warningNotice}</Text>
+      <View className="bg-[#FDF5E6] rounded-field border border-[#F3D9A4] p-3 mt-1 mb-2.5">
+        <Text className="text-[11px] text-warning font-semibold leading-4">
+          {warningNotice}
+        </Text>
       </View>
 
       <AddMedicineModal
@@ -459,234 +503,3 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  heroCard: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    padding: 16,
-    marginBottom: 14,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  heroTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  heroName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  heroGeneric: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  heroMeta: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  sourceCaption: {
-    marginTop: 4,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
-  },
-  imageNotice: {
-    marginTop: 8,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  heroActionWrap: {
-    marginTop: 14,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 16,
-    marginBottom: 14,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  packTitleCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  packSourceHint: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 8,
-  },
-  matchingTitleCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  matchingSubtitle: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    marginTop: 1,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 2,
-  },
-  supportingEmpty: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    paddingVertical: 6,
-  },
-  packSelectorWrap: {
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  packSelectorPrompt: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    marginBottom: 8,
-  },
-  packChipsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  packChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    minWidth: 104,
-  },
-  packChipActive: {
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-    backgroundColor: '#EAF5F1',
-  },
-  packChipTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  packChipTitleActive: {
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  packChipPrice: {
-    marginTop: 2,
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  packChipPriceActive: {
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  selectedPackPanel: {
-    borderTopWidth: 1,
-    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
-    paddingTop: 4,
-  },
-  packWarningRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  packWarningText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-    fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
-    gap: 12,
-  },
-  lastRow: {
-    borderBottomWidth: 0,
-    paddingBottom: 2,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    flexShrink: 0,
-    maxWidth: '46%',
-  },
-  infoValue: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    textAlign: 'right',
-  },
-  linkText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-    flexShrink: 0,
-  },
-  altGroupWrap: {
-    marginBottom: 4,
-  },
-  comboNote: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    marginBottom: 6,
-  },
-  loadMoreAltWrap: {
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  viewGenericWrap: {
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  warningBox: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderRadius: CAREDOSE_RADIUS.field,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-    padding: 12,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  warningText: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-});

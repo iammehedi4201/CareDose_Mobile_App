@@ -9,6 +9,7 @@ export * from './FormFields';
 export * from './MedicineCard';
 export * from './MedicineFormThumbnail';
 export * from './Overlays';
+export * from './ScheduleModal';
 export * from './ScreenContainer';
 export * from './SearchInput';
 export * from './StatusBadge';

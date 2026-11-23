@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 
 export type StatusVariant =
@@ -119,33 +119,15 @@ export function StatusBadge({ variant, label }: StatusBadgeProps): React.JSX.Ele
       accessible
       accessibilityRole="text"
       accessibilityLabel={`Status: ${cfg.label}`}
-      style={[
-        styles.badge,
-        {
-          backgroundColor: cfg.backgroundColor,
-          borderColor: cfg.borderColor,
-        },
-      ]}
+      className="max-w-full shrink-0 self-start rounded-full border px-2.5 py-1"
+      style={{
+        backgroundColor: cfg.backgroundColor,
+        borderColor: cfg.borderColor,
+      }}
     >
-      <Text numberOfLines={1} style={[styles.text, { color: cfg.textColor }]}>
+      <Text numberOfLines={1} className="text-[11px] font-semibold" style={{ color: cfg.textColor }}>
         {cfg.label}
       </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    flexShrink: 0,
-  },
-  text: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-});

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   EmptyState,
@@ -18,7 +18,6 @@ import {
   formatMissingCatalogueValue,
   formatUnitOrPackPrice,
 } from '../src/features/catalogue/catalogue-helpers';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 export default function AlternativeBrandsScreen(): React.JSX.Element {
   const router = useRouter();
@@ -86,9 +85,13 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
       title="Alternative Brands"
       onBack={() => router.push('/profile')}
     >
-      <View style={styles.warningCard}>
-        <Text style={styles.warningTitle}>Pharmacist / Doctor Review Required</Text>
-        <Text style={styles.warningBody}>{warningNotice}</Text>
+      <View className="bg-[#FDF5E6] rounded-card border border-[#F3D9A4] p-3.5 mb-3">
+        <Text className="text-[13px] font-bold text-warning">
+          Pharmacist / Doctor Review Required
+        </Text>
+        <Text className="mt-[3px] text-[12px] text-main leading-[17px]">
+          {warningNotice}
+        </Text>
       </View>
 
       <SearchInput
@@ -98,11 +101,11 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
       />
 
       {loading ? (
-        <View style={styles.stateWrap}>
+        <View className="mt-3">
           <LoadingSkeleton rows={3} />
         </View>
       ) : errorMessage ? (
-        <View style={styles.stateWrap}>
+        <View className="mt-3">
           <ErrorState
             title="Could not load comparison groups"
             message={errorMessage}
@@ -119,11 +122,14 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
       ) : (
         <>
           {groups.map((group) => (
-            <View key={group.id} style={styles.groupCard}>
-              <View style={styles.groupHeader}>
-                <View style={styles.groupTitleCol}>
-                  <Text style={styles.groupGeneric}>{group.generic.name}</Text>
-                  <Text style={styles.groupMeta}>
+            <View
+              key={group.id}
+              className="bg-white rounded-card border border-border p-3.5 mt-3"
+            >
+              <View className="flex-row items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-border">
+                <View className="flex-1 min-w-0 pr-2">
+                  <Text className="text-[15px] font-bold text-main">{group.generic.name}</Text>
+                  <Text className="mt-0.5 text-[12px] text-[#5A706B]">
                     {group.strengthNorm} · {group.dosageFormNorm}
                     {group.isCombination ? ' · Combination' : ''}
                   </Text>
@@ -136,18 +142,17 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
                   key={brand.id}
                   accessibilityRole="button"
                   onPress={() => router.push(`/explore/brand/${brand.sourceId}`)}
-                  style={[
-                    styles.brandRow,
-                    idx === group.brands.length - 1 ? styles.lastBrandRow : null,
-                  ]}
+                  className={`flex-row items-center justify-between gap-2.5 py-2.5 ${
+                    idx === group.brands.length - 1 ? 'pb-0.5' : 'border-b border-border'
+                  }`}
                 >
-                  <View style={styles.brandInfoCol}>
-                    <Text style={styles.brandName}>{brand.name}</Text>
-                    <Text style={styles.brandMfr}>
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-[13px] font-semibold text-main">{brand.name}</Text>
+                    <Text className="mt-0.5 text-[11px] text-[#5A706B]">
                       {formatMissingCatalogueValue(brand.manufacturer)}
                     </Text>
                   </View>
-                  <Text style={styles.brandPrice}>
+                  <Text className="text-[12px] font-semibold text-primary shrink-0 text-right">
                     {formatUnitOrPackPrice(brand.primaryPack)}
                   </Text>
                 </Pressable>
@@ -156,7 +161,7 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
           ))}
 
           {hasMore && nextCursor ? (
-            <View style={styles.loadMoreWrap}>
+            <View className="mt-3 mb-2.5">
               <SecondaryButton
                 fullWidth
                 label={loadingMore ? 'Loading more...' : 'Load more groups'}
@@ -170,99 +175,3 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  warningCard: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-    padding: 14,
-    marginBottom: 12,
-  },
-  warningTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-  },
-  warningBody: {
-    marginTop: 3,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    lineHeight: 17,
-  },
-  stateWrap: {
-    marginTop: 12,
-  },
-  groupCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginTop: 12,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  groupTitleCol: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 8,
-  },
-  groupGeneric: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  groupMeta: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  lastBrandRow: {
-    borderBottomWidth: 0,
-    paddingBottom: 2,
-  },
-  brandInfoCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  brandName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  brandMfr: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  brandPrice: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-    flexShrink: 0,
-    textAlign: 'right',
-  },
-  loadMoreWrap: {
-    marginTop: 12,
-    marginBottom: 10,
-  },
-});

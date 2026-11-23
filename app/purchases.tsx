@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   BottomSheet,
@@ -12,7 +12,6 @@ import {
   SuccessToast,
   validateRequiredFields,
 } from '../src/components';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 interface PurchaseRecordItem {
   id: string;
@@ -90,27 +89,32 @@ export default function PurchaseHistoryScreen(): React.JSX.Element {
     >
       <SuccessToast message={toast} />
 
-      <View style={styles.summaryBanner}>
+      <View className="flex-row items-center justify-between flex-wrap gap-2.5 bg-mint rounded-card border border-[#C5E8D8] p-4 mb-3.5">
         <View>
-          <Text style={styles.summaryCount}>{purchases.length} records</Text>
-          <Text style={styles.summarySub}>Total recorded purchases</Text>
+          <Text className="text-[16px] font-bold text-main">{purchases.length} records</Text>
+          <Text className="mt-0.5 text-[12px] text-[#5A706B]">Total recorded purchases</Text>
         </View>
-        <Text style={styles.summaryTotal}>৳ {totalBdt}</Text>
+        <Text className="text-[20px] font-bold text-primary">৳ {totalBdt}</Text>
       </View>
 
       {purchases.map((item) => {
         const unitCost =
           item.units > 0 ? `৳${(item.amountBdt / item.units).toFixed(1)}/unit` : '';
         return (
-          <View key={item.id} style={styles.rowCard}>
-            <View style={styles.leftCol}>
-              <Text style={styles.medTitle}>{item.medicineName}</Text>
-              <Text style={styles.metaText}>
+          <View
+            key={item.id}
+            className="flex-row items-center justify-between gap-2.5 bg-white rounded-card border border-border p-3.5 mb-2.5"
+          >
+            <View className="flex-1 min-w-0 pr-1">
+              <Text className="text-[14px] font-semibold text-main">{item.medicineName}</Text>
+              <Text className="mt-[3px] text-[12px] text-[#5A706B]">
                 {item.date} · {item.packs} pack(s) · {item.units} units
                 {unitCost ? ` · ${unitCost}` : ''}
               </Text>
             </View>
-            <Text style={styles.priceText}>৳ {item.amountBdt}</Text>
+            <Text className="text-[15px] font-bold text-primary shrink-0">
+              ৳ {item.amountBdt}
+            </Text>
           </View>
         );
       })}
@@ -186,67 +190,3 @@ export default function PurchaseHistoryScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  summaryBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    padding: 16,
-    marginBottom: 14,
-  },
-  summaryCount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  summarySub: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  summaryTotal: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  rowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  leftCol: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 4,
-  },
-  medTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  metaText: {
-    marginTop: 3,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  priceText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-    flexShrink: 0,
-  },
-});

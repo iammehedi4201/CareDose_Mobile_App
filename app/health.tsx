@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   BottomSheet,
@@ -14,7 +14,6 @@ import {
   validateRequiredFields,
 } from '../src/components';
 import { useResponsiveLayout } from '../src/theme/responsive';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS } from '../src/theme/tokens';
 
 interface GlucoseEntry {
   id: string;
@@ -96,27 +95,32 @@ export default function HealthLogScreen(): React.JSX.Element {
       <SuccessToast message={toast} />
 
       {/* 7-Day Blood Glucose Bar Chart */}
-      <View style={[styles.chartCard, { padding: layout.cardPadding }]}>
-        <View style={styles.chartHeaderRow}>
-          <Text style={styles.chartTitle}>Last 7 glucose readings</Text>
-          <Text style={styles.unitTag}>{unit}</Text>
+      <View
+        className="bg-white rounded-card border border-border mb-4"
+        style={{ padding: layout.cardPadding }}
+      >
+        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2.5">
+          <Text className="text-[15px] font-semibold text-main shrink min-w-0">
+            Last 7 glucose readings
+          </Text>
+          <Text className="text-[11px] font-semibold text-[#5A706B] shrink-0">{unit}</Text>
         </View>
-        <View style={styles.barsRow}>
+        <View className="flex-row items-end justify-between h-[124px] pt-3">
           {chartPoints.map((pt) => {
             const barHeight = Math.max(18, Math.round((pt.value / maxVal) * 88));
             return (
-              <View key={pt.id} style={styles.barCol}>
-                <Text style={styles.barValue}>{pt.value}</Text>
+              <View key={pt.id} className="flex-1 min-w-0 px-[1px] items-center">
+                <Text className="text-[10px] font-semibold text-[#5A706B] mb-1">
+                  {pt.value}
+                </Text>
                 <View
-                  style={[
-                    styles.barFill,
-                    {
-                      height: barHeight,
-                      width: layout.isCompact ? 14 : 18,
-                    },
-                  ]}
+                  className="rounded-[6px] bg-primary"
+                  style={{
+                    height: barHeight,
+                    width: layout.isCompact ? 14 : 18,
+                  }}
                 />
-                <Text style={styles.barDate} numberOfLines={1}>
+                <Text className="mt-1.5 text-[10px] text-[#5A706B]" numberOfLines={1}>
                   {pt.date.slice(5)}
                 </Text>
               </View>
@@ -125,19 +129,24 @@ export default function HealthLogScreen(): React.JSX.Element {
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Glucose readings ({readings.length})</Text>
+      <Text className="text-[15px] font-semibold text-main mb-2.5">
+        Glucose readings ({readings.length})
+      </Text>
       {readings.map((r) => (
-        <View key={r.id} style={styles.readingRow}>
-          <View style={styles.readingTextCol}>
-            <Text style={styles.readingValue}>
+        <View
+          key={r.id}
+          className="flex-row items-center justify-between gap-2.5 bg-white rounded-card border border-border p-3.5 mb-2.5"
+        >
+          <View className="flex-1 min-w-0">
+            <Text className="text-[15px] font-bold text-main">
               {r.value} {r.unit}
             </Text>
-            <Text style={styles.readingMeta}>
+            <Text className="mt-0.5 text-[12px] text-[#5A706B]">
               {r.date} · {r.time}
             </Text>
           </View>
-          <View style={styles.contextPill}>
-            <Text style={styles.contextText}>{r.context}</Text>
+          <View className="bg-mint px-2.5 py-1 rounded-full">
+            <Text className="text-[11px] font-semibold text-primary">{r.context}</Text>
           </View>
         </View>
       ))}
@@ -217,107 +226,3 @@ export default function HealthLogScreen(): React.JSX.Element {
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  chartCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 16,
-    marginBottom: 16,
-  },
-  chartHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  chartTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  unitTag: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    flexShrink: 0,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    marginBottom: 10,
-  },
-  barsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: 124,
-    paddingTop: 12,
-  },
-  barCol: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 1,
-    alignItems: 'center',
-  },
-  barValue: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    marginBottom: 4,
-  },
-  barFill: {
-    width: 18,
-    borderRadius: 6,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  barDate: {
-    marginTop: 6,
-    fontSize: 10,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  readingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  readingTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  readingValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  readingMeta: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  contextPill: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  contextText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-});

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import {
@@ -36,7 +36,7 @@ import {
   StockEntryMode,
 } from '../features/medications/stock-calculator';
 import { getTodayLocalYmd } from '../features/schedule/dose-rules';
-import { CAREDOSE_EXTENDED_COLORS, CAREDOSE_RADIUS, MIN_TOUCH_TARGET } from '../theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 import { PrimaryButton, SecondaryButton } from './Buttons';
 import { DateField, FormCol, FormField, FormRow, SelectField, validateRequiredFields } from './FormFields';
 import { MedicineFormThumbnail } from './MedicineFormThumbnail';
@@ -817,14 +817,14 @@ export function AddMedicineModal({
       hideFooter={stage === 'success'}
     >
       {stage === 'search' ? (
-        <View style={styles.searchStage}>
+        <View className="pb-1.5">
           <SearchInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search brand or generic (e.g. Napa, Paracetamol)"
           />
 
-          <View style={styles.quickRow}>
+          <View className="my-2.5 flex-row flex-wrap gap-1.5">
             {QUICK_SEARCH_TERMS.map((term) => {
               const active = searchQuery.trim().toLowerCase() === term.toLowerCase();
               return (
@@ -832,13 +832,14 @@ export function AddMedicineModal({
                   key={term}
                   accessibilityRole="button"
                   onPress={() => setSearchQuery(term)}
-                  style={[styles.quickChip, active ? styles.quickChipActive : null]}
+                  className={`rounded-full border px-2.5 py-1.5 ${
+                    active ? 'border-primary bg-primary' : 'border-border bg-white'
+                  }`}
                 >
                   <Text
-                    style={[
-                      styles.quickChipText,
-                      active ? styles.quickChipTextActive : null,
-                    ]}
+                    className={`text-xs font-semibold ${
+                      active ? 'text-white' : 'text-main'
+                    }`}
                   >
                     {term}
                   </Text>
@@ -848,26 +849,28 @@ export function AddMedicineModal({
           </View>
 
           {searchOfflineNote ? (
-            <View style={styles.offlineNotice}>
+            <View className="mb-2 flex-row items-center gap-1.5 rounded-lg bg-[#FDF5E6] p-2">
               <Feather name="wifi-off" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
-              <Text style={styles.offlineNoticeText}>{searchOfflineNote}</Text>
+              <Text className="flex-1 text-[11px] font-semibold text-warning">
+                {searchOfflineNote}
+              </Text>
             </View>
           ) : null}
 
           {searching ? (
-            <View style={styles.loadingRow}>
+            <View className="flex-row items-center justify-center gap-2 py-5">
               <ActivityIndicator size="small" color={CAREDOSE_EXTENDED_COLORS.primary} />
-              <Text style={styles.loadingText}>Searching medicines...</Text>
+              <Text className="text-xs text-[#5A706B]">Searching medicines...</Text>
             </View>
           ) : searchResults.length === 0 ? (
-            <View style={styles.emptySearchBox}>
-              <Text style={styles.emptySearchTitle}>No matching medicine found</Text>
-              <Text style={styles.emptySearchSub}>
+            <View className="my-2 items-center rounded-field border border-border bg-background p-4">
+              <Text className="text-sm font-semibold text-main">No matching medicine found</Text>
+              <Text className="mt-1 text-center text-xs text-[#5A706B]">
                 Try another brand or generic name, or enter medicine details manually.
               </Text>
             </View>
           ) : (
-            <View style={styles.resultsList}>
+            <View className="gap-2">
               {searchResults.map((brand) => {
                 const packSummary = formatPackSummary(brand.primaryPack);
                 const priceSummary = formatUnitOrPackPrice(brand.primaryPack);
@@ -877,22 +880,22 @@ export function AddMedicineModal({
                     accessibilityRole="button"
                     accessibilityLabel={`Select ${brand.name}`}
                     onPress={() => void applyBrandSelection(brand)}
-                    style={styles.resultRow}
+                    className="min-h-[44px] flex-row items-center gap-2.5 rounded-field border border-border bg-white p-2.5"
                   >
                     <MedicineFormThumbnail
                       size="card"
                       dosageForm={brand.dosageForm}
                       imageUrl={brand.primaryImageUrl}
                     />
-                    <View style={styles.resultTextCol}>
-                      <Text style={styles.resultName} numberOfLines={1}>
+                    <View className="flex-1 min-w-0">
+                      <Text className="text-sm font-bold text-main" numberOfLines={1}>
                         {brand.name}
                       </Text>
-                      <Text style={styles.resultMeta} numberOfLines={1}>
+                      <Text className="mt-0.5 text-xs text-[#5A706B]" numberOfLines={1}>
                         {brand.generic?.name ? `${brand.generic.name} · ` : ''}
                         {brand.strength ?? 'Strength N/A'} · {brand.dosageForm ?? 'Medicine'}
                       </Text>
-                      <Text style={styles.resultSub} numberOfLines={1}>
+                      <Text className="mt-0.5 text-[11px] font-semibold text-primary-dark" numberOfLines={1}>
                         {packSummary} · {priceSummary}
                       </Text>
                     </View>
@@ -922,49 +925,51 @@ export function AddMedicineModal({
               const tabletInfo = extractPackInfo('Tablet', null, []);
               syncModeDefaults(tabletInfo, getDefaultStockMode(tabletInfo));
             }}
-            style={styles.manualSwitchBtn}
+            className="mt-3 min-h-[44px] flex-row items-center justify-center gap-2 rounded-field border border-[#C5E8D8] bg-mint px-3 py-2.5"
           >
             <Feather name="edit-3" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            <Text style={styles.manualSwitchText}>
+            <Text className="shrink text-center text-xs font-semibold text-primary">
               Can&apos;t find medicine? Enter details manually
             </Text>
           </Pressable>
         </View>
       ) : stage === 'success' && savedRecord ? (
-        <View style={styles.successStage}>
-          <View style={styles.successIconWrap}>
+        <View className="items-center py-2.5">
+          <View className="mb-3 h-[54px] w-[54px] items-center justify-center rounded-full border border-[#C5E8D8] bg-mint">
             <Feather name="check" size={26} color={CAREDOSE_EXTENDED_COLORS.primary} />
           </View>
-          <Text style={styles.successTitle}>Medicine added successfully.</Text>
-          <Text style={styles.successSub}>
+          <Text className="text-center text-[17px] font-bold text-main">
+            Medicine added successfully.
+          </Text>
+          <Text className="mt-1 mb-3.5 text-center text-xs leading-[18px] text-[#5A706B]">
             No schedule was created automatically. You can track doses anytime from schedules.
           </Text>
 
-          <View style={styles.successSummaryCard}>
-            <Text style={styles.successMedName}>{savedRecord.name}</Text>
-            <Text style={styles.successMedMeta}>
+          <View className="mb-4 w-full rounded-card border border-border bg-background p-3.5">
+            <Text className="text-[15px] font-bold text-main">{savedRecord.name}</Text>
+            <Text className="mt-0.5 text-xs text-[#5A706B]">
               {[savedRecord.genericName, savedRecord.strength, savedRecord.dosageForm]
                 .filter(Boolean)
                 .join(' · ')}
             </Text>
-            <View style={styles.successStockBadge}>
+            <View className="mt-2.5 flex-row items-center gap-1.5 self-start rounded-lg border border-[#C5E8D8] bg-mint px-2.5 py-2">
               <Feather name="package" size={14} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
-              <Text style={styles.successStockText}>
+              <Text className="text-xs font-bold text-primary-dark">
                 {savedSummaryText ?? `${savedRecord.stockRemaining} ${savedRecord.stockUnit}`}
               </Text>
             </View>
             {savedPaidPrice !== null ? (
-              <Text style={styles.successPriceNote}>
+              <Text className="mt-1.5 text-xs font-semibold text-[#5A706B]">
                 Recorded purchase paid: ৳{formatBdtCurrency(savedPaidPrice)}
               </Text>
             ) : savedEstimatedPrice !== null ? (
-              <Text style={styles.successPriceNote}>
+              <Text className="mt-1.5 text-xs font-semibold text-[#5A706B]">
                 Estimated stock value: ৳{formatBdtCurrency(savedEstimatedPrice)}
               </Text>
             ) : null}
           </View>
 
-          <View style={styles.successActionsCol}>
+          <View className="w-full gap-2.5">
             <PrimaryButton
               fullWidth
               label="Create a Dose Schedule"
@@ -989,40 +994,40 @@ export function AddMedicineModal({
       ) : (
         <View>
           {stage === 'configure' && selectedBrand ? (
-            <View style={styles.selectedCard}>
-              <View style={styles.selectedTopRow}>
+            <View className="mb-2.5 rounded-card border border-[#C5E8D8] bg-mint p-3">
+              <View className="flex-row items-center gap-3">
                 <MedicineFormThumbnail
                   size="card"
                   dosageForm={selectedBrand.dosageForm}
                   imageUrl={selectedBrand.primaryImageUrl}
                 />
-                <View style={styles.selectedInfoCol}>
-                  <View style={styles.selectedTitleRow}>
-                    <Text style={styles.selectedName} numberOfLines={2}>
+                <View className="flex-1 min-w-0">
+                  <View className="flex-row items-start justify-between gap-2">
+                    <Text className="flex-1 min-w-0 text-[15px] font-bold text-main" numberOfLines={2}>
                       {selectedBrand.name}
                     </Text>
                     <Pressable
                       accessibilityRole="button"
                       onPress={handleChangeMedicine}
-                      style={styles.changeBtn}
+                      className="rounded-full border border-border bg-white px-2.5 py-1"
                     >
-                      <Text style={styles.changeBtnText}>Change</Text>
+                      <Text className="text-[11px] font-semibold text-primary">Change</Text>
                     </Pressable>
                   </View>
-                  <Text style={styles.selectedMeta}>
+                  <Text className="mt-0.5 text-xs text-[#5A706B]">
                     {selectedBrand.generic?.name ?? 'Generic: Not available'}
                   </Text>
-                  <Text style={styles.selectedMeta}>
+                  <Text className="mt-0.5 text-xs text-[#5A706B]">
                     {(selectedBrand.strength ?? 'Strength: N/A')} ·{' '}
                     {selectedBrand.dosageForm ?? 'Form: N/A'}
                   </Text>
                   {selectedBrand.manufacturer ? (
-                    <Text style={styles.selectedMfr} numberOfLines={1}>
+                    <Text className="mt-0.5 text-[11px] text-[#7D928D]" numberOfLines={1}>
                       {selectedBrand.manufacturer}
                     </Text>
                   ) : null}
                   {selectedBrandBadge ? (
-                    <View style={styles.selectedBadgeRow}>
+                    <View className="mt-1.5 items-start">
                       <StatusBadge
                         variant={selectedBrandBadge.variant}
                         label={selectedBrandBadge.label}
@@ -1033,16 +1038,16 @@ export function AddMedicineModal({
               </View>
 
               {loadingBrandDetail ? (
-                <View style={styles.packLoadingRow}>
+                <View className="mt-2 flex-row items-center gap-1.5">
                   <ActivityIndicator size="small" color={CAREDOSE_EXTENDED_COLORS.primary} />
-                  <Text style={styles.packLoadingText}>Checking packaging options...</Text>
+                  <Text className="text-[11px] text-[#5A706B]">Checking packaging options...</Text>
                 </View>
               ) : availablePacks.length > 1 ? (
-                <View style={styles.packsSection}>
-                  <Text style={styles.packsLabel}>
+                <View className="mt-2.5 border-t border-[#C5E8D8] pt-2.5">
+                  <Text className="mb-1.5 text-[11px] font-bold text-primary-dark">
                     Package size ({availablePacks.length} options)
                   </Text>
-                  <View style={styles.packChipsWrap}>
+                  <View className="flex-row flex-wrap gap-1.5">
                     {availablePacks.map((pk) => {
                       const active = selectedPack?.id === pk.id;
                       const label = `${pk.packQuantity ?? (pk.packUnits ? `${pk.packUnits}'s pack` : 'Standard')}${
@@ -1053,13 +1058,16 @@ export function AddMedicineModal({
                           key={pk.id}
                           accessibilityRole="button"
                           onPress={() => handleSelectPack(pk)}
-                          style={[styles.packChip, active ? styles.packChipActive : null]}
+                          className={`rounded-full border px-2.5 py-1.5 ${
+                            active
+                              ? 'border-primary bg-primary'
+                              : 'border-[#C5E8D8] bg-white'
+                          }`}
                         >
                           <Text
-                            style={[
-                              styles.packChipText,
-                              active ? styles.packChipTextActive : null,
-                            ]}
+                            className={`text-[11px] font-semibold ${
+                              active ? 'text-white' : 'text-main'
+                            }`}
                           >
                             {label}
                           </Text>
@@ -1069,13 +1077,13 @@ export function AddMedicineModal({
                   </View>
                 </View>
               ) : selectedPack ? (
-                <View style={styles.singlePackBox}>
-                  <Text style={styles.singlePackHint}>
+                <View className="mt-2 border-t border-[#C5E8D8] pt-2">
+                  <Text className="text-[11px] font-semibold text-primary-dark">
                     {formatPackSummary(selectedPack)}
                     {selectedUnitDetails ? ` · ${selectedUnitDetails.value}` : ''}
                   </Text>
                   {selectedPack.packPrice || selectedPack.unitPrice ? (
-                    <Text style={styles.refPriceCaption}>
+                    <Text className="mt-0.5 text-[11px] text-[#5A706B]">
                       Catalogue ref: {formatUnitOrPackPrice(selectedPack)}
                     </Text>
                   ) : null}
@@ -1083,15 +1091,15 @@ export function AddMedicineModal({
               ) : null}
             </View>
           ) : (
-            <View style={styles.manualCard}>
-              <View style={styles.manualHeaderRow}>
-                <Text style={styles.manualHeaderTitle}>Medicine details</Text>
+            <View className="mb-3 rounded-card border border-border bg-background p-3">
+              <View className="mb-2 flex-row items-center justify-between">
+                <Text className="text-[13px] font-bold text-main">Medicine details</Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={handleChangeMedicine}
-                  style={styles.changeBtn}
+                  className="rounded-full border border-border bg-white px-2.5 py-1"
                 >
-                  <Text style={styles.changeBtnText}>Search DB</Text>
+                  <Text className="text-[11px] font-semibold text-primary">Search DB</Text>
                 </Pressable>
               </View>
               <FormField
@@ -1134,25 +1142,29 @@ export function AddMedicineModal({
           )}
 
           {/* Simplified Stock Entry Section */}
-          <View style={styles.sectionBox}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>How much do you currently have?</Text>
-              <View style={styles.unitTag}>
-                <Text style={styles.unitTagText}>
+          <View className="mb-2.5 rounded-card border border-border bg-white p-3">
+            <View className="mb-2 flex-row items-center justify-between gap-2">
+              <Text className="flex-1 min-w-0 shrink text-[13px] font-bold text-main">
+                How much do you currently have?
+              </Text>
+              <View className="shrink-0 rounded-full bg-mint px-2 py-0.5">
+                <Text className="text-[11px] font-bold text-primary-dark">
                   {formatUnitNounCapitalized(enteredUnitDisplay)}
                 </Text>
               </View>
             </View>
 
             {missingPackagingBannerText ? (
-              <View style={styles.infoNoticeBox}>
+              <View className="mb-2.5 flex-row items-start gap-1.5 rounded-lg border border-border bg-background p-2">
                 <Feather name="info" size={13} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
-                <Text style={styles.infoNoticeText}>{missingPackagingBannerText}</Text>
+                <Text className="flex-1 text-[11px] leading-4 text-[#5A706B]">
+                  {missingPackagingBannerText}
+                </Text>
               </View>
             ) : null}
 
             {packInfo.strategy === 'injection' && !packInfo.containerUnit ? (
-              <View style={styles.modeChipsWrap}>
+              <View className="mb-2.5 flex-row flex-wrap gap-1.5">
                 {INJECTION_UNIT_OPTIONS.map((opt) => {
                   const active = injectionContainerUnit === opt.value;
                   return (
@@ -1160,13 +1172,14 @@ export function AddMedicineModal({
                       key={opt.value}
                       accessibilityRole="button"
                       onPress={() => setInjectionContainerUnit(opt.value)}
-                      style={[styles.modeChip, active ? styles.modeChipActive : null]}
+                      className={`rounded-full border px-2.5 py-1.5 ${
+                        active ? 'border-primary bg-primary' : 'border-border bg-background'
+                      }`}
                     >
                       <Text
-                        style={[
-                          styles.modeChipText,
-                          active ? styles.modeChipTextActive : null,
-                        ]}
+                        className={`text-xs font-semibold ${
+                          active ? 'text-white' : 'text-main'
+                        }`}
                       >
                         {opt.label}
                       </Text>
@@ -1179,27 +1192,29 @@ export function AddMedicineModal({
             {renderPrimaryStockInput()}
 
             {stockCalc.calculationSummary && primaryQty.trim().length > 0 && stockCalc.isValid ? (
-              <View style={styles.calculatedStockPill}>
-                <View style={styles.calculatedSummaryHeader}>
+              <View className="mt-1 gap-1.5 rounded-lg border border-[#C5E8D8] bg-mint px-2.5 py-2">
+                <View className="flex-row items-center gap-1.5">
                   <Feather name="check-circle" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
-                  <Text style={styles.calculatedStockText}>{stockCalc.calculationSummary}</Text>
+                  <Text className="flex-1 text-xs font-bold text-primary-dark">
+                    {stockCalc.calculationSummary}
+                  </Text>
                 </View>
                 {stockCalc.calculatedTotalPrice !== null ? (
-                  <View style={styles.calculatedPriceRow}>
-                    <View style={styles.calculatedPriceLeft}>
+                  <View className="flex-row flex-wrap items-center justify-between gap-2 border-t border-[#D5EFE3] pt-1.5">
+                    <View className="flex-1 min-w-0 flex-row items-center gap-1.5">
                       <Feather name="tag" size={13} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
-                      <Text style={styles.calculatedPriceText}>
+                      <Text className="shrink text-xs font-bold text-main">
                         Estimated price: ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
                       </Text>
                     </View>
                     {stockCalc.referenceUnitPriceText !== 'Not listed' ? (
-                      <Text style={styles.calculatedRateText}>
+                      <Text className="shrink-0 text-[11px] font-semibold text-[#5A706B]">
                         {stockCalc.referenceUnitPriceText}
                       </Text>
                     ) : null}
                   </View>
                 ) : stage === 'configure' ? (
-                  <Text style={styles.calculatedPriceMissingText}>
+                  <Text className="pl-5 text-[11px] text-[#5A706B]">
                     Catalogue reference price unavailable
                   </Text>
                 ) : null}
@@ -1207,20 +1222,20 @@ export function AddMedicineModal({
             ) : null}
 
             {availableModes.length > 1 ? (
-              <View style={styles.unitToggleArea}>
+              <View className="mt-2.5">
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setShowUnitPicker((v) => !v)}
-                  style={styles.changeUnitLinkBtn}
+                  className="mb-1 flex-row items-center gap-1.5 self-start py-1"
                 >
                   <Feather name="sliders" size={12} color={CAREDOSE_EXTENDED_COLORS.primary} />
-                  <Text style={styles.changeUnitLinkText}>
+                  <Text className="text-xs font-semibold text-primary">
                     {showUnitPicker ? 'Hide unit options' : 'Change quantity unit'}
                   </Text>
                 </Pressable>
 
                 {showUnitPicker ? (
-                  <View style={styles.modeChipsWrap}>
+                  <View className="mb-2.5 flex-row flex-wrap gap-1.5">
                     {availableModes.map((m) => {
                       const active = stockMode === m.mode;
                       return (
@@ -1228,13 +1243,14 @@ export function AddMedicineModal({
                           key={m.mode}
                           accessibilityRole="button"
                           onPress={() => handleSelectMode(m.mode)}
-                          style={[styles.modeChip, active ? styles.modeChipActive : null]}
+                          className={`rounded-full border px-2.5 py-1.5 ${
+                            active ? 'border-primary bg-primary' : 'border-border bg-background'
+                          }`}
                         >
                           <Text
-                            style={[
-                              styles.modeChipText,
-                              active ? styles.modeChipTextActive : null,
-                            ]}
+                            className={`text-xs font-semibold ${
+                              active ? 'text-white' : 'text-main'
+                            }`}
                           >
                             {m.label}
                           </Text>
@@ -1248,21 +1264,23 @@ export function AddMedicineModal({
           </View>
 
           {/* Optional Collapsible Purchase Details (hidden by default) */}
-          <View style={styles.purchaseCard}>
+          <View className="mb-2.5 rounded-card border border-border bg-white p-3">
             <Pressable
               accessibilityRole="button"
               onPress={() => setShowPurchaseDetails((prev) => !prev)}
-              style={styles.purchaseToggleRow}
+              className="flex-row items-center justify-between gap-2.5 min-h-[36px]"
             >
-              <View style={styles.purchaseToggleLeft}>
+              <View className="flex-1 min-w-0 flex-row items-center gap-2">
                 <Feather
                   name={showPurchaseDetails ? 'chevron-up' : 'plus-circle'}
                   size={15}
                   color={CAREDOSE_EXTENDED_COLORS.primary}
                 />
-                <Text style={styles.purchaseToggleText}>Add purchase details (optional)</Text>
+                <Text className="flex-1 min-w-0 shrink text-[13px] font-semibold text-primary-dark">
+                  Add purchase details (optional)
+                </Text>
               </View>
-              <Text style={styles.purchaseToggleHint}>
+              <Text className="shrink-0 text-right text-[11px] font-semibold text-[#7D928D]">
                 {showPurchaseDetails
                   ? 'Hide'
                   : stockCalc.calculatedTotalPrice !== null
@@ -1272,10 +1290,10 @@ export function AddMedicineModal({
             </Pressable>
 
             {showPurchaseDetails ? (
-              <View style={styles.purchaseFieldsWrap}>
+              <View className="mt-2.5 border-t border-border pt-2.5">
                 {stockCalc.calculatedTotalPrice !== null ? (
-                  <View style={styles.purchaseEstimateRow}>
-                    <Text style={styles.purchaseEstimateText}>
+                  <View className="mb-2.5 flex-row flex-wrap items-center justify-between gap-2 rounded-lg border border-[#C5E8D8] bg-mint px-2.5 py-1.5">
+                    <Text className="flex-1 min-w-0 shrink text-[11px] font-semibold text-primary-dark">
                       Calculated catalogue price: ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
                     </Text>
                     {purchaseAmount.trim() !== formatBdtCurrency(stockCalc.calculatedTotalPrice) ? (
@@ -1287,9 +1305,9 @@ export function AddMedicineModal({
                             setErrors((e) => ({ ...e, purchaseAmount: '' }));
                           }
                         }}
-                        style={styles.useEstimateChip}
+                        className="shrink-0 rounded-full bg-primary px-2.5 py-1"
                       >
-                        <Text style={styles.useEstimateChipText}>
+                        <Text className="text-[11px] font-bold text-white">
                           Use ৳{formatBdtCurrency(stockCalc.calculatedTotalPrice)}
                         </Text>
                       </Pressable>
@@ -1328,7 +1346,7 @@ export function AddMedicineModal({
                   onChangeText={setPurchaseVendor}
                   placeholder="Optional (e.g. Lazz Pharma)"
                 />
-                <Text style={styles.purchaseDisclaimer}>
+                <Text className="mt-0.5 text-[11px] text-[#5A706B]">
                   Records only what you paid. Catalogue reference prices are never copied automatically.
                 </Text>
               </View>
@@ -1336,9 +1354,9 @@ export function AddMedicineModal({
           </View>
 
           {saveError ? (
-            <View style={styles.errorBanner}>
+            <View className="mb-2 flex-row items-center gap-2 rounded-lg border border-[#F2C6C6] bg-[#FDECEC] p-2.5">
               <Feather name="alert-circle" size={14} color={CAREDOSE_EXTENDED_COLORS.error} />
-              <Text style={styles.errorBannerText}>{saveError}</Text>
+              <Text className="flex-1 text-xs font-semibold text-error">{saveError}</Text>
             </View>
           ) : null}
         </View>
@@ -1346,599 +1364,3 @@ export function AddMedicineModal({
     </BottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  searchStage: {
-    paddingBottom: 6,
-  },
-  quickRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  quickChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  quickChipActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  quickChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  quickChipTextActive: {
-    color: '#FFFFFF',
-  },
-  offlineNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    marginBottom: 8,
-  },
-  offlineNoticeText: {
-    flex: 1,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-    fontWeight: '600',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 22,
-  },
-  loadingText: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  emptySearchBox: {
-    padding: 16,
-    borderRadius: CAREDOSE_RADIUS.field,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  emptySearchTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  emptySearchSub: {
-    marginTop: 4,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    textAlign: 'center',
-  },
-  resultsList: {
-    gap: 8,
-  },
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 10,
-    borderRadius: CAREDOSE_RADIUS.field,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    minHeight: MIN_TOUCH_TARGET,
-  },
-  resultTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  resultName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  resultMeta: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  resultSub: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-    fontWeight: '600',
-  },
-  manualSwitchBtn: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: CAREDOSE_RADIUS.field,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: MIN_TOUCH_TARGET,
-  },
-  manualSwitchText: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-    textAlign: 'center',
-  },
-  selectedCard: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    padding: 12,
-    marginBottom: 10,
-  },
-  selectedTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  selectedInfoCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  selectedTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  selectedName: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  selectedMeta: {
-    marginTop: 2,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  selectedMfr: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
-  },
-  changeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  changeBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  packLoadingRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  packLoadingText: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  packsSection: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#C5E8D8',
-  },
-  packsLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-    marginBottom: 6,
-  },
-  packChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  packChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-  },
-  packChipActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  packChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  packChipTextActive: {
-    color: '#FFFFFF',
-  },
-  singlePackBox: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#C5E8D8',
-  },
-  singlePackHint: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  refPriceCaption: {
-    marginTop: 2,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  selectedBadgeRow: {
-    marginTop: 6,
-    alignItems: 'flex-start',
-  },
-  unitToggleArea: {
-    marginTop: 10,
-  },
-  changeUnitLinkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    marginBottom: 4,
-  },
-  changeUnitLinkText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  purchaseCard: {
-    borderRadius: CAREDOSE_RADIUS.card,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 12,
-    marginBottom: 10,
-  },
-  purchaseToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    minHeight: 36,
-  },
-  purchaseToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    minWidth: 0,
-  },
-  purchaseToggleText: {
-    flex: 1,
-    flexShrink: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  purchaseToggleHint: {
-    flexShrink: 0,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.mutedText,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  purchaseFieldsWrap: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  purchaseDisclaimer: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    marginTop: 2,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.errorSurface,
-    borderWidth: 1,
-    borderColor: '#F2C6C6',
-    marginBottom: 8,
-  },
-  errorBannerText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.error,
-  },
-  successStage: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  successIconWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 999,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  successTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-    textAlign: 'center',
-  },
-  successSub: {
-    marginTop: 4,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  successSummaryCard: {
-    width: '100%',
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderRadius: CAREDOSE_RADIUS.card,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    padding: 14,
-    marginBottom: 16,
-  },
-  successMedName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  successMedMeta: {
-    marginTop: 3,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  successStockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    alignSelf: 'flex-start',
-  },
-  successStockText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  successActionsCol: {
-    width: '100%',
-    gap: 10,
-  },
-  manualCard: {
-    padding: 12,
-    borderRadius: CAREDOSE_RADIUS.card,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    marginBottom: 12,
-  },
-  manualHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  manualHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  sectionBox: {
-    padding: 12,
-    borderRadius: CAREDOSE_RADIUS.card,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    marginBottom: 10,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 8,
-  },
-  sectionHeading: {
-    flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  unitTag: {
-    flexShrink: 0,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-  },
-  unitTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  modeChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10,
-  },
-  modeChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-  },
-  modeChipActive: {
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-    borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  modeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  modeChipTextActive: {
-    color: '#FFFFFF',
-  },
-  infoNoticeBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    borderWidth: 1,
-    borderColor: CAREDOSE_EXTENDED_COLORS.border,
-    marginBottom: 10,
-  },
-  infoNoticeText: {
-    flex: 1,
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    lineHeight: 16,
-  },
-  calculatedStockPill: {
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    marginTop: 4,
-  },
-  calculatedSummaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  calculatedStockText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  calculatedPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#D5EFE3',
-  },
-  calculatedPriceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-  },
-  calculatedPriceText: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  calculatedRateText: {
-    flexShrink: 0,
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-  calculatedPriceMissingText: {
-    fontSize: 11,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    paddingLeft: 20,
-  },
-  purchaseEstimateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    borderWidth: 1,
-    borderColor: '#C5E8D8',
-    marginBottom: 10,
-  },
-  purchaseEstimateText: {
-    flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
-    fontSize: 11,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.primaryDark,
-  },
-  useEstimateChip: {
-    flexShrink: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-  },
-  useEstimateChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  successPriceNote: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: '600',
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-  },
-});

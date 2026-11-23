@@ -251,13 +251,12 @@ describe('CareDose Simplified Add Medicine Flow — End-to-End Domain Rules', ()
     expect(modalSource).toContain('Create a Dose Schedule');
     expect(modalSource).toContain('Go to My Medicines');
 
-    // Responsive flex guards on narrow screens (no overlapping text between rows/badges)
-    expect(modalSource).toMatch(/purchaseToggleRow:\s*\{[^}]*gap:\s*10/);
-    expect(modalSource).toMatch(/purchaseToggleLeft:\s*\{[^}]*minWidth:\s*0/);
-    expect(modalSource).toMatch(/purchaseToggleText:\s*\{[^}]*flexShrink:\s*1/);
-    expect(modalSource).toMatch(/sectionHeading:\s*\{[^}]*flexShrink:\s*1/);
-    expect(modalSource).toMatch(/calculatedPriceRow:\s*\{[^}]*flexWrap:\s*'wrap'/);
-    expect(modalSource).toMatch(/purchaseEstimateRow:\s*\{[^}]*flexWrap:\s*'wrap'/);
+    // Responsive NativeWind layout guards on narrow screens (no overlapping text between rows/badges)
+    expect(modalSource).not.toContain('StyleSheet.create');
+    expect(modalSource).toContain('className=');
+    expect(modalSource).toContain('gap-2.5 min-h-[36px]');
+    expect(modalSource).toContain('min-w-0 shrink');
+    expect(modalSource).toContain('flex-wrap');
 
     // Removed old clutter fields / switches from initial add form
     expect(modalSource).not.toContain('Personal instructions');

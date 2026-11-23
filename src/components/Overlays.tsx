@@ -5,18 +5,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../theme/responsive';
-import {
-  CAREDOSE_EXTENDED_COLORS,
-  CAREDOSE_RADIUS,
-  MIN_TOUCH_TARGET,
-} from '../theme/tokens';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 import { DestructiveButton, PrimaryButton, SecondaryButton } from './Buttons';
 
 export interface BottomSheetProps {
@@ -63,32 +58,28 @@ export function BottomSheet({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
+        className="flex-1 bg-[rgba(24,49,45,0.48)] justify-end"
       >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close dialog"
-          style={styles.backdropDismiss}
+          className="flex-1"
           onPress={submitLoading ? undefined : onClose}
         />
 
         <View
-          style={[
-            styles.sheetContainer,
-            {
-              paddingHorizontal: layout.modalHorizontalPadding,
-              paddingBottom: Math.max(20, insets.bottom + 12),
-              maxWidth: layout.modalMaxWidth,
-              alignSelf: 'center',
-              width: '100%',
-            },
-          ]}
+          className="bg-white rounded-t-[22px] pt-2.5 max-h-[88%] self-center w-full"
+          style={{
+            paddingHorizontal: layout.modalHorizontalPadding,
+            paddingBottom: Math.max(20, insets.bottom + 12),
+            maxWidth: layout.modalMaxWidth,
+          }}
         >
-          <View style={styles.handle} />
+          <View className="w-10 h-1 rounded-[2px] bg-border self-center mb-3" />
 
-          <View style={styles.headerRow}>
+          <View className="flex-row items-center justify-between gap-2.5">
             {iconName ? (
-              <View style={styles.headerIconBadge}>
+              <View className="w-[34px] h-[34px] rounded-[10px] bg-mint items-center justify-center">
                 <Feather
                   name={iconName}
                   size={17}
@@ -96,16 +87,20 @@ export function BottomSheet({
                 />
               </View>
             ) : null}
-            <View style={styles.headerTextCol}>
-              <Text style={styles.sheetTitle}>{title}</Text>
-              {subtitle ? <Text style={styles.sheetSubtitle}>{subtitle}</Text> : null}
+            <View className="flex-1 min-w-0">
+              <Text className="text-[17px] font-bold text-main">{title}</Text>
+              {subtitle ? (
+                <Text className="mt-[3px] text-[12px] text-[#5A706B] leading-[17px]">
+                  {subtitle}
+                </Text>
+              ) : null}
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close modal"
               disabled={submitLoading}
               onPress={onClose}
-              style={styles.closeBtn}
+              className="w-9 h-9 rounded-full bg-background items-center justify-center"
             >
               <Feather
                 name="x"
@@ -116,26 +111,28 @@ export function BottomSheet({
           </View>
 
           <ScrollView
-            style={styles.bodyScroll}
-            contentContainerStyle={styles.bodyContent}
+            className="mt-3.5"
+            contentContainerStyle={{ paddingBottom: 8 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             {children}
             {warningNote ? (
-              <View style={styles.warningBox}>
-                <Text style={styles.warningText}>{warningNote}</Text>
+              <View className="mt-2 p-3 rounded-field bg-[#FDF5E6] border border-[#F3D9A4]">
+                <Text className="text-[12px] text-warning font-semibold leading-[17px]">
+                  {warningNote}
+                </Text>
               </View>
             ) : null}
           </ScrollView>
 
           {!hideFooter ? (
-            <View style={styles.footerRow}>
+            <View className="mt-3.5 pt-3 border-t border-border flex-row gap-2.5">
               <SecondaryButton
                 label={cancelLabel}
                 onPress={onClose}
                 disabled={submitLoading}
-                style={styles.footerBtn}
+                className="flex-1"
               />
               {onSubmit ? (
                 <PrimaryButton
@@ -143,7 +140,7 @@ export function BottomSheet({
                   onPress={onSubmit}
                   disabled={submitDisabled}
                   loading={submitLoading}
-                  style={styles.footerBtn}
+                  className="flex-1"
                 />
               ) : null}
             </View>
@@ -190,56 +187,56 @@ export function ConfirmDialog({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={styles.backdrop}>
+      <View className="flex-1 bg-[rgba(24,49,45,0.48)] justify-end">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close confirmation"
-          style={styles.backdropDismiss}
+          className="flex-1"
           onPress={loading ? undefined : onCancel}
         />
 
         <View
-          style={[
-            styles.sheetContainer,
-            {
-              paddingHorizontal: layout.modalHorizontalPadding,
-              paddingBottom: Math.max(20, insets.bottom + 12),
-              maxWidth: layout.modalMaxWidth,
-              alignSelf: 'center',
-              width: '100%',
-            },
-          ]}
+          className="bg-white rounded-t-[22px] pt-2.5 max-h-[88%] self-center w-full"
+          style={{
+            paddingHorizontal: layout.modalHorizontalPadding,
+            paddingBottom: Math.max(20, insets.bottom + 12),
+            maxWidth: layout.modalMaxWidth,
+          }}
         >
-          <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <Text style={styles.sheetSubtitle}>{description}</Text>
+          <View className="w-10 h-1 rounded-[2px] bg-border self-center mb-3" />
+          <Text className="text-[17px] font-bold text-main">{title}</Text>
+          <Text className="mt-[3px] text-[12px] text-[#5A706B] leading-[17px]">
+            {description}
+          </Text>
 
           {warningNote ? (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>{warningNote}</Text>
+            <View className="mt-2 p-3 rounded-field bg-[#FDF5E6] border border-[#F3D9A4]">
+              <Text className="text-[12px] text-warning font-semibold leading-[17px]">
+                {warningNote}
+              </Text>
             </View>
           ) : null}
 
-          <View style={styles.footerRow}>
+          <View className="mt-3.5 pt-3 border-t border-border flex-row gap-2.5">
             <SecondaryButton
               label={cancelLabel}
               onPress={onCancel}
               disabled={loading}
-              style={styles.footerBtn}
+              className="flex-1"
             />
             {destructive ? (
               <DestructiveButton
                 label={confirmLabel}
                 onPress={onConfirm}
                 loading={loading}
-                style={styles.footerBtn}
+                className="flex-1"
               />
             ) : (
               <PrimaryButton
                 label={confirmLabel}
                 onPress={onConfirm}
                 loading={loading}
-                style={styles.footerBtn}
+                className="flex-1"
               />
             )}
           </View>
@@ -248,98 +245,3 @@ export function ConfirmDialog({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(24, 49, 45, 0.48)',
-    justifyContent: 'flex-end',
-  },
-  backdropDismiss: {
-    flex: 1,
-  },
-  sheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    maxHeight: '88%',
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.border,
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  headerIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  closeBtn: {
-    width: MIN_TOUCH_TARGET - 8,
-    height: MIN_TOUCH_TARGET - 8,
-    borderRadius: 18,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: CAREDOSE_EXTENDED_COLORS.mainText,
-  },
-  sheetSubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.secondaryText,
-    lineHeight: 17,
-  },
-  bodyScroll: {
-    marginTop: 14,
-  },
-  bodyContent: {
-    paddingBottom: 8,
-  },
-  warningBox: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: CAREDOSE_RADIUS.field,
-    backgroundColor: CAREDOSE_EXTENDED_COLORS.warningSurface,
-    borderWidth: 1,
-    borderColor: '#F3D9A4',
-  },
-  warningText: {
-    fontSize: 12,
-    color: CAREDOSE_EXTENDED_COLORS.warning,
-    fontWeight: '600',
-    lineHeight: 17,
-  },
-  footerRow: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: CAREDOSE_EXTENDED_COLORS.border,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  footerBtn: {
-    flex: 1,
-  },
-});
