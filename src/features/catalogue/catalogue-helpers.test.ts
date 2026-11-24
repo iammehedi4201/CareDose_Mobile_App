@@ -174,6 +174,6 @@ describe('Phase 4 — Mobile Catalogue Formatting & Safety Helpers', () => {
         { ...basePack, packQuantity: "5's pack", packUnits: 5 },
         'Nebuliser Solution',
       ),
-    ).toEqual({ label: 'Pack quantity', value: '5 respules / ampoules per pack' });
+    ).toEqual({ label: 'Pack quantity', value: '5 respules per pack' });
   });
 });

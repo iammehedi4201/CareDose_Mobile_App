@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import {
@@ -39,7 +39,7 @@ import { getTodayLocalYmd } from '../features/schedule/dose-rules';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 import { PrimaryButton, SecondaryButton } from './Buttons';
 import { DateField, FormCol, FormField, FormRow, SelectField, validateRequiredFields } from './FormFields';
-import { MedicineFormThumbnail } from './MedicineFormThumbnail';
+import { formatSimplifiedDosageForm, MedicineFormThumbnail } from './MedicineFormThumbnail';
 import { BottomSheet } from './Overlays';
 import { SearchInput } from './SearchInput';
 import { StatusBadge } from './StatusBadge';
@@ -201,6 +201,9 @@ export function AddMedicineModal({
       brand: CatalogueBrandSummaryDto | CatalogueBrandDetailDto,
       preferredPackId: string | null = null,
     ) => {
+      if (typeof Keyboard?.dismiss === 'function') {
+        Keyboard.dismiss();
+      }
       const selReqId = ++selectionReqIdRef.current;
       const initialPacks = resolveBrandPacks(
         brand,
@@ -592,9 +595,10 @@ export function AddMedicineModal({
     }
 
     if (stockMode === 'packs') {
+      const packNoun = packInfo.wholePackNoun === 'bottle' ? 'bottle' : 'pack';
       return (
         <FormField
-          label="Number of packs"
+          label={packNoun === 'bottle' ? 'Number of bottles' : 'Number of packs'}
           value={primaryQty}
           onChangeText={(txt) => {
             setPrimaryQty(txt);
@@ -606,7 +610,7 @@ export function AddMedicineModal({
           errorMessage={errors.primaryQty || undefined}
           helperText={
             packInfo.packTotalUnits
-              ? `1 pack = ${packInfo.packTotalUnits} ${packInfo.baseUnit}`
+              ? `1 ${packNoun} = ${packInfo.packTotalUnits} ${packInfo.baseUnit}`
               : undefined
           }
         />
@@ -782,11 +786,15 @@ export function AddMedicineModal({
     stage === 'configure' && selectedBrand
       ? resolvePackQuantityUnit(selectedPack, selectedBrand.dosageForm, availablePacks)
       : null;
-  const enteredUnitDisplay = getEnteredQuantityUnit({
+  const rawEnteredUnitDisplay = getEnteredQuantityUnit({
     mode: stockMode,
     baseUnit: packInfo.baseUnit,
     containerUnit: effectiveContainerUnit,
   });
+  const enteredUnitDisplay =
+    stockMode === 'packs' && packInfo.wholePackNoun === 'bottle'
+      ? 'bottles'
+      : rawEnteredUnitDisplay;
   const missingPackagingBannerText =
     stage === 'configure' &&
     (!packInfo.hasReliableDefaultPackaging || Boolean(stockCalc.missingPackagingNotice))
@@ -815,38 +823,44 @@ export function AddMedicineModal({
       submitDisabled={isSaveDisabled}
       submitLoading={saving}
       hideFooter={stage === 'success'}
-    >
-      {stage === 'search' ? (
-        <View className="pb-1.5">
+      scrollResetKey={stage}
+      pinnedHeader={
+        stage === 'search' ? (
           <SearchInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search brand or generic (e.g. Napa, Paracetamol)"
           />
-
-          <View className="my-2.5 flex-row flex-wrap gap-1.5">
-            {QUICK_SEARCH_TERMS.map((term) => {
-              const active = searchQuery.trim().toLowerCase() === term.toLowerCase();
-              return (
-                <Pressable
-                  key={term}
-                  accessibilityRole="button"
-                  onPress={() => setSearchQuery(term)}
-                  className={`rounded-full border px-2.5 py-1.5 ${
-                    active ? 'border-primary bg-primary' : 'border-border bg-white'
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-semibold ${
-                      active ? 'text-white' : 'text-main'
+        ) : undefined
+      }
+    >
+      {stage === 'search' ? (
+        <View className="pb-1.5">
+          {searchQuery.trim().length === 0 ? (
+            <View className="mb-2.5 flex-row flex-wrap gap-1.5">
+              {QUICK_SEARCH_TERMS.map((term) => {
+                const active = searchQuery.trim().toLowerCase() === term.toLowerCase();
+                return (
+                  <Pressable
+                    key={term}
+                    accessibilityRole="button"
+                    onPress={() => setSearchQuery(term)}
+                    className={`rounded-full border px-2.5 py-1.5 ${
+                      active ? 'border-primary bg-primary' : 'border-border bg-white'
                     }`}
                   >
-                    {term}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Text
+                      className={`text-xs font-semibold ${
+                        active ? 'text-white' : 'text-main'
+                      }`}
+                    >
+                      {term}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
 
           {searchOfflineNote ? (
             <View className="mb-2 flex-row items-center gap-1.5 rounded-lg bg-[#FDF5E6] p-2">
@@ -878,7 +892,11 @@ export function AddMedicineModal({
                   <Pressable
                     key={brand.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`Select ${brand.name}`}
+                    accessibilityLabel={
+                      brand.strength
+                        ? `Select ${brand.name} ${brand.strength}`
+                        : `Select ${brand.name}`
+                    }
                     onPress={() => void applyBrandSelection(brand)}
                     className="min-h-[44px] flex-row items-center gap-2.5 rounded-field border border-border bg-white p-2.5"
                   >
@@ -888,12 +906,21 @@ export function AddMedicineModal({
                       imageUrl={brand.primaryImageUrl}
                     />
                     <View className="flex-1 min-w-0">
-                      <Text className="text-sm font-bold text-main" numberOfLines={1}>
-                        {brand.name}
-                      </Text>
+                      <View className="flex-row flex-wrap items-center gap-1.5">
+                        <Text className="shrink text-sm font-bold text-main" numberOfLines={1}>
+                          {brand.name}
+                        </Text>
+                        {brand.strength ? (
+                          <View className="max-w-full shrink-0 rounded-full border border-[#C5E8D8] bg-mint px-2 py-0.5">
+                            <Text className="text-[11px] font-bold text-primary-dark">
+                              {brand.strength}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text className="mt-0.5 text-xs text-[#5A706B]" numberOfLines={1}>
                         {brand.generic?.name ? `${brand.generic.name} · ` : ''}
-                        {brand.strength ?? 'Strength N/A'} · {brand.dosageForm ?? 'Medicine'}
+                        {formatSimplifiedDosageForm(brand.dosageForm) ?? 'Medicine'}
                       </Text>
                       <Text className="mt-0.5 text-[11px] font-semibold text-primary-dark" numberOfLines={1}>
                         {packSummary} · {priceSummary}
@@ -913,6 +940,9 @@ export function AddMedicineModal({
           <Pressable
             accessibilityRole="button"
             onPress={() => {
+              if (typeof Keyboard?.dismiss === 'function') {
+                Keyboard.dismiss();
+              }
               selectionReqIdRef.current += 1;
               setLoadingBrandDetail(false);
               setSelectedBrand(null);
@@ -959,9 +989,14 @@ export function AddMedicineModal({
               </Text>
             </View>
             {savedPaidPrice !== null ? (
-              <Text className="mt-1.5 text-xs font-semibold text-[#5A706B]">
-                Recorded purchase paid: ৳{formatBdtCurrency(savedPaidPrice)}
-              </Text>
+              <View className="mt-2 rounded-lg border border-[#C5E8D8] bg-mint px-2.5 py-2">
+                <Text className="text-xs font-semibold text-primary-dark">
+                  Recorded purchase paid: ৳{formatBdtCurrency(savedPaidPrice)}
+                </Text>
+                <Text className="mt-0.5 text-[11px] text-[#5A706B]">
+                  Saved automatically to My Medicines, Stock, Purchase History & Expenses.
+                </Text>
+              </View>
             ) : savedEstimatedPrice !== null ? (
               <Text className="mt-1.5 text-xs font-semibold text-[#5A706B]">
                 Estimated stock value: ৳{formatBdtCurrency(savedEstimatedPrice)}
@@ -1019,7 +1054,7 @@ export function AddMedicineModal({
                   </Text>
                   <Text className="mt-0.5 text-xs text-[#5A706B]">
                     {(selectedBrand.strength ?? 'Strength: N/A')} ·{' '}
-                    {selectedBrand.dosageForm ?? 'Form: N/A'}
+                    {formatSimplifiedDosageForm(selectedBrand.dosageForm) ?? 'Form: N/A'}
                   </Text>
                   {selectedBrand.manufacturer ? (
                     <Text className="mt-0.5 text-[11px] text-[#7D928D]" numberOfLines={1}>
@@ -1268,25 +1303,34 @@ export function AddMedicineModal({
             <Pressable
               accessibilityRole="button"
               onPress={() => setShowPurchaseDetails((prev) => !prev)}
-              className="flex-row items-center justify-between gap-2.5 min-h-[36px]"
+              className="min-h-[36px]"
             >
-              <View className="flex-1 min-w-0 flex-row items-center gap-2">
-                <Feather
-                  name={showPurchaseDetails ? 'chevron-up' : 'plus-circle'}
-                  size={15}
-                  color={CAREDOSE_EXTENDED_COLORS.primary}
-                />
-                <Text className="flex-1 min-w-0 shrink text-[13px] font-semibold text-primary-dark">
-                  Add purchase details (optional)
-                </Text>
+              <View className="flex-row items-center justify-between gap-2.5 min-h-[36px]">
+                <View className="flex-1 min-w-0 flex-row items-center gap-2">
+                  <Feather
+                    name={showPurchaseDetails ? 'chevron-up' : 'plus-circle'}
+                    size={15}
+                    color={CAREDOSE_EXTENDED_COLORS.primary}
+                  />
+                  <Text className="flex-1 min-w-0 shrink text-[13px] font-semibold text-primary-dark">
+                    Add purchase details (optional)
+                  </Text>
+                </View>
+                <View className="shrink-0 rounded-full border border-[#C5E8D8] bg-mint px-2.5 py-1">
+                  <Text className="text-[11px] font-semibold text-primary-dark">
+                    {showPurchaseDetails
+                      ? 'Hide'
+                      : stockCalc.calculatedTotalPrice !== null
+                        ? `Est. ৳${formatBdtCurrency(stockCalc.calculatedTotalPrice)}`
+                        : 'Add'}
+                  </Text>
+                </View>
               </View>
-              <Text className="shrink-0 text-right text-[11px] font-semibold text-[#7D928D]">
-                {showPurchaseDetails
-                  ? 'Hide'
-                  : stockCalc.calculatedTotalPrice !== null
-                    ? `Est. ৳${formatBdtCurrency(stockCalc.calculatedTotalPrice)}`
-                    : 'Optional'}
-              </Text>
+              {!showPurchaseDetails ? (
+                <Text className="mt-0.5 pl-[23px] text-[11px] leading-4 text-[#5A706B]">
+                  Auto-saves to Purchase History & Expenses if filled
+                </Text>
+              ) : null}
             </Pressable>
 
             {showPurchaseDetails ? (
@@ -1314,39 +1358,33 @@ export function AddMedicineModal({
                     ) : null}
                   </View>
                 ) : null}
-                <FormRow>
-                  <FormCol>
-                    <FormField
-                      label="Amount paid (৳ BDT)"
-                      value={purchaseAmount}
-                      onChangeText={(txt) => {
-                        setPurchaseAmount(txt);
-                        if (errors.purchaseAmount) setErrors((e) => ({ ...e, purchaseAmount: '' }));
-                      }}
-                      placeholder={
-                        stockCalc.calculatedTotalPrice !== null
-                          ? `e.g. ${formatBdtCurrency(stockCalc.calculatedTotalPrice)}`
-                          : 'e.g. 50.00'
-                      }
-                      keyboardType="decimal-pad"
-                      errorMessage={errors.purchaseAmount || undefined}
-                    />
-                  </FormCol>
-                  <FormCol>
-                    <DateField
-                      label="Purchase date"
-                      value={purchaseDate}
-                      onChangeDate={setPurchaseDate}
-                    />
-                  </FormCol>
-                </FormRow>
+                <FormField
+                  label="Amount paid (৳ BDT)"
+                  value={purchaseAmount}
+                  onChangeText={(txt) => {
+                    setPurchaseAmount(txt);
+                    if (errors.purchaseAmount) setErrors((e) => ({ ...e, purchaseAmount: '' }));
+                  }}
+                  placeholder={
+                    stockCalc.calculatedTotalPrice !== null
+                      ? `e.g. ${formatBdtCurrency(stockCalc.calculatedTotalPrice)}`
+                      : 'e.g. 50.00'
+                  }
+                  keyboardType="decimal-pad"
+                  errorMessage={errors.purchaseAmount || undefined}
+                />
+                <DateField
+                  label="Purchase date"
+                  value={purchaseDate}
+                  onChangeDate={setPurchaseDate}
+                />
                 <FormField
                   label="Pharmacy / vendor"
                   value={purchaseVendor}
                   onChangeText={setPurchaseVendor}
                   placeholder="Optional (e.g. Lazz Pharma)"
                 />
-                <Text className="mt-0.5 text-[11px] text-[#5A706B]">
+                <Text className="mt-0.5 text-[11px] leading-4 text-[#5A706B]">
                   Records only what you paid. Catalogue reference prices are never copied automatically.
                 </Text>
               </View>

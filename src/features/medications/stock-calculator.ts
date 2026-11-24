@@ -61,6 +61,10 @@ export interface ExtractedPackInfo {
   containerUnit: string | null;
   /** True when catalogue packaging supports automatic unit conversion without manual guesswork. */
   hasReliableDefaultPackaging: boolean;
+  /** True when a tablet/capsule pack represents a whole consumer pack/bottle rather than strips or huge bulk boxes. */
+  prefersWholePackDefault: boolean;
+  /** Preferred noun when entering whole packs/bottles for tablet/capsule packs. */
+  wholePackNoun: 'bottle' | 'pack';
   /** Price for 1 discrete unit (tablet, capsule, piece, sachet), or derived packPrice / packTotalUnits when pack is countable. */
   discreteUnitPrice: number | null;
   discretePriceSource: 'unit_price' | 'derived_from_pack' | 'none';
@@ -126,6 +130,42 @@ export function classifyDosageFormStrategy(
     return 'drops';
   }
 
+  // Classify Inhalation Capsule / DPI / MDPI before generic tablet/capsule so metered-dose devices
+  // like Seretide ("60 doses unit") use puffs, while discrete DPI capsules ("30's pack") stay capsules.
+  if (
+    form.includes('inhalation capsule') ||
+    form.includes('dpi') ||
+    form.includes('mdpi')
+  ) {
+    if (extractMeteredDoses(packQuantity) !== null || form.includes('mdpi')) {
+      return 'inhaler';
+    }
+    return 'tablet_capsule';
+  }
+
+  // Topical & Ocular Sprays: metered sprays track puffs; ml bottles/sprays track verified ml.
+  if (form.includes('topical spray') || form.includes('ocular spray')) {
+    if (extractMeteredDoses(packQuantity) !== null) {
+      return 'inhaler';
+    }
+    if (extractVolumeMl(packQuantity) !== null) {
+      return 'liquid';
+    }
+    return 'inhaler';
+  }
+
+  // Respirator Solution & Nebuliser Solution/Suspension: use ml when bottle/ampoule volume is listed;
+  // otherwise track discrete respule container counts without inventing ml/doses.
+  if (form.includes('respirator solution') || form.includes('nebuliser')) {
+    if (extractMeteredDoses(packQuantity) !== null) {
+      return 'inhaler';
+    }
+    if (extractVolumeMl(packQuantity) !== null) {
+      return 'liquid';
+    }
+    return 'injection';
+  }
+
   if (form.includes('tablet') || form.includes('capsule')) {
     return 'tablet_capsule';
   }
@@ -141,12 +181,7 @@ export function classifyDosageFormStrategy(
     return 'injection';
   }
 
-  if (
-    form.includes('inhaler') ||
-    form.includes('nasal spray') ||
-    form.includes('topical spray') ||
-    form.includes('ocular spray')
-  ) {
+  if (form.includes('inhaler') || form.includes('nasal spray')) {
     return 'inhaler';
   }
 
@@ -267,7 +302,7 @@ export function extractWeightGm(packQuantity?: string | null): number | null {
 
 export function extractMeteredDoses(packQuantity?: string | null): number | null {
   if (!packQuantity) return null;
-  const m = packQuantity.match(/^(\d+)\s*(?:metered\s+(?:doses?|sprays?)|puffs?)\b/i);
+  const m = packQuantity.match(/^(\d+)\s*(?:(?:metered\s+)?(?:doses?|sprays?)|puffs?)\b/i);
   if (m) {
     const val = Number(m[1]);
     return Number.isFinite(val) && val > 0 ? val : null;
@@ -280,17 +315,20 @@ function detectContainerNoun(text: string): string | null {
   if (/pre-filled\s*syringe|prefilled\s*syringe|syringe|\bpfs\b/.test(lower)) {
     return 'syringes';
   }
-  if (/\bampoules?\b|\bamp\b/.test(lower)) {
+  if (/\bampoules?\b|\bamps?\b/.test(lower)) {
     return 'ampoules';
   }
   if (/\bvials?\b/.test(lower)) {
     return 'vials';
   }
-  if (/\bpens?\b/.test(lower)) {
+  if (/\b(?:kwikpen|flexpen|flextouch|solostar|penset|biopen|pens?)\b/.test(lower)) {
     return 'pens';
   }
-  if (/\bcartridges?\b/.test(lower)) {
+  if (/\b(?:penfill|cartridges?)\b/.test(lower)) {
     return 'cartridges';
+  }
+  if (/\brespules?\b/.test(lower)) {
+    return 'respules';
   }
   if (/\bbags?\b/.test(lower)) {
     return 'bags';
@@ -323,6 +361,13 @@ export function extractInjectionContainerUnit(
   }
   if (formLower.includes('insulin device')) {
     return 'pens';
+  }
+  if (
+    (formLower.includes('respirator solution') || formLower.includes('nebuliser')) &&
+    selectedPack?.packUnits != null &&
+    selectedPack.packUnits > 0
+  ) {
+    return 'respules';
   }
   // If an injection only has "5's pack" or no container keyword at all, do NOT guess vials vs ampoules.
   return null;
@@ -465,9 +510,23 @@ export function extractPackInfo(
     }
   }
 
+  const isBottleSolidPack =
+    strategy === 'tablet_capsule' &&
+    /\b(bottle|pot|jar|tin|container)\b/i.test(packQty ?? '');
+  const hasValidPackCount =
+    packTotalUnits !== null &&
+    packTotalUnits >= 1 &&
+    !/\bml\b/i.test(packQty ?? '');
+  const prefersWholePackDefault =
+    strategy === 'tablet_capsule' &&
+    stripUnits === null &&
+    hasValidPackCount &&
+    (packTotalUnits <= 100 || isBottleSolidPack);
+  const wholePackNoun: 'bottle' | 'pack' = isBottleSolidPack ? 'bottle' : 'pack';
+
   const hasReliableDefaultPackaging =
     strategy === 'tablet_capsule'
-      ? stripUnits !== null
+      ? stripUnits !== null || hasValidPackCount
       : strategy === 'liquid'
         ? bottleVolumeMl !== null
         : strategy === 'injection'
@@ -492,6 +551,8 @@ export function extractPackInfo(
     meteredDoses,
     containerUnit,
     hasReliableDefaultPackaging,
+    prefersWholePackDefault,
+    wholePackNoun,
     discreteUnitPrice,
     discretePriceSource,
     containerPrice,
@@ -506,23 +567,41 @@ export function getAvailableStockModes(
   switch (info.strategy) {
     case 'tablet_capsule': {
       const unitLabel = info.baseUnit === 'capsules' ? 'Capsules' : 'Tablets';
-      const modes: Array<{ mode: StockEntryMode; label: string }> =
-        info.stripUnits !== null
-          ? [
-              { mode: 'strips', label: `By strips (${info.stripUnits})` },
-              { mode: 'direct', label: unitLabel },
-            ]
-          : [
-              { mode: 'direct', label: unitLabel },
-              { mode: 'strips', label: 'By strips' },
-            ];
-      if (
-        info.stripUnits === null &&
-        info.packTotalUnits !== null &&
-        info.packTotalUnits > 1 &&
-        info.packTotalUnits <= 100
-      ) {
-        modes.push({ mode: 'packs', label: `Packs (${info.packTotalUnits})` });
+      const wholePackLabel =
+        info.packTotalUnits !== null
+          ? info.wholePackNoun === 'bottle'
+            ? `Bottles (${info.packTotalUnits})`
+            : `Packs (${info.packTotalUnits})`
+          : null;
+      if (info.stripUnits !== null) {
+        const modes: Array<{ mode: StockEntryMode; label: string }> = [
+          { mode: 'strips', label: `By strips (${info.stripUnits})` },
+        ];
+        if (
+          wholePackLabel &&
+          info.packTotalUnits !== null &&
+          info.packTotalUnits > 1 &&
+          info.packTotalUnits <= 100 &&
+          info.packTotalUnits !== info.stripUnits
+        ) {
+          modes.push({ mode: 'packs', label: wholePackLabel });
+        }
+        modes.push({ mode: 'direct', label: unitLabel });
+        return modes;
+      }
+      if (info.prefersWholePackDefault && wholePackLabel) {
+        return [
+          { mode: 'packs', label: wholePackLabel },
+          { mode: 'direct', label: unitLabel },
+          { mode: 'strips', label: 'By strips' },
+        ];
+      }
+      const modes: Array<{ mode: StockEntryMode; label: string }> = [
+        { mode: 'direct', label: unitLabel },
+        { mode: 'strips', label: 'By strips' },
+      ];
+      if (wholePackLabel && info.packTotalUnits !== null && info.packTotalUnits >= 1 && info.packTotalUnits <= 100) {
+        modes.push({ mode: 'packs', label: wholePackLabel });
       }
       return modes;
     }
@@ -592,7 +671,9 @@ export function getAvailableStockModes(
 
 export function getDefaultStockMode(info: ExtractedPackInfo): StockEntryMode {
   if (info.strategy === 'tablet_capsule') {
-    return info.stripUnits !== null ? 'strips' : 'direct';
+    if (info.stripUnits !== null) return 'strips';
+    if (info.prefersWholePackDefault) return 'packs';
+    return 'direct';
   }
   if (info.strategy === 'liquid') {
     return info.bottleVolumeMl !== null ? 'bottles' : 'ml';
@@ -627,6 +708,7 @@ export function formatUnitLabelForCount(count: number, unit: string): string {
   if (lower === 'syringe' || lower === 'syringes') return isOne ? 'pre-filled syringe' : 'pre-filled syringes';
   if (lower === 'pen' || lower === 'pens') return isOne ? 'pen' : 'pens';
   if (lower === 'cartridge' || lower === 'cartridges') return isOne ? 'cartridge' : 'cartridges';
+  if (lower === 'respule' || lower === 'respules') return isOne ? 'respule' : 'respules';
   if (lower === 'bag' || lower === 'bags') return isOne ? 'bag' : 'bags';
   if (lower === 'sachet' || lower === 'sachets') return isOne ? 'sachet' : 'sachets';
   if (lower === 'puff' || lower === 'puffs') return isOne ? 'puff' : 'puffs';
@@ -674,6 +756,7 @@ export function computeDefaultLowStockThreshold(
     u === 'syringes' ||
     u === 'pens' ||
     u === 'cartridges' ||
+    u === 'respules' ||
     u === 'bags'
   ) {
     return initialStock > 2 ? 1 : 0;
@@ -764,14 +847,16 @@ export function calculateStockAndPrice(params: {
     }
   } else if (mode === 'packs') {
     const packUnits = packInfo.packTotalUnits;
+    const singularPackNoun = packInfo.wholePackNoun === 'bottle' ? 'bottle' : 'pack';
+    const pluralPackNoun = packInfo.wholePackNoun === 'bottle' ? 'bottles' : 'packs';
     if (p1 !== null && p1 > 0 && packUnits !== null) {
       stockRemaining = Number((p1 * packUnits).toFixed(2));
       const unitLabel = formatUnitLabelForCount(stockRemaining, packInfo.baseUnit);
-      calculationSummary = `${formatStockQuantity(p1)} ${p1 === 1 ? 'pack' : 'packs'} = ${formatStockQuantity(stockRemaining)} ${unitLabel}`;
+      calculationSummary = `${formatStockQuantity(p1)} ${p1 === 1 ? singularPackNoun : pluralPackNoun} = ${formatStockQuantity(stockRemaining)} ${unitLabel}`;
       const packPrice = toPositiveNumber(packInfo.pack?.packPrice);
       if (packPrice !== null) {
         calculatedTotalPrice = Number((p1 * packPrice).toFixed(2));
-        priceScopeDescription = `Total value for ${formatStockQuantity(p1)} ${p1 === 1 ? 'pack' : 'packs'} (৳${formatBdtCurrency(packPrice)}/pack)`;
+        priceScopeDescription = `Total value for ${formatStockQuantity(p1)} ${p1 === 1 ? singularPackNoun : pluralPackNoun} (৳${formatBdtCurrency(packPrice)}/${singularPackNoun})`;
       } else if (packInfo.discreteUnitPrice !== null) {
         calculatedTotalPrice = Number((stockRemaining * packInfo.discreteUnitPrice).toFixed(2));
         priceScopeDescription = `Total value for ${formatStockQuantity(stockRemaining)} ${unitLabel}`;
@@ -980,6 +1065,7 @@ function normalizeSingularStockUnit(unit?: string | null): string {
   if (lower === 'syringes' || lower === 'syringe' || lower.includes('syringe')) return 'syringe';
   if (lower === 'pens' || lower === 'pen') return 'pen';
   if (lower === 'cartridges' || lower === 'cartridge') return 'cartridge';
+  if (lower === 'respules' || lower === 'respule') return 'respule';
   if (lower === 'bags' || lower === 'bag') return 'bag';
   if (lower === 'sachets' || lower === 'sachet') return 'sachet';
   if (lower === 'puffs' || lower === 'puff') return 'puff';
@@ -999,6 +1085,7 @@ const DISCRETE_ESTIMATE_UNITS = new Set([
   'syringe',
   'pen',
   'cartridge',
+  'respule',
   'bag',
   'sachet',
   'inhaler',
@@ -1071,7 +1158,9 @@ export function estimateCurrentStockValue(params: {
             return Number(((packPrice / totalUnits) * stockRemaining).toFixed(2));
           }
         }
-        const countPackMatch = packDesc.match(/^(\d+)'s\s+(?:pack|strip|box|blister)/i);
+        const countPackMatch = packDesc.match(
+          /^(\d+)'s\s+(?:pack|strip|box|blister|bottle|pot|jar|tin|container)/i,
+        );
         if (countPackMatch && DISCRETE_ESTIMATE_UNITS.has(targetUnit)) {
           const totalUnits = Number(countPackMatch[1]);
           if (totalUnits > 0) {

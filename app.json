@@ -7,6 +7,9 @@
     "scheme": "caredose",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "android": {
+      "softwareKeyboardLayoutMode": "resize"
+    },
     "plugins": [
       "expo-router",
       "expo-sqlite",

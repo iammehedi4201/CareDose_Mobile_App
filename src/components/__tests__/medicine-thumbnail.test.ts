@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatSimplifiedDosageForm,
   formatThumbnailFormLabel,
   normalizeMedicineFormCategory,
 } from '../MedicineFormThumbnail';
@@ -19,9 +20,14 @@ describe('MedicineFormThumbnail dosage form detection & labeling', () => {
     expect(normalizeMedicineFormCategory(null)).toBe('default');
   });
 
-  it('produces readable pill-tag dosage form labels without clipping', () => {
+  it('produces readable pill-tag dosage form labels without clipping or release-type clutter', () => {
     expect(formatThumbnailFormLabel('Tablet')).toBe('Tablet');
-    expect(formatThumbnailFormLabel('Tablet (Extended Release)')).toBe('Tablet ER');
+    expect(formatThumbnailFormLabel('Tablet (Extended Release)')).toBe('Tablet');
+    expect(formatThumbnailFormLabel('Tablet (Sustained Release)')).toBe('Tablet');
+    expect(formatThumbnailFormLabel('Tablet (Delayed Release)')).toBe('Tablet');
+    expect(formatSimplifiedDosageForm('Tablet (Extended Release)')).toBe('Tablet');
+    expect(formatSimplifiedDosageForm('Capsule (Extended Release)')).toBe('Capsule');
+    expect(formatSimplifiedDosageForm('Powder for Suspension')).toBe('Powder for Suspension');
     expect(formatThumbnailFormLabel('Syrup')).toBe('Syrup');
     expect(formatThumbnailFormLabel('Suppository')).toBe('Suppository');
     expect(formatThumbnailFormLabel('Pediatric Drops')).toBe('Paediatric Drops');

@@ -13,6 +13,8 @@ import {
   validateRequiredFields,
 } from '../src/components';
 import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
+import { formatBdtAmount } from '../src/features/expenses/expense-helpers';
+import { usePurchases } from '../src/features/expenses/PurchasesContext';
 import { isPersonalMedicationLowStock } from '../src/features/medications/medication-helpers';
 import { useMedications } from '../src/features/medications/MedicationsContext';
 import {
@@ -82,6 +84,7 @@ export default function HomeScreen(): React.JSX.Element {
   const layout = useResponsiveLayout();
   const { medications } = useMedications();
   const { getLocalRangeDoses, recordDoseAction, pendingOccurrenceKeys } = useSchedules();
+  const { expensesSummary } = usePurchases();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [quickReadingOpen, setQuickReadingOpen] = useState(false);
   const [readingValue, setReadingValue] = useState('');
@@ -503,7 +506,7 @@ export default function HomeScreen(): React.JSX.Element {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Monthly spend ৳ 720"
+          accessibilityLabel={`Monthly spend ${formatBdtAmount(expensesSummary.actualSpent)}`}
           onPress={() => router.push('/expenses')}
           className={`${
             layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'
@@ -518,11 +521,13 @@ export default function HomeScreen(): React.JSX.Element {
             </Text>
           </View>
           <Text className="mt-2 text-[20px] font-bold text-primary" numberOfLines={1}>
-            ৳ 720
+            {formatBdtAmount(expensesSummary.actualSpent, { keepDecimals: true })}
           </Text>
           <View className="mt-1.5 flex-row items-center justify-between gap-2">
             <Text className="flex-1 min-w-0 text-[11px] text-[#5A706B]" numberOfLines={1}>
-              This month
+              {expensesSummary.monthlyBudget
+                ? `of ${formatBdtAmount(expensesSummary.monthlyBudget)} budget`
+                : 'This month'}
             </Text>
             <Feather
               name="arrow-right"

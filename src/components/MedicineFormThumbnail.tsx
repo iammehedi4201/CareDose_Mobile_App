@@ -67,14 +67,21 @@ export function normalizeMedicineFormCategory(
   return 'default';
 }
 
-export function formatThumbnailFormLabel(dosageForm?: string | null): string {
+const RELEASE_QUALIFIER_RE =
+  /\s*\((?:extended|sustained|delayed|controlled|modified|prolonged)\s+release\)\s*/gi;
+
+export function formatSimplifiedDosageForm(dosageForm?: string | null): string | null {
   const raw = (dosageForm ?? '').trim();
+  if (!raw) return null;
+  const cleaned = raw.replace(RELEASE_QUALIFIER_RE, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned || raw;
+}
+
+export function formatThumbnailFormLabel(dosageForm?: string | null): string {
+  const raw = formatSimplifiedDosageForm(dosageForm);
   if (!raw) return 'Medicine';
 
   const lower = raw.toLowerCase();
-  if (lower === 'tablet (extended release)') return 'Tablet ER';
-  if (lower === 'tablet (sustained release)') return 'Tablet SR';
-  if (lower === 'tablet (delayed release)') return 'Tablet DR';
   if (lower === 'iv injection or infusion') return 'IV Injection';
   if (lower === 'powder for suspension') return 'Suspension';
   if (lower === 'pediatric drops' || lower === 'paediatric drops') return 'Paediatric Drops';

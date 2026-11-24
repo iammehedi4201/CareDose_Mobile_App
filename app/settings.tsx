@@ -11,6 +11,7 @@ import {
   SuccessToast,
   ToggleField,
 } from '../src/components';
+import { usePurchases } from '../src/features/expenses/PurchasesContext';
 import { useMedications } from '../src/features/medications/MedicationsContext';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 
@@ -18,16 +19,34 @@ export default function SettingsScreen(): React.JSX.Element {
   const router = useRouter();
   const { resetDemoMedications } = useMedications();
   const { resetDemoSchedules } = useSchedules();
+  const {
+    monthlyBudget: savedBudget,
+    updateMonthlyBudget,
+    resetDemoPurchases,
+  } = usePurchases();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [leadTime, setLeadTime] = useState('10');
   const [glucoseUnit, setGlucoseUnit] = useState('mg/dL');
-  const [monthlyBudget, setMonthlyBudget] = useState('2500');
+  const [monthlyBudget, setMonthlyBudget] = useState(
+    savedBudget !== null ? String(savedBudget) : '2500',
+  );
   const [displayName, setDisplayName] = useState('Karim');
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const handleSaveSettings = (): void => {
+  const handleSaveSettings = async (): Promise<void> => {
+    const trimmedBudget = monthlyBudget.trim();
+    const parsedBudget =
+      trimmedBudget.length === 0 ? null : Number(trimmedBudget);
+    if (
+      parsedBudget !== null &&
+      (!Number.isFinite(parsedBudget) || parsedBudget < 0)
+    ) {
+      setToast('Enter a valid non-negative monthly budget.');
+      return;
+    }
+    await updateMonthlyBudget(parsedBudget);
     setToast('Care preferences saved.');
   };
 
@@ -38,7 +57,11 @@ export default function SettingsScreen(): React.JSX.Element {
     setGlucoseUnit('mg/dL');
     setMonthlyBudget('2500');
     setDisplayName('Karim');
-    await Promise.all([resetDemoMedications(), resetDemoSchedules()]);
+    await Promise.all([
+      resetDemoMedications(),
+      resetDemoSchedules(),
+      resetDemoPurchases(),
+    ]);
     setResetConfirmOpen(false);
     setToast('Fictional demo data restored to defaults.');
   };
@@ -107,7 +130,7 @@ export default function SettingsScreen(): React.JSX.Element {
         <PrimaryButton
           fullWidth
           label="Save settings"
-          onPress={handleSaveSettings}
+          onPress={() => void handleSaveSettings()}
         />
       </View>
 

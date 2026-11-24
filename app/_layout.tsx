@@ -2,6 +2,7 @@ import '../global.css';
 import React from 'react';
 import { Slot } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PurchasesProvider } from '../src/features/expenses/PurchasesContext';
 import { MedicationsProvider } from '../src/features/medications/MedicationsContext';
 import { SchedulesProvider } from '../src/features/schedule/SchedulesContext';
 
@@ -10,7 +11,9 @@ export default function RootLayout(): React.JSX.Element {
     <SafeAreaProvider>
       <MedicationsProvider>
         <SchedulesProvider>
-          <Slot />
+          <PurchasesProvider>
+            <Slot />
+          </PurchasesProvider>
         </SchedulesProvider>
       </MedicationsProvider>
     </SafeAreaProvider>

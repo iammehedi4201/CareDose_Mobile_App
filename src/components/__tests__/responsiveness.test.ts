@@ -2,7 +2,10 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { __setMockWindowWidth } from '../../test/mocks/react-native';
 import { getResponsiveMetrics, VIEWPORT_BREAKPOINTS } from '../../theme/responsive';
-import { computeKeyboardModalMetrics } from '../BottomSheetContext';
+import {
+  computeEffectiveModalSafeBottom,
+  computeKeyboardModalMetrics,
+} from '../BottomSheetContext';
 import { PrimaryButton, SecondaryButton } from '../Buttons';
 import { DoseCard } from '../DoseCard';
 import { DoseProgressCard } from '../DoseProgressCard';
@@ -10,15 +13,19 @@ import { EmptyState, ErrorState, LoadingSkeleton, SuccessToast } from '../Feedba
 import { FormCol, FormRow } from '../FormFields';
 import { MedicineCard } from '../MedicineCard';
 import { BottomSheet, ConfirmDialog } from '../Overlays';
+import { RecordPurchaseModal } from '../RecordPurchaseModal';
 import { ScheduleModal } from '../ScheduleModal';
 import { StatusBadge } from '../StatusBadge';
 import { AppHeader } from '../AppHeader';
 import { BottomNavigation } from '../BottomNavigation';
 import { ScreenContainer } from '../ScreenContainer';
+import { UpdateStockModal } from '../UpdateStockModal';
 import HomeScreen from '../../../app/index';
 import ScheduleScreen from '../../../app/schedule';
 import ManageSchedulesScreen from '../../../app/schedules';
 import DoseHistoryScreen from '../../../app/history';
+import ExpensesScreen from '../../../app/expenses';
+import PurchasesScreen from '../../../app/purchases';
 
 const mockRouterPush = vi.fn();
 const mockRouterNavigate = vi.fn();
@@ -109,6 +116,96 @@ vi.mock('../../features/medications/MedicationsContext', () => ({
       },
     ],
     loading: false,
+    adjustMedicationStock: vi.fn(async () => undefined),
+  }),
+}));
+
+vi.mock('../../features/expenses/PurchasesContext', () => ({
+  usePurchases: () => ({
+    purchases: [
+      {
+        id: 'pur-1',
+        patientId: 'local-patient',
+        patientMedicationId: 'med-1',
+        purchaseDate: '2026-11-20T12:00:00.000Z',
+        purchaseDateYmd: '2026-11-20',
+        packCount: 1,
+        unitsPerPack: '30.00',
+        totalUnitsAdded: '30.00',
+        amountPaid: '720.00',
+        unitPrice: '24.00',
+        currency: 'BDT',
+        vendor: 'Lazz Pharma',
+        note: null,
+        createdAt: '2026-11-20T12:00:00.000Z',
+        medication: {
+          id: 'med-1',
+          name: 'Napa',
+          strength: '500 mg',
+          dosageForm: 'Tablet',
+          stockUnit: 'tablets',
+        },
+      },
+    ],
+    selectedMonth: '2026-11',
+    setSelectedMonth: vi.fn(),
+    monthlyBudget: 2500,
+    loading: false,
+    error: null,
+    refreshPurchasesAndExpenses: vi.fn(async () => undefined),
+    recordPurchase: vi.fn(async () => ({})),
+    updateMonthlyBudget: vi.fn(async () => undefined),
+    getPurchasesForMedication: () => [],
+    resetDemoPurchases: vi.fn(async () => undefined),
+    expensesSummary: {
+      patientId: 'local-patient',
+      timezone: 'Asia/Dhaka',
+      selectedMonth: '2026-11',
+      currency: 'BDT',
+      actualSpent: '720.00',
+      monthlyBudget: '2500.00',
+      budgetRemaining: '1780.00',
+      budgetUtilizationPercent: 28.8,
+      monthlySeries: [
+        { month: '2026-09', shortLabel: 'Sep', yearLabel: '2026', totalSpent: '400.00', purchaseCount: 1, isSelected: false },
+        { month: '2026-10', shortLabel: 'Oct', yearLabel: '2026', totalSpent: '550.00', purchaseCount: 1, isSelected: false },
+        { month: '2026-11', shortLabel: 'Nov', yearLabel: '2026', totalSpent: '720.00', purchaseCount: 1, isSelected: true },
+      ],
+      medicationBreakdown: [
+        {
+          medicationId: 'med-1',
+          medicationName: 'Napa',
+          strength: '500 mg',
+          dosageForm: 'Tablet',
+          stockUnit: 'tablets',
+          totalSpent: '720.00',
+          totalUnitsAdded: '30.00',
+          purchaseCount: 1,
+        },
+      ],
+      recentPurchases: [],
+      estimatedMonthlyCost: {
+        hasEstimate: true,
+        totalEstimatedCost: '1185.00',
+        includedCount: 1,
+        excludedCount: 0,
+        disclaimer: 'Estimated 30-day cost.',
+        items: [
+          {
+            medicationId: 'med-1',
+            medicationName: 'Napa',
+            strength: '500 mg',
+            estimatedCost: '1185.00',
+            monthlyUnits: '90.00',
+            stockUnit: 'tablets',
+            unitPriceUsed: '13.17',
+            priceSource: 'confirmed_purchase',
+            scheduleSummary: '3x daily',
+          },
+        ],
+        excludedItems: [],
+      },
+    },
   }),
 }));
 
@@ -354,6 +451,29 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(medEls.some((e) => hasClass(e, 'flex-wrap'))).toBe(true);
     expect(medEls.some((e) => e.style.padding === 12)).toBe(true);
 
+    const variantEls = collectElements(
+      MedicineCard({
+        name: 'Simpli',
+        genericName: 'Azithromycin Dihydrate',
+        strength: '200 mg/5 ml',
+        dosageForm: 'Powder for Suspension',
+        manufacturer: 'Beacon Pharmaceuticals Ltd.',
+        stockText: '৳ 85.57 / pack',
+        priceText: '20 ml bottle',
+        statusVariant: 'unverified',
+        showStatusBadge: false,
+        highlightVariants: true,
+        onPress: vi.fn(),
+      }),
+    );
+    expect(
+      variantEls.some(
+        (e) =>
+          e.type === 'Text' &&
+          (e.props.children === '200 mg/5 ml' || e.props.children === 'Powder for Suspension'),
+      ),
+    ).toBe(true);
+
     const doseCases = [
       {
         medicineName: 'Napa',
@@ -566,6 +686,69 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(keyboardOpen.sheetPaddingBottom).toBe(12);
     expect(keyboardOpen.sheetMaxHeight).toBe(800 - 320 - 36);
     expect(keyboardOpen.backdropPaddingBottom + keyboardOpen.sheetMaxHeight).toBeLessThanOrEqual(800);
+
+    // When Android adjustResize already shrunk window height (keyboardInset=0, keyboardVisible=true),
+    // BottomSheet uses full remaining height up to topGuard without double-padding or 0.88 shrink.
+    const androidResizedOpen = computeKeyboardModalMetrics({
+      windowHeight: 480,
+      safeTop: 28,
+      safeBottom: 16,
+      keyboardInset: 0,
+      keyboardVisible: true,
+    });
+    expect(androidResizedOpen.backdropPaddingBottom).toBe(0);
+    expect(androidResizedOpen.sheetPaddingBottom).toBe(12);
+    expect(androidResizedOpen.sheetMaxHeight).toBe(480 - 36);
+
+    // When Android pans or reports stale inset against a shorter backdrop, metrics clamp safely
+    // so sheet never clips past the status bar.
+    const androidPannedOrStale = computeKeyboardModalMetrics({
+      windowHeight: 800,
+      safeTop: 28,
+      safeBottom: 16,
+      keyboardInset: 120,
+      keyboardVisible: true,
+      windowTopClip: 200,
+    });
+    expect(androidPannedOrStale.backdropPaddingBottom).toBe(120);
+    expect(androidPannedOrStale.sheetMaxHeight).toBe(800 - 120 - (36 + 200));
+    expect(
+      androidPannedOrStale.backdropPaddingBottom + androidPannedOrStale.sheetMaxHeight + 236,
+    ).toBeLessThanOrEqual(800);
+
+    // Avoid double bottom padding on Android 3-button nav bars while preserving iOS & edge-to-edge gesture insets
+    const androidThreeButtonSafeBottom = computeEffectiveModalSafeBottom({
+      platformOs: 'android',
+      safeBottom: 48,
+      screenHeight: 800,
+      modalBottomInScreen: 752,
+    });
+    expect(androidThreeButtonSafeBottom).toBe(0);
+    expect(
+      computeKeyboardModalMetrics({
+        windowHeight: 752,
+        safeTop: 28,
+        safeBottom: androidThreeButtonSafeBottom,
+        keyboardInset: 0,
+      }).sheetPaddingBottom,
+    ).toBe(16);
+
+    expect(
+      computeEffectiveModalSafeBottom({
+        platformOs: 'android',
+        safeBottom: 24,
+        screenHeight: 840,
+        modalBottomInScreen: 840,
+      }),
+    ).toBe(24);
+    expect(
+      computeEffectiveModalSafeBottom({
+        platformOs: 'ios',
+        safeBottom: 34,
+        screenHeight: 844,
+        modalBottomInScreen: 844,
+      }),
+    ).toBe(34);
   });
 
   it('keeps ScheduleScreen focused on daily doses with Manage Schedules and Dose History secondary links, and validates ManageSchedulesScreen + DoseHistoryScreen', () => {
@@ -1025,7 +1208,7 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         ),
       ).toBe(true);
       expect(els.some((e) => e.props.accessibilityLabel === 'Latest glucose 106 mg/dL')).toBe(true);
-      expect(els.some((e) => e.props.accessibilityLabel === 'Monthly spend ৳ 720')).toBe(true);
+      expect(els.some((e) => e.props.accessibilityLabel === 'Monthly spend ৳720')).toBe(true);
     }
 
     // Trigger interactions on HomeScreen
@@ -1047,11 +1230,71 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(mockRouterPush).toHaveBeenCalledWith('/medicines');
 
     (
-      homeEls.find((e) => e.props.accessibilityLabel === 'Monthly spend ৳ 720')!.props
+      homeEls.find((e) => e.props.accessibilityLabel === 'Monthly spend ৳720')!.props
         .onPress as () => void
     )();
     expect(mockRouterPush).toHaveBeenCalledWith('/expenses');
 
     mockDayItemsOverride = null;
+  });
+
+  it('renders PurchasesScreen, ExpensesScreen, RecordPurchaseModal, and UpdateStockModal with Single-CTA compliance across 320px-768px', () => {
+    const extractText = (els: ElementMatch[]) =>
+      els
+        .map((e) => {
+          const c = e.props.children;
+          if (typeof c === 'string' || typeof c === 'number') return String(c);
+          if (Array.isArray(c)) {
+            return c
+              .filter((x) => typeof x === 'string' || typeof x === 'number')
+              .map(String)
+              .join('');
+          }
+          return '';
+        })
+        .join(' ');
+
+    for (const width of [320, 360, 390, 768]) {
+      __setMockWindowWidth(width);
+
+      const purchaseEls = collectElements(PurchasesScreen());
+      const recordButtons = purchaseEls.filter((e) => e.props.accessibilityLabel === '+ Record');
+      expect(recordButtons).toHaveLength(1);
+      expect(extractText(purchaseEls)).toContain('Lazz Pharma');
+
+      const expenseEls = collectElements(ExpensesScreen());
+      const purchaseCtas = expenseEls.filter((e) => e.props.accessibilityLabel === '+ Purchase');
+      expect(purchaseCtas).toHaveLength(1);
+      expect(extractText(expenseEls)).toContain('Estimated future monthly cost');
+
+      const modalEls = collectElements(
+        RecordPurchaseModal({
+          visible: true,
+          initialMedicationId: 'med-1',
+          onClose: vi.fn(),
+        }),
+      );
+      expect(modalEls.length).toBeGreaterThan(0);
+
+      const stockModalEls = collectElements(
+        UpdateStockModal({
+          visible: true,
+          medication: {
+            id: 'med-1',
+            name: 'Napa',
+            strength: '500 mg',
+            dosageForm: 'Tablet',
+            instructions: 'After breakfast',
+            stockRemaining: 30,
+            stockUnit: 'tablets',
+            unitPriceText: '৳1.20/tablet',
+            lowStockThreshold: 5,
+            archived: false,
+          },
+          onClose: vi.fn(),
+        }),
+      );
+      expect(stockModalEls.length).toBeGreaterThan(0);
+    }
   });
 });

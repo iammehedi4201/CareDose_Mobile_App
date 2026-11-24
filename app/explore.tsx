@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -189,6 +189,20 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
   const isFiltered =
     query.trim().length > 0 || formFilter !== 'all' || manufacturerFilter !== null;
 
+  const hasMultipleVariantsInResults = useMemo(() => {
+    if (!isFiltered || items.length < 2) return false;
+    const seenFormsByBrand = new Map<string, Set<string>>();
+    for (const item of items) {
+      const key = item.name.trim().toLowerCase();
+      const variant = `${item.dosageForm ?? ''}|${item.strength ?? ''}`;
+      const set = seenFormsByBrand.get(key) ?? new Set<string>();
+      set.add(variant);
+      if (set.size > 1) return true;
+      seenFormsByBrand.set(key, set);
+    }
+    return false;
+  }, [isFiltered, items]);
+
   const brandsCountLabel = summary
     ? `${summary.counts.brands.toLocaleString()} brands · ${summary.counts.generics.toLocaleString()} generics`
     : '19,590 brands · 1,585 generics';
@@ -246,21 +260,25 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         </View>
       ) : null}
 
-      {/* Feature Info Banner */}
-      <View className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-3.5">
-        <View className="w-9 h-9 rounded-[10px] bg-white items-center justify-center mr-2.5 shrink-0">
-          <Feather name="book-open" size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
-        </View>
-        <View className="flex-1 min-w-0">
-          <Text className="text-[13px] font-bold text-main">Bangladesh Medicine Directory</Text>
-          <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-            {brandsCountLabel} · Reference (unverified)
-          </Text>
-        </View>
-        <View className="w-6 h-6 rounded-full bg-primary items-center justify-center ml-2 shrink-0">
-          <Text className="text-white text-[12px] font-bold">i</Text>
-        </View>
-      </View>
+      {!isFiltered ? (
+        <>
+          {/* Feature Info Banner */}
+          <View className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-3.5">
+            <View className="w-9 h-9 rounded-[10px] bg-white items-center justify-center mr-2.5 shrink-0">
+              <Feather name="book-open" size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
+            </View>
+            <View className="flex-1 min-w-0">
+              <Text className="text-[13px] font-bold text-main">Bangladesh Medicine Directory</Text>
+              <Text className="mt-0.5 text-[12px] text-[#5A706B]">
+                {brandsCountLabel} · Reference (unverified)
+              </Text>
+            </View>
+            <View className="w-6 h-6 rounded-full bg-primary items-center justify-center ml-2 shrink-0">
+              <Text className="text-white text-[12px] font-bold">i</Text>
+            </View>
+          </View>
+        </>
+      ) : null}
 
       {offlineFallback ? (
         <View className="flex-row items-center gap-2 bg-[#FDF5E6] border border-[#F3D9A4] rounded-field px-3 py-2 mb-3.5">
@@ -271,88 +289,92 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         </View>
       ) : null}
 
-      {/* Popular Searches */}
-      <Text className="text-[15px] font-semibold text-main mb-2">Popular Searches</Text>
-      <View className="flex-row flex-wrap gap-2 mb-4">
-        {POPULAR_SEARCHES.map((term) => (
-          <Pressable
-            key={term}
-            accessibilityRole="button"
-            onPress={() => setQuery(term)}
-            className="bg-white border border-border rounded-full px-3 py-1.5"
-          >
-            <Text className="text-[12px] text-main font-medium">{term}</Text>
-          </Pressable>
-        ))}
-      </View>
+      {!isFiltered ? (
+        <>
+          {/* Popular Searches */}
+          <Text className="text-[15px] font-semibold text-main mb-2">Popular Searches</Text>
+          <View className="flex-row flex-wrap gap-2 mb-4">
+            {POPULAR_SEARCHES.map((term) => (
+              <Pressable
+                key={term}
+                accessibilityRole="button"
+                onPress={() => setQuery(term)}
+                className="bg-white border border-border rounded-full px-3 py-1.5"
+              >
+                <Text className="text-[12px] text-main font-medium">{term}</Text>
+              </Pressable>
+            ))}
+          </View>
 
-      {/* Browse by Category */}
-      <Text className="text-[15px] font-semibold text-main mb-2">Browse by Category</Text>
-      <View className="mb-4" style={{ gap: layout.gridGap }}>
-        <View
-          className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
-          style={{ gap: layout.gridGap }}
-        >
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setGenericSheetOpen(true)}
-            className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
-          >
-            <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
-              <Feather name="disc" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            </View>
-            <View className="flex-1 min-w-0">
-              <Text className="text-[12px] font-semibold text-main">By Generic</Text>
-              <Text className="mt-[1px] text-[11px] text-[#5A706B]">{genericsSubtitle}</Text>
-            </View>
-          </Pressable>
+          {/* Browse by Category */}
+          <Text className="text-[15px] font-semibold text-main mb-2">Browse by Category</Text>
+          <View className="mb-4" style={{ gap: layout.gridGap }}>
+            <View
+              className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
+              style={{ gap: layout.gridGap }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setGenericSheetOpen(true)}
+                className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+              >
+                <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
+                  <Feather name="disc" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[12px] font-semibold text-main">By Generic</Text>
+                  <Text className="mt-[1px] text-[11px] text-[#5A706B]">{genericsSubtitle}</Text>
+                </View>
+              </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setManufacturerFilter('Square')}
-            className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
-          >
-            <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
-              <Feather name="briefcase" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setManufacturerFilter('Square')}
+                className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+              >
+                <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
+                  <Feather name="briefcase" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[12px] font-semibold text-main">By Manufacturer</Text>
+                  <Text className="mt-[1px] text-[11px] text-[#5A706B]">{mfrSubtitle}</Text>
+                </View>
+              </Pressable>
             </View>
-            <View className="flex-1 min-w-0">
-              <Text className="text-[12px] font-semibold text-main">By Manufacturer</Text>
-              <Text className="mt-[1px] text-[11px] text-[#5A706B]">{mfrSubtitle}</Text>
-            </View>
-          </Pressable>
-        </View>
 
-        <View
-          className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
-          style={{ gap: layout.gridGap }}
-        >
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setFormFilter('tablet')}
-            className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
-          >
-            <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
-              <Feather name="box" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            </View>
-            <View className="flex-1 min-w-0">
-              <Text className="text-[12px] font-semibold text-main">By Form</Text>
-              <Text className="mt-[1px] text-[11px] text-[#5A706B]">Tablet, Syrup &amp; more</Text>
-            </View>
-          </Pressable>
+            <View
+              className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
+              style={{ gap: layout.gridGap }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setFormFilter('tablet')}
+                className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+              >
+                <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
+                  <Feather name="box" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[12px] font-semibold text-main">By Form</Text>
+                  <Text className="mt-[1px] text-[11px] text-[#5A706B]">Tablet, Syrup &amp; more</Text>
+                </View>
+              </Pressable>
 
-          <View
-            className={`flex-row items-center bg-[#EEF2F0] opacity-75 border border-border rounded-field p-3 ${categoryCardSizeClass}`}
-          >
-            <View className="w-8 h-8 rounded-[8px] bg-[#E2E8E5] items-center justify-center mr-2.5">
-              <Feather name="lock" size={15} color={CAREDOSE_EXTENDED_COLORS.mutedText} />
-            </View>
-            <View className="flex-1 min-w-0">
-              <Text className="text-[12px] font-semibold text-[#5A706B]">By Condition</Text>
-              <Text className="mt-[1px] text-[11px] text-[#5A706B]">Unavailable</Text>
+              <View
+                className={`flex-row items-center bg-[#EEF2F0] opacity-75 border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+              >
+                <View className="w-8 h-8 rounded-[8px] bg-[#E2E8E5] items-center justify-center mr-2.5">
+                  <Feather name="lock" size={15} color={CAREDOSE_EXTENDED_COLORS.mutedText} />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[12px] font-semibold text-[#5A706B]">By Condition</Text>
+                  <Text className="mt-[1px] text-[11px] text-[#5A706B]">Unavailable</Text>
+                </View>
+              </View>
             </View>
           </View>
-        </View>
-      </View>
+        </>
+      ) : null}
 
       {/* Catalogue Results Header */}
       <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
@@ -371,6 +393,15 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
           </Pressable>
         ) : null}
       </View>
+
+      {hasMultipleVariantsInResults ? (
+        <View className="mb-2.5 flex-row items-start gap-2 rounded-field border border-[#C5E8D8] bg-mint px-3 py-2">
+          <Feather name="info" size={14} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
+          <Text className="flex-1 min-w-0 text-[11px] leading-4 text-primary-dark">
+            Multiple forms or strengths found — check the strength and form badges below to match your prescription, or filter by form above.
+          </Text>
+        </View>
+      ) : null}
 
       {loading ? (
         <LoadingSkeleton rows={4} />
@@ -399,6 +430,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
                 statusVariant={badge.variant}
                 statusLabel={badge.label}
                 showStatusBadge={badge.showBadge}
+                highlightVariants
                 onPress={() => router.push(`/explore/brand/${item.sourceId}`)}
               />
             );

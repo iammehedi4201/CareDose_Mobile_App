@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
-import { MedicineFormThumbnail } from './MedicineFormThumbnail';
+import { formatSimplifiedDosageForm, MedicineFormThumbnail } from './MedicineFormThumbnail';
 import { StatusBadge, StatusVariant } from './StatusBadge';
 
 export interface MedicineCardProps {
@@ -20,6 +20,7 @@ export interface MedicineCardProps {
   onPress?: () => void;
   secondaryNote?: string;
   rightSubtext?: string;
+  highlightVariants?: boolean;
 }
 
 export function formatMedicineMeta(
@@ -28,7 +29,8 @@ export function formatMedicineMeta(
   genericName?: string | null,
 ): string {
   const s = strength && strength.trim().length > 0 ? strength.trim() : 'Strength: Not available';
-  const f = dosageForm && dosageForm.trim().length > 0 ? dosageForm.trim() : 'Form: Not available';
+  const simplifiedForm = formatSimplifiedDosageForm(dosageForm);
+  const f = simplifiedForm ?? 'Form: Not available';
   const g = genericName && genericName.trim().length > 0 ? genericName.trim() : null;
   return g ? `${g} · ${s} · ${f}` : `${s} · ${f}`;
 }
@@ -67,9 +69,13 @@ export function MedicineCard({
   onPress,
   secondaryNote,
   rightSubtext,
+  highlightVariants = false,
 }: MedicineCardProps): React.JSX.Element {
   const layout = useResponsiveLayout();
   const metaLine = formatMedicineMeta(strength, dosageForm, genericName);
+  const cleanStrength = strength && strength.trim().length > 0 ? strength.trim() : null;
+  const cleanForm = formatSimplifiedDosageForm(dosageForm);
+  const cleanGeneric = genericName && genericName.trim().length > 0 ? genericName.trim() : null;
 
   return (
     <Pressable
@@ -102,16 +108,46 @@ export function MedicineCard({
             ) : null}
           </View>
 
-          <View className="mt-[3px] flex-row flex-wrap items-start justify-between gap-1.5">
-            <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={2}>
-              {metaLine}
-            </Text>
-            {rightSubtext ? (
-              <Text className="shrink-0 text-[11px] font-medium text-[#5A706B]">
-                {rightSubtext}
+          {highlightVariants ? (
+            <>
+              <View className="mt-1 flex-row flex-wrap items-center gap-1.5">
+                <View className="max-w-full rounded-full border border-[#C5E8D8] bg-mint px-2 py-0.5">
+                  <Text className="text-[11px] font-bold text-primary-dark">
+                    {cleanStrength ?? 'Strength: N/A'}
+                  </Text>
+                </View>
+                <View className="max-w-full rounded-full border border-border bg-background px-2 py-0.5">
+                  <Text className="text-[11px] font-semibold text-main">
+                    {cleanForm ?? 'Form: N/A'}
+                  </Text>
+                </View>
+              </View>
+
+              {(cleanGeneric || rightSubtext) ? (
+                <View className="mt-1 flex-row flex-wrap items-start justify-between gap-1.5">
+                  <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={1}>
+                    {cleanGeneric ?? 'Generic: Not available'}
+                  </Text>
+                  {rightSubtext ? (
+                    <Text className="shrink-0 text-[11px] font-medium text-[#5A706B]">
+                      {rightSubtext}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <View className="mt-[3px] flex-row flex-wrap items-start justify-between gap-1.5">
+              <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={2}>
+                {metaLine}
               </Text>
-            ) : null}
-          </View>
+              {rightSubtext ? (
+                <Text className="shrink-0 text-[11px] font-medium text-[#5A706B]">
+                  {rightSubtext}
+                </Text>
+              ) : null}
+            </View>
+          )}
 
           {manufacturer ? (
             <Text className="mt-[3px] text-[11.5px] font-medium text-primary-dark" numberOfLines={1}>

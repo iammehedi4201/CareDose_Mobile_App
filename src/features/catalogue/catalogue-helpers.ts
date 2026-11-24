@@ -95,6 +95,12 @@ function singularContainerNoun(unit: string): string {
       return 'ampoule';
     case 'vials':
       return 'vial';
+    case 'pens':
+      return 'pen';
+    case 'cartridges':
+      return 'cartridge';
+    case 'respules':
+      return 'respule';
     case 'bags':
       return 'infusion bag';
     case 'bottles':
@@ -277,7 +283,10 @@ export function resolvePackQuantityUnit(
     if (info.packTotalUnits !== null && info.packTotalUnits > 1) {
       const plural = info.containerUnit ?? 'vials';
       return {
-        label: 'Injection pack',
+        label:
+          formLower.includes('nebul') || plural === 'respules'
+            ? 'Pack quantity'
+            : 'Injection pack',
         value: `${info.packTotalUnits} ${plural} per pack`,
       };
     }

@@ -4,19 +4,25 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   BottomSheet,
   ConfirmDialog,
-  DateField,
   EmptyState,
   FormField,
   MedicineCard,
   PrimaryButton,
+  RecordPurchaseModal,
   ScheduleModal,
   ScreenContainer,
   SecondaryButton,
-  SelectField,
   StatusBadge,
   SuccessToast,
+  UpdateStockModal,
   validateRequiredFields,
 } from '../../src/components';
+import {
+  formatBdtAmount,
+  formatPurchaseDateCompact,
+  formatPurchasePackSummary,
+} from '../../src/features/expenses/expense-helpers';
+import { usePurchases } from '../../src/features/expenses/PurchasesContext';
 import {
   parseNonNegativeNumberInput,
   resolveMedicationStatusVariant,
@@ -52,15 +58,16 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     updateMedication,
     archiveMedication,
     restoreMedication,
-    adjustMedicationStock,
   } = useMedications();
   const {
     schedules,
     doseEvents,
   } = useSchedules();
+  const { getPurchasesForMedication } = usePurchases();
 
   const medication = id ? getMedicationById(id) : undefined;
   const medSchedules = schedules.filter((s) => s.patientMedicationId === id);
+  const recentMedPurchases = id ? getPurchasesForMedication(id).slice(0, 3) : [];
   const recentMedHistory = doseEvents
     .filter((ev) => ev.patientMedicationId === id)
     .sort((a, b) => b.scheduledFor.localeCompare(a.scheduledFor))
@@ -97,13 +104,6 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
 
   // Secondary modal form states
   const [editingSchedule, setEditingSchedule] = useState<LocalScheduleRecord | null>(null);
-  const [purchaseDate, setPurchaseDate] = useState('2026-11-21');
-  const [packCount, setPackCount] = useState('1');
-  const [unitsPerPack, setUnitsPerPack] = useState('30');
-  const [amountPaid, setAmountPaid] = useState('555');
-  const [stockAction, setStockAction] = useState('Add stock');
-  const [stockDelta, setStockDelta] = useState('10');
-  const [stockReason, setStockReason] = useState('Physical count');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   if (!medication) {
@@ -154,42 +154,6 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
     setEditOpen(false);
     setErrors({});
     setToast('Medicine details updated.');
-  };
-
-  const handleSavePurchase = async (): Promise<void> => {
-    const errs = validateRequiredFields(
-      { purchaseDate, packCount, unitsPerPack, amountPaid },
-      {
-        purchaseDate: 'Purchase date',
-        packCount: 'Number of packs',
-        unitsPerPack: 'Units per pack',
-        amountPaid: 'Amount paid',
-      },
-    );
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    const added = Math.max(0, (Number(packCount) || 1) * (Number(unitsPerPack) || 0));
-    await adjustMedicationStock(medication.id, 'add', added);
-    setPurchaseOpen(false);
-    setErrors({});
-    setToast(`Purchase saved (+${added} ${medication.stockUnit} added to stock).`);
-  };
-
-  const handleUpdateStock = async (): Promise<void> => {
-    const qty = parseNonNegativeNumberInput(stockDelta);
-    if (qty === null) {
-      setErrors({ stockDelta: 'Enter a valid non-negative number.' });
-      return;
-    }
-    await adjustMedicationStock(
-      medication.id,
-      stockAction === 'Set balance' ? 'set' : 'add',
-      qty,
-    );
-    setUpdateStockOpen(false);
-    setErrors({});
-    setToast(`Stock updated (${stockReason}).`);
   };
 
   const handleOpenGeneric = (): void => {
@@ -433,17 +397,42 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
           </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/purchases')}
+            onPress={() => router.push(`/purchases?medicationId=${medication.id}`)}
           >
             <Text className="text-[12px] font-semibold text-primary shrink-0">See all</Text>
           </Pressable>
         </View>
-        <View className="flex-row items-center justify-between py-2 pb-0.5 gap-4">
-          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
-            25 Oct 2026 · 30 tablets
-          </Text>
-          <Text className="flex-1 min-w-0 text-right text-[13px] font-semibold text-main">৳555</Text>
-        </View>
+        {recentMedPurchases.length === 0 ? (
+          <View className="py-2 pb-0.5">
+            <Text className="text-[12px] text-[#5A706B]">
+              No purchases recorded for this medicine yet.
+            </Text>
+          </View>
+        ) : (
+          recentMedPurchases.map((pur, idx) => (
+            <View
+              key={pur.id}
+              className={`flex-row items-center justify-between py-2 gap-4 ${
+                idx === recentMedPurchases.length - 1 ? 'pb-0.5' : 'border-b border-border'
+              }`}
+            >
+              <View className="flex-1 min-w-0">
+                <Text className="text-[12px] text-[#5A706B]" numberOfLines={1}>
+                  {formatPurchaseDateCompact(pur.purchaseDateYmd)} ·{' '}
+                  {formatPurchasePackSummary(pur)}
+                </Text>
+                {pur.vendor ? (
+                  <Text className="text-[11px] text-[#7A8F8A]" numberOfLines={1}>
+                    {pur.vendor}
+                  </Text>
+                ) : null}
+              </View>
+              <Text className="text-[13px] font-semibold text-main shrink-0">
+                {formatBdtAmount(pur.amountPaid, { keepDecimals: true })}
+              </Text>
+            </View>
+          ))
+        )}
       </View>
 
       {/* Schedule Section */}
@@ -618,46 +607,17 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       />
 
       {/* Record Purchase Modal */}
-      <BottomSheet
+      <RecordPurchaseModal
         visible={purchaseOpen}
-        title="Record Purchase"
-        subtitle={`Record a pack purchase for ${medication.name}`}
+        initialMedicationId={medication.id}
+        lockMedicineSelection
         onClose={() => setPurchaseOpen(false)}
-        onSubmit={() => void handleSavePurchase()}
-        submitLabel="Save purchase"
-      >
-        <DateField
-          label="Purchase date"
-          value={purchaseDate}
-          onChangeDate={setPurchaseDate}
-          required
-          errorMessage={errors.purchaseDate}
-        />
-        <FormField
-          label="Number of packs"
-          value={packCount}
-          onChangeText={setPackCount}
-          keyboardType="numeric"
-          required
-          errorMessage={errors.packCount}
-        />
-        <FormField
-          label="Units per pack"
-          value={unitsPerPack}
-          onChangeText={setUnitsPerPack}
-          keyboardType="numeric"
-          required
-          errorMessage={errors.unitsPerPack}
-        />
-        <FormField
-          label="Amount paid (৳ BDT)"
-          value={amountPaid}
-          onChangeText={setAmountPaid}
-          keyboardType="numeric"
-          required
-          errorMessage={errors.amountPaid}
-        />
-      </BottomSheet>
+        onSaved={(outcome) => {
+          setToast(
+            `Purchase saved (+${outcome.totalUnitsAdded} ${outcome.stockUnit} added to stock).`,
+          );
+        }}
+      />
 
       {/* Edit Medicine Modal */}
       <BottomSheet
@@ -699,44 +659,16 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </BottomSheet>
 
       {/* Update Stock Modal */}
-      <BottomSheet
+      <UpdateStockModal
         visible={updateStockOpen}
-        title="Update Stock"
-        warningNote="Creates an auditable stock adjustment transaction."
+        medication={medication}
         onClose={() => setUpdateStockOpen(false)}
-        onSubmit={() => void handleUpdateStock()}
-        submitLabel="Update stock"
-      >
-        <SelectField
-          label="Action"
-          value={stockAction}
-          options={[
-            { label: 'Add stock', value: 'Add stock' },
-            { label: 'Set balance', value: 'Set balance' },
-          ]}
-          onSelect={setStockAction}
-          required
-        />
-        <FormField
-          label="Quantity"
-          value={stockDelta}
-          onChangeText={setStockDelta}
-          keyboardType="numeric"
-          required
-          errorMessage={errors.stockDelta}
-        />
-        <SelectField
-          label="Reason"
-          value={stockReason}
-          options={[
-            { label: 'Physical count', value: 'Physical count' },
-            { label: 'Damaged / wasted', value: 'Damaged / wasted' },
-            { label: 'Correction', value: 'Correction' },
-          ]}
-          onSelect={setStockReason}
-          required
-        />
-      </BottomSheet>
+        onSaved={(outcome) => {
+          setToast(
+            `Stock updated to ${outcome.nextStock} ${outcome.stockUnit} (${outcome.reason}).`,
+          );
+        }}
+      />
 
       {/* Archive Confirmation */}
       <ConfirmDialog

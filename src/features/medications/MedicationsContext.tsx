@@ -2,6 +2,10 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiRequestError, readSavedAuthSession } from '../../api/config';
 import {
+  adjustMedicationInventory,
+  type AdjustStockModeDto,
+} from '../../api/inventory';
+import {
   archivePatientMedication,
   createPatientMedication,
   listPatientMedications,
@@ -14,6 +18,11 @@ import {
   mapApiMedicationToRecord,
   PersonalMedicationRecord,
 } from './medication-helpers';
+import {
+  buildLocalPurchaseFromInitialMedication,
+  PURCHASES_STORAGE_KEY,
+} from '../expenses/expense-helpers';
+import type { PurchaseItemDto } from '../../api/purchases';
 import { formatUnitLabelForCount } from './stock-calculator';
 
 const STORAGE_KEY = 'caredose:personal-meds:v2';
@@ -60,6 +69,14 @@ export interface UpdatePersonalMedicationInput {
   stockUnit?: string;
 }
 
+export interface AdjustStockOptions {
+  syncRemote?: boolean;
+  reason?: string;
+  note?: string;
+  enteredQuantity?: number;
+  enteredUnit?: string;
+}
+
 interface MedicationsContextValue {
   medications: PersonalMedicationRecord[];
   loading: boolean;
@@ -73,8 +90,9 @@ interface MedicationsContextValue {
   restoreMedication: (id: string) => Promise<void>;
   adjustMedicationStock: (
     id: string,
-    mode: 'add' | 'set',
+    mode: 'add' | 'set' | 'deduct',
     quantity: number,
+    options?: AdjustStockOptions,
   ) => Promise<void>;
   refreshMedications: () => Promise<void>;
   resetDemoMedications: () => Promise<void>;
@@ -230,6 +248,29 @@ export function MedicationsProvider({
         archived: false,
       };
 
+      // Persist optional initial purchase before updating medications so PurchasesContext
+      // sees the new purchase record immediately when medications.length changes.
+      if (input.purchaseDetails) {
+        try {
+          const localPurchase = buildLocalPurchaseFromInitialMedication({
+            medication: localMed,
+            purchaseDetails: input.purchaseDetails,
+            enteredQuantity: input.enteredQuantity,
+          });
+          const rawPurchases = await AsyncStorage.getItem(PURCHASES_STORAGE_KEY);
+          const existingPurchases = rawPurchases
+            ? (JSON.parse(rawPurchases) as PurchaseItemDto[])
+            : [];
+          const nextPurchases = [
+            localPurchase,
+            ...(Array.isArray(existingPurchases) ? existingPurchases : []),
+          ];
+          await AsyncStorage.setItem(PURCHASES_STORAGE_KEY, JSON.stringify(nextPurchases));
+        } catch {
+          // Ignore non-fatal local purchase persistence error
+        }
+      }
+
       setMedications((prev) => {
         const next = [localMed, ...prev];
         void persistLocal(next);
@@ -339,12 +380,47 @@ export function MedicationsProvider({
   );
 
   const adjustMedicationStock = useCallback(
-    async (id: string, mode: 'add' | 'set', quantity: number) => {
+    async (
+      id: string,
+      mode: 'add' | 'set' | 'deduct',
+      quantity: number,
+      options: AdjustStockOptions = {},
+    ) => {
+      let resolvedRemoteStock: number | null = null;
+      if (options.syncRemote && /^[0-9a-f]{8}-/i.test(id)) {
+        const session = await readSavedAuthSession();
+        if (session) {
+          const apiMode: AdjustStockModeDto =
+            mode === 'set' ? 'SET' : mode === 'deduct' ? 'DEDUCT' : 'ADD';
+          try {
+            const res = await adjustMedicationInventory(id, session.token, {
+              mode: apiMode,
+              quantity,
+              enteredQuantity: options.enteredQuantity,
+              enteredUnit: options.enteredUnit,
+              reason: options.reason,
+              note: options.note,
+            });
+            resolvedRemoteStock = Number(res.stockRemaining);
+          } catch (err) {
+            if (err instanceof ApiRequestError && !err.isNetworkError) {
+              throw err;
+            }
+          }
+        }
+      }
+
       setMedications((prev) => {
         const next = prev.map((m) => {
           if (m.id !== id) return m;
           const nextStock =
-            mode === 'set' ? Math.max(0, quantity) : Math.max(0, m.stockRemaining + quantity);
+            resolvedRemoteStock !== null && Number.isFinite(resolvedRemoteStock)
+              ? resolvedRemoteStock
+              : mode === 'set'
+                ? Math.max(0, quantity)
+                : mode === 'deduct'
+                  ? Math.max(0, m.stockRemaining - quantity)
+                  : Math.max(0, m.stockRemaining + quantity);
           return { ...m, stockRemaining: Number(nextStock.toFixed(2)) };
         });
         void persistLocal(next);

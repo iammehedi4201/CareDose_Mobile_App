@@ -162,8 +162,9 @@ describe('CareDose Simplified Add Medicine Flow — End-to-End Domain Rules', ()
     ).toBe('tubes');
   });
 
-  it('rejects corrupt or missing packaging without guessing strip sizes or bottle volumes', () => {
-    // 28's pack with strip_units=10 is arithmetically inconsistent (28 % 10 !== 0)
+  it('rejects corrupt strip counts while preserving verified whole-pack conversion and never guessing missing bottle volumes', () => {
+    // 28's pack with strip_units=10 has an arithmetically inconsistent strip size (28 % 10 !== 0):
+    // strip conversion must stay disabled, while verified packUnits=28 conversion remains valid.
     const mismatchedPack = makePack({
       packQuantity: "28's pack",
       packUnits: 28,
@@ -172,8 +173,9 @@ describe('CareDose Simplified Add Medicine Flow — End-to-End Domain Rules', ()
     });
     const mismatchedInfo = extractPackInfo('Tablet', mismatchedPack, [mismatchedPack]);
     expect(mismatchedInfo.stripUnits).toBeNull();
-    expect(mismatchedInfo.hasReliableDefaultPackaging).toBe(false);
-    expect(getDefaultStockMode(mismatchedInfo)).toBe('direct');
+    expect(mismatchedInfo.packTotalUnits).toBe(28);
+    expect(mismatchedInfo.hasReliableDefaultPackaging).toBe(true);
+    expect(getDefaultStockMode(mismatchedInfo)).toBe('packs');
 
     // Bottle without ml volume never guesses 60/100ml
     const unknownSyrup = makePack({ packQuantity: 'Bottle', packPrice: null });
@@ -257,6 +259,8 @@ describe('CareDose Simplified Add Medicine Flow — End-to-End Domain Rules', ()
     expect(modalSource).toContain('gap-2.5 min-h-[36px]');
     expect(modalSource).toContain('min-w-0 shrink');
     expect(modalSource).toContain('flex-wrap');
+    // Search results show strength prominently beside brand name so long generics never clip mg variants
+    expect(modalSource).toContain('Select ${brand.name} ${brand.strength}');
 
     // Removed old clutter fields / switches from initial add form
     expect(modalSource).not.toContain('Personal instructions');
