@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, Share, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import settingsHeaderImage from '../assets/settings-header-illustration.jpg';
 import { clearCatalogueClientCache, getCatalogueSqliteStats } from '../src/api/catalogue';
 import { readSavedAuthSession } from '../src/api/config';
 import {
@@ -23,6 +24,7 @@ import {
   SelectField,
   SuccessToast,
   ToggleField,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   applyBackupDocumentToLocalStorage,
@@ -414,16 +416,31 @@ export default function SettingsScreen(): React.JSX.Element {
     }
   };
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Settings',
+    subtitle: 'Reminders, offline cache, backup & privacy.',
+    imageSource: settingsHeaderImage,
+    onBack: () => router.push('/profile'),
+  });
+
   return (
     <ScreenContainer
       title="Settings"
-      subtitle="Reminders, offline cache, backup & privacy"
-      onBack={() => router.push('/profile')}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
-      {/* Reminders & Device Permissions */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      {/* Reminders & Device Permissions floating over header wave */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm"
+      >
         <View className="flex-row items-center justify-between gap-2 mb-2">
           <Text className="text-[15px] font-semibold text-main">Reminders</Text>
           <View
@@ -541,7 +558,7 @@ export default function SettingsScreen(): React.JSX.Element {
       </View>
 
       {/* Units & Profile */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-semibold text-main mb-2">Units & Profile</Text>
         <SelectField
           label="Glucose unit"
@@ -582,7 +599,7 @@ export default function SettingsScreen(): React.JSX.Element {
       </View>
 
       {/* SQLite Offline Catalogue Cache */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-semibold text-main">
           Offline Catalogue Cache
         </Text>
@@ -601,7 +618,7 @@ export default function SettingsScreen(): React.JSX.Element {
       </View>
 
       {/* Backup Export & Restore */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-semibold text-main">
           Data Export & Backup
         </Text>
@@ -634,7 +651,7 @@ export default function SettingsScreen(): React.JSX.Element {
       </View>
 
       {/* Demo Data Reset */}
-      <View className="bg-[#FDF5E6] rounded-card border border-[#F3D9A4] p-4 mb-3.5">
+      <View className="bg-[#FDF5E6] rounded-card border border-[#F3D9A4] p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-bold text-warning">Demo Data</Text>
         <Text className="mt-1 text-[12px] text-main leading-[17px]">
           Restore sample defaults for medicines, schedules, health readings, purchases, and preferences.
@@ -649,7 +666,7 @@ export default function SettingsScreen(): React.JSX.Element {
       </View>
 
       {/* Permanent Account & Data Deletion */}
-      <View className="bg-[#FDECEC] rounded-card border border-[#F3C1BE] p-4 mb-3.5">
+      <View className="bg-[#FDECEC] rounded-card border border-[#F3C1BE] p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-bold text-error">
           Delete Account & Data
         </Text>

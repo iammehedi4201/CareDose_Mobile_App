@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import schedulesHeaderImage from '../assets/schedules-header-illustration.jpg';
 import {
   ConfirmDialog,
   EmptyState,
@@ -15,6 +16,7 @@ import {
   StatusBadge,
   StatusVariant,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import type { ScheduleStatusDto } from '../src/api/schedules';
 import { useMedications } from '../src/features/medications/MedicationsContext';
@@ -189,22 +191,35 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
     return 'archived';
   };
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Manage Schedules',
+    subtitle: 'Manage your recurring medicine schedules.',
+    imageSource: schedulesHeaderImage,
+    onBack: () => {
+      if (typeof router.navigate === 'function') {
+        router.navigate('/schedule');
+      } else {
+        router.push('/schedule');
+      }
+    },
+    primaryAction: {
+      label: 'Add Schedule',
+      iconName: 'plus',
+      pill: true,
+      onPress: handleOpenCreate,
+    },
+  });
+
   return (
     <ScreenContainer
       title="Manage Schedules"
-      subtitle="Manage your recurring medicine schedules."
-      onBack={() => {
-        if (typeof router.navigate === 'function') {
-          router.navigate('/schedule');
-        } else {
-          router.push('/schedule');
-        }
-      }}
-      primaryAction={{
-        label: 'Add Schedule',
-        iconName: 'plus',
-        onPress: handleOpenCreate,
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
@@ -219,8 +234,8 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
         />
       ) : null}
 
-      {/* Summary bar */}
-      <View className="mb-3 flex-row flex-wrap gap-2">
+      {/* Summary bar floating over header wave */}
+      <View style={{ marginTop: -overlapPx }} className="mb-3 flex-row flex-wrap gap-2">
         <View
           className="flex-1 min-w-[84px] rounded-card border border-border bg-white px-3 py-2.5 shadow-sm"
           accessibilityLabel={`Total schedules ${counts.all}`}

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import exploreHeaderImage from '../assets/explore-header-illustration.jpg';
 import {
   BottomSheet,
   EmptyState,
@@ -11,6 +12,7 @@ import {
   ScreenContainer,
   SearchInput,
   SecondaryButton,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   CatalogueBrandSummaryDto,
@@ -244,26 +246,49 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
 
   const categoryCardSizeClass = layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0';
 
-  return (
-    <ScreenContainer title="Explore Medicines">
-      <SearchInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search brand, generic, strength or manufacturer"
-      />
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    eyebrow: 'BANGLADESH DIRECTORY',
+    title: 'Explore Medicines',
+    subtitle: brandsCountLabel,
+    imageSource: exploreHeaderImage,
+    overlapRatio: 0.25,
+  });
 
-      <View className="mt-2 mb-3">
-        <FilterChips
-          options={[
-            { key: 'all', label: 'All' },
-            { key: 'tablet', label: 'Tablet' },
-            { key: 'capsule', label: 'Capsule' },
-            { key: 'syrup', label: 'Syrup' },
-            { key: 'injection', label: 'Injection' },
-          ]}
-          selectedKey={formFilter}
-          onSelect={setFormFilter}
+  return (
+    <ScreenContainer
+      title="Explore Medicines"
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
+    >
+      {/* Floating Search & Dosage Form Filter Container */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3.5 rounded-card border border-border bg-white p-3 shadow-sm"
+      >
+        <SearchInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search brand, generic, strength or manufacturer"
         />
+
+        <View className="mt-2">
+          <FilterChips
+            options={[
+              { key: 'all', label: 'All' },
+              { key: 'tablet', label: 'Tablet' },
+              { key: 'capsule', label: 'Capsule' },
+              { key: 'syrup', label: 'Syrup' },
+              { key: 'injection', label: 'Injection' },
+            ]}
+            selectedKey={formFilter}
+            onSelect={setFormFilter}
+          />
+        </View>
       </View>
 
       {manufacturerFilter ? (
@@ -282,23 +307,21 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
       ) : null}
 
       {!isFiltered ? (
-        <>
-          {/* Feature Info Banner */}
-          <View className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-3.5">
-            <View className="w-9 h-9 rounded-[10px] bg-white items-center justify-center mr-2.5 shrink-0">
-              <Feather name="book-open" size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
-            </View>
-            <View className="flex-1 min-w-0">
-              <Text className="text-[13px] font-bold text-main">Bangladesh Medicine Directory</Text>
-              <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-                {brandsCountLabel} · Reference (unverified)
-              </Text>
-            </View>
-            <View className="w-6 h-6 rounded-full bg-primary items-center justify-center ml-2 shrink-0">
-              <Text className="text-white text-[12px] font-bold">i</Text>
-            </View>
+        <View
+          className="flex-row items-center gap-2.5 rounded-card px-3.5 py-2.5 mb-3.5"
+          style={{
+            backgroundColor: CAREDOSE_EXTENDED_COLORS.mintSurface,
+            borderWidth: 1,
+            borderColor: '#C5E8D8',
+          }}
+        >
+          <View className="w-8 h-8 rounded-full bg-white items-center justify-center shrink-0">
+            <Feather name="book-open" size={15} color={CAREDOSE_EXTENDED_COLORS.primary} />
           </View>
-        </>
+          <Text className="flex-1 min-w-0 text-[12px] font-medium text-main">
+            Bangladesh Medicine Directory · Reference records (unverified)
+          </Text>
+        </View>
       ) : null}
 
       {offlineFallback ? (
@@ -313,22 +336,23 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
       {!isFiltered ? (
         <>
           {/* Popular Searches */}
-          <Text className="text-[15px] font-semibold text-main mb-2">Popular Searches</Text>
+          <Text className="text-[15px] font-bold text-main mb-2">Popular Searches</Text>
           <View className="flex-row flex-wrap gap-2 mb-4">
             {POPULAR_SEARCHES.map((term) => (
               <Pressable
                 key={term}
                 accessibilityRole="button"
                 onPress={() => setQuery(term)}
-                className="bg-white border border-border rounded-full px-3 py-1.5"
+                className="flex-row items-center gap-1.5 bg-white border border-border rounded-full px-3 py-1.5 shadow-sm active:bg-mint"
               >
-                <Text className="text-[12px] text-main font-medium">{term}</Text>
+                <Feather name="search" size={11} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                <Text className="text-[12px] text-main font-semibold">{term}</Text>
               </Pressable>
             ))}
           </View>
 
           {/* Browse by Category */}
-          <Text className="text-[15px] font-semibold text-main mb-2">Browse by Category</Text>
+          <Text className="text-[15px] font-bold text-main mb-2">Browse by Category</Text>
           <View className="mb-4" style={{ gap: layout.gridGap }}>
             <View
               className={layout.stackTwoCol ? 'flex-col' : 'flex-row'}
@@ -337,13 +361,13 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setGenericSheetOpen(true)}
-                className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+                className={`flex-row items-center bg-white border border-border rounded-card p-3.5 shadow-sm active:bg-mint ${categoryCardSizeClass}`}
               >
-                <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
+                <View className="w-9 h-9 rounded-full bg-mint items-center justify-center mr-2.5 shrink-0">
                   <Feather name="disc" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-[12px] font-semibold text-main">By Generic</Text>
+                  <Text className="text-[13px] font-bold text-main">By Generic</Text>
                   <Text className="mt-[1px] text-[11px] text-[#5A706B]">{genericsSubtitle}</Text>
                 </View>
               </Pressable>
@@ -351,13 +375,13 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setManufacturerFilter('Square')}
-                className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+                className={`flex-row items-center bg-white border border-border rounded-card p-3.5 shadow-sm active:bg-mint ${categoryCardSizeClass}`}
               >
-                <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
+                <View className="w-9 h-9 rounded-full bg-mint items-center justify-center mr-2.5 shrink-0">
                   <Feather name="briefcase" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-[12px] font-semibold text-main">By Manufacturer</Text>
+                  <Text className="text-[13px] font-bold text-main">By Manufacturer</Text>
                   <Text className="mt-[1px] text-[11px] text-[#5A706B]">{mfrSubtitle}</Text>
                 </View>
               </Pressable>
@@ -370,28 +394,30 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setFormFilter('tablet')}
-                className={`flex-row items-center bg-white border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+                className={`flex-row items-center bg-white border border-border rounded-card p-3.5 shadow-sm active:bg-mint ${categoryCardSizeClass}`}
               >
-                <View className="w-8 h-8 rounded-[8px] bg-mint items-center justify-center mr-2.5">
+                <View className="w-9 h-9 rounded-full bg-mint items-center justify-center mr-2.5 shrink-0">
                   <Feather name="box" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-[12px] font-semibold text-main">By Form</Text>
+                  <Text className="text-[13px] font-bold text-main">By Form</Text>
                   <Text className="mt-[1px] text-[11px] text-[#5A706B]">Tablet, Syrup &amp; more</Text>
                 </View>
               </Pressable>
 
-              <View
-                className={`flex-row items-center bg-[#EEF2F0] opacity-75 border border-border rounded-field p-3 ${categoryCardSizeClass}`}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/alternatives')}
+                className={`flex-row items-center bg-white border border-border rounded-card p-3.5 shadow-sm active:bg-mint ${categoryCardSizeClass}`}
               >
-                <View className="w-8 h-8 rounded-[8px] bg-[#E2E8E5] items-center justify-center mr-2.5">
-                  <Feather name="lock" size={15} color={CAREDOSE_EXTENDED_COLORS.mutedText} />
+                <View className="w-9 h-9 rounded-full bg-mint items-center justify-center mr-2.5 shrink-0">
+                  <Feather name="layers" size={16} color={CAREDOSE_EXTENDED_COLORS.primary} />
                 </View>
                 <View className="flex-1 min-w-0">
-                  <Text className="text-[12px] font-semibold text-[#5A706B]">By Condition</Text>
-                  <Text className="mt-[1px] text-[11px] text-[#5A706B]">Unavailable</Text>
+                  <Text className="text-[13px] font-bold text-main">Alternatives</Text>
+                  <Text className="mt-[1px] text-[11px] text-[#5A706B]">Compare matching brands</Text>
                 </View>
-              </View>
+              </Pressable>
             </View>
           </View>
         </>

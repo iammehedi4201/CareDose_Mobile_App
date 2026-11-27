@@ -15,6 +15,7 @@ export * from './Overlays';
 export * from './RecordPurchaseModal';
 export * from './ScheduleModal';
 export * from './ScreenContainer';
+export * from './ScreenWaveHeader';
 export * from './SearchInput';
 export * from './SectionHeader';
 export * from './SegmentedControl';

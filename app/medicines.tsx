@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import medicinesHeaderImage from '../assets/medicines-header-illustration.jpg';
 import {
   AddMedicineModal,
   EmptyState,
@@ -9,9 +11,11 @@ import {
   ScreenContainer,
   SearchInput,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   filterPersonalMedications,
+  isPersonalMedicationLowStock,
   MedFilter,
   resolveMedicationStatusVariant,
 } from '../src/features/medications/medication-helpers';
@@ -21,6 +25,7 @@ import {
   formatStockWithUnit,
 } from '../src/features/medications/stock-calculator';
 import { useMedications } from '../src/features/medications/MedicationsContext';
+import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
 
 export default function MyMedicinesScreen(): React.JSX.Element {
   const router = useRouter();
@@ -31,22 +36,150 @@ export default function MyMedicinesScreen(): React.JSX.Element {
   const [toast, setToast] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  const counts = useMemo(() => {
+    let active = 0;
+    let lowStock = 0;
+    let archived = 0;
+    for (const m of medications) {
+      if (m.archived) {
+        archived += 1;
+      } else {
+        active += 1;
+        if (isPersonalMedicationLowStock(m)) {
+          lowStock += 1;
+        }
+      }
+    }
+    return { active, lowStock, archived };
+  }, [medications]);
+
   const filteredMeds = useMemo(
     () => filterPersonalMedications(medications, { query, filter }),
     [medications, query, filter],
   );
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    eyebrow: 'MY CARE',
+    title: 'My Medicines',
+    subtitle: 'Track stock levels and dose plans.',
+    imageSource: medicinesHeaderImage,
+    overlapRatio: 0.25,
+    primaryAction: {
+      label: 'Add',
+      iconName: 'plus',
+      pill: true,
+      onPress: () => setAddOpen(true),
+    },
+  });
+
   return (
     <ScreenContainer
-      eyebrow="MY CARE"
       title="My Medicines"
-      primaryAction={{
-        label: 'Add',
-        iconName: 'plus',
-        onPress: () => setAddOpen(true),
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
+
+      {/* Floating Stock Overview Tiles matching Home & Schedule summary cards */}
+      <View style={{ marginTop: -overlapPx }} className="mb-3 flex-row gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Active medicines ${counts.active}`}
+          onPress={() => setFilter((prev) => (prev === 'active' ? 'all' : 'active'))}
+          className="flex-1 min-w-0 rounded-card bg-white px-3 py-2.5 shadow-sm active:opacity-90"
+          style={{
+            borderWidth: 1,
+            borderColor: filter === 'active' ? CAREDOSE_EXTENDED_COLORS.primary : CAREDOSE_EXTENDED_COLORS.border,
+          }}
+        >
+          <View className="flex-row items-center gap-1.5">
+            <Feather name="package" size={13} color={CAREDOSE_EXTENDED_COLORS.primary} />
+            <Text className="text-[11px] font-semibold text-[#5A706B]" numberOfLines={1}>
+              Active
+            </Text>
+          </View>
+          <Text className="mt-1 text-[20px] font-bold text-main">{counts.active}</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Low stock medicines ${counts.lowStock}`}
+          onPress={() => setFilter((prev) => (prev === 'low_stock' ? 'all' : 'low_stock'))}
+          className="flex-1 min-w-0 rounded-card px-3 py-2.5 shadow-sm active:opacity-90"
+          style={{
+            backgroundColor:
+              counts.lowStock > 0
+                ? CAREDOSE_EXTENDED_COLORS.warningSurface
+                : CAREDOSE_EXTENDED_COLORS.mintSurface,
+            borderWidth: 1,
+            borderColor:
+              filter === 'low_stock'
+                ? CAREDOSE_EXTENDED_COLORS.primary
+                : counts.lowStock > 0
+                  ? '#F3D9A4'
+                  : '#CBE7DB',
+          }}
+        >
+          <View className="flex-row items-center gap-1.5">
+            <Feather
+              name={counts.lowStock > 0 ? 'alert-triangle' : 'check-circle'}
+              size={13}
+              color={
+                counts.lowStock > 0
+                  ? CAREDOSE_EXTENDED_COLORS.warning
+                  : CAREDOSE_EXTENDED_COLORS.primary
+              }
+            />
+            <Text
+              className="text-[11px] font-semibold"
+              style={{
+                color:
+                  counts.lowStock > 0
+                    ? CAREDOSE_EXTENDED_COLORS.warning
+                    : CAREDOSE_EXTENDED_COLORS.primary,
+              }}
+              numberOfLines={1}
+            >
+              Low stock
+            </Text>
+          </View>
+          <Text
+            className="mt-1 text-[20px] font-bold"
+            style={{
+              color:
+                counts.lowStock > 0
+                  ? CAREDOSE_EXTENDED_COLORS.warning
+                  : CAREDOSE_EXTENDED_COLORS.primaryDark,
+            }}
+          >
+            {counts.lowStock}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Archived medicines ${counts.archived}`}
+          onPress={() => setFilter((prev) => (prev === 'archived' ? 'all' : 'archived'))}
+          className="flex-1 min-w-0 rounded-card bg-white px-3 py-2.5 shadow-sm active:opacity-90"
+          style={{
+            borderWidth: 1,
+            borderColor: filter === 'archived' ? CAREDOSE_EXTENDED_COLORS.primary : CAREDOSE_EXTENDED_COLORS.border,
+          }}
+        >
+          <View className="flex-row items-center gap-1.5">
+            <Feather name="archive" size={13} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
+            <Text className="text-[11px] font-semibold text-[#5A706B]" numberOfLines={1}>
+              Archived
+            </Text>
+          </View>
+          <Text className="mt-1 text-[20px] font-bold text-main">{counts.archived}</Text>
+        </Pressable>
+      </View>
 
       <SearchInput
         value={query}
@@ -54,13 +187,13 @@ export default function MyMedicinesScreen(): React.JSX.Element {
         placeholder="Search name, brand or generic"
       />
 
-      <View className="mt-2 mb-2.5">
+      <View className="mt-2 mb-3">
         <FilterChips
           options={[
-            { key: 'all', label: 'All' },
-            { key: 'active', label: 'Active' },
-            { key: 'low_stock', label: 'Low Stock' },
-            { key: 'archived', label: 'Archived' },
+            { key: 'all', label: 'All', count: medications.length },
+            { key: 'active', label: 'Active', count: counts.active },
+            { key: 'low_stock', label: 'Low Stock', count: counts.lowStock },
+            { key: 'archived', label: 'Archived', count: counts.archived },
           ]}
           selectedKey={filter}
           onSelect={setFilter}

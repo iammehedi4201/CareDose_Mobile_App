@@ -83,7 +83,7 @@ export function MedicineCard({
       accessibilityLabel={`${name}, ${metaLine}`}
       disabled={!onPress}
       onPress={onPress}
-      className="mb-2.5 rounded-card border border-border bg-white"
+      className="mb-2.5 rounded-card border border-border bg-white shadow-sm"
       style={{ padding: layout.cardPadding }}
     >
       <View className="flex-row items-start">

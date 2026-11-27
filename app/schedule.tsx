@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import scheduleHeaderImage from '../assets/schedule-header-illustration.jpg';
 import {
   DoseCard,
@@ -16,6 +15,7 @@ import {
   SectionHeader,
   SegmentedControl,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
 import { useMedications } from '../src/features/medications/MedicationsContext';
@@ -69,7 +69,6 @@ function stripLeadingAmountPrefix(doseInstruction: string, amountLabel: string):
 export default function ScheduleScreen(): React.JSX.Element {
   const router = useRouter();
   const layout = useResponsiveLayout();
-  const insets = useSafeAreaInsets();
   const { medications } = useMedications();
   const {
     schedules,
@@ -147,152 +146,16 @@ export default function ScheduleScreen(): React.JSX.Element {
     }));
   };
 
-  // Full-bleed header proportions matched identically to HomeScreen (2:1 artwork),
-  // extending seamlessly from y = 0 behind the status bar down behind the top selector card.
-  const isWideViewport = layout.width > 500;
-  const baseArtWidth = isWideViewport
-    ? layout.width
-    : Math.round(layout.width * (layout.isCompact ? 1.1 : 1.14));
-  const baseArtHeight = isWideViewport ? 220 : Math.round(baseArtWidth * 0.5);
-  const topInset = Math.max(0, insets.top);
-  const headerArtTop = topInset > 0 ? 0 : -Math.round(baseArtHeight * 0.14);
-  const minArtHeightForInset =
-    topInset > 0
-      ? Math.max(
-          topInset + (layout.isCompact ? 140 : 162),
-          Math.round(topInset / 0.21),
-        )
-      : baseArtHeight;
-  const headerArtHeight = Math.max(baseArtHeight, minArtHeightForInset);
-  const headerArtWidth = isWideViewport
-    ? layout.width
-    : Math.max(baseArtWidth, Math.round(headerArtHeight * 2));
-  const headerTopPadding = topInset + (layout.isCompact ? 10 : 12);
-  const headerHeight = Math.max(
-    headerTopPadding + 104,
-    headerArtHeight + headerArtTop,
-  );
-  const headerOverlapPx = Math.round(Math.max(120, headerHeight - topInset) * 0.31);
-
-  const statusBarGuardOverlay =
-    topInset > 0 ? (
-      <View
-        accessible={false}
-        pointerEvents="none"
-        className="absolute left-0 right-0 top-0 z-20 overflow-hidden bg-[#DFF6EC]"
-        style={{ height: topInset }}
-      >
-        <Image
-          source={scheduleHeaderImage}
-          resizeMode="cover"
-          accessible={false}
-          style={{
-            position: 'absolute',
-            top: headerArtTop,
-            right: 0,
-            width: headerArtWidth,
-            height: headerArtHeight,
-          }}
-        />
-      </View>
-    ) : null;
-
-  const scheduleHeaderBanner = (
-    <View
-      className="relative w-full overflow-hidden bg-[#DFF6EC]"
-      style={{
-        height: headerHeight,
-        paddingTop: headerTopPadding,
-      }}
-    >
-      <Image
-        source={scheduleHeaderImage}
-        resizeMode="cover"
-        accessible={false}
-        style={{
-          position: 'absolute',
-          top: headerArtTop,
-          right: 0,
-          width: headerArtWidth,
-          height: headerArtHeight,
-        }}
-      />
-      {/* Feathered multi-step transition into #F7FAF8 background matching HomeScreen */}
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 56,
-          backgroundColor: 'rgba(247, 250, 248, 0.20)',
-        }}
-      />
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 40,
-          backgroundColor: 'rgba(247, 250, 248, 0.40)',
-        }}
-      />
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 24,
-          backgroundColor: 'rgba(247, 250, 248, 0.65)',
-        }}
-      />
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 12,
-          backgroundColor: 'rgba(247, 250, 248, 0.90)',
-        }}
-      />
-
-      <View
-        className="w-full"
-        style={[
-          { paddingHorizontal: layout.screenPadding },
-          layout.maxContentWidth
-            ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-            : undefined,
-        ]}
-      >
-        <View
-          className="min-w-0 pr-3"
-          style={{ maxWidth: layout.isCompact ? '54%' : '56%' }}
-        >
-          <Text
-            className="font-bold text-main"
-            style={{
-              fontSize: layout.isCompact ? 25 : 28,
-              lineHeight: layout.isCompact ? 30 : 34,
-            }}
-            numberOfLines={1}
-          >
-            Schedule
-          </Text>
-          <Text className="mt-1 text-xs leading-[17px] text-[#5A706B]" numberOfLines={2}>
-            Your medicine plan and daily routine.
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
+  const {
+    topBanner: scheduleHeaderBanner,
+    topOverlay: statusBarGuardOverlay,
+    overlapPx: headerOverlapPx,
+  } = useScreenWaveHeader({
+    title: 'Schedule',
+    subtitle: 'Your medicine plan and daily routine.',
+    imageSource: scheduleHeaderImage,
+    overlapRatio: 0.31,
+  });
 
   const floatingMenu = (
     <FloatingActionMenu

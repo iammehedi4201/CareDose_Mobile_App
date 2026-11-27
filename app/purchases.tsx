@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import purchasesHeaderImage from '../assets/purchases-header-illustration.jpg';
 import {
   EmptyState,
   FilterChips,
@@ -9,6 +10,7 @@ import {
   ScreenContainer,
   SearchInput,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   filterPurchasesList,
@@ -83,20 +85,36 @@ export default function PurchasesScreen(): React.JSX.Element {
     [filteredPurchases],
   );
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Purchase History',
+    subtitle: 'Recorded packs & stock refills.',
+    imageSource: purchasesHeaderImage,
+    onBack: () => router.back(),
+    primaryAction: {
+      label: '+ Record',
+      pill: true,
+      onPress: () => setPurchaseOpen(true),
+    },
+  });
+
   return (
     <ScreenContainer
       title="Purchase History"
-      subtitle="Recorded packs & stock refills"
-      onBack={() => router.back()}
-      primaryAction={{
-        label: '+ Record',
-        onPress: () => setPurchaseOpen(true),
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
-      {/* Summary Banner */}
-      <View className="mb-3.5 rounded-card border border-[#CBE7DB] bg-mint p-4">
+      {/* Summary Banner floating cleanly over header wave */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3.5 rounded-card border border-[#CBE7DB] bg-mint p-4 shadow-sm"
+      >
         <View className="flex-row items-center justify-between gap-3">
           <View className="flex-1 min-w-0">
             <Text className="text-xs font-medium text-[#3C5853]">
@@ -180,18 +198,30 @@ export default function PurchasesScreen(): React.JSX.Element {
                 accessibilityRole="button"
                 accessibilityLabel={`${medName}, ${formatPurchaseDateCompact(item.purchaseDateYmd)}, ${formatBdtAmount(item.amountPaid, { keepDecimals: true })}`}
                 onPress={() => router.push(`/medicines/${item.patientMedicationId}`)}
-                className="rounded-card border border-border bg-white p-3.5 active:bg-background"
+                className="rounded-card border border-border bg-white p-3.5 shadow-sm active:bg-background"
               >
                 <View className="flex-row items-start justify-between gap-2.5">
-                  <View className="flex-1 min-w-0">
-                    <Text className="text-[14px] font-bold text-main" numberOfLines={2}>
-                      {medName}
-                      {strength ? ` · ${strength}` : ''}
-                    </Text>
-                    <Text className="mt-1 text-xs font-medium text-[#5A706B]">
-                      {formatPurchaseDateCompact(item.purchaseDateYmd)} ·{' '}
-                      {formatPurchasePackSummary(item)}
-                    </Text>
+                  <View className="flex-row flex-1 min-w-0 items-start gap-2.5">
+                    <View
+                      className="mt-0.5 h-9 w-9 shrink-0 items-center justify-center rounded-full bg-mint"
+                      style={{ borderWidth: 1, borderColor: '#CBE7DB' }}
+                    >
+                      <Feather
+                        name="shopping-bag"
+                        size={15}
+                        color={CAREDOSE_EXTENDED_COLORS.primary}
+                      />
+                    </View>
+                    <View className="flex-1 min-w-0">
+                      <Text className="text-[14px] font-bold text-main" numberOfLines={2}>
+                        {medName}
+                        {strength ? ` · ${strength}` : ''}
+                      </Text>
+                      <Text className="mt-1 text-xs font-medium text-[#5A706B]">
+                        {formatPurchaseDateCompact(item.purchaseDateYmd)} ·{' '}
+                        {formatPurchasePackSummary(item)}
+                      </Text>
+                    </View>
                   </View>
                   <View className="shrink-0 items-end">
                     <Text className="text-[15px] font-bold text-primary">

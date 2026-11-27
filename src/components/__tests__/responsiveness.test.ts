@@ -23,6 +23,9 @@ import { UpdateStockModal } from '../UpdateStockModal';
 import HomeScreen from '../../../app/index';
 import ScheduleScreen from '../../../app/schedule';
 import ManageSchedulesScreen from '../../../app/schedules';
+import MyMedicinesScreen from '../../../app/medicines';
+import ExploreMedicinesScreen from '../../../app/explore';
+import AlternativeBrandsScreen from '../../../app/alternatives';
 import DoseHistoryScreen from '../../../app/history';
 import ExpensesScreen from '../../../app/expenses';
 import PurchasesScreen from '../../../app/purchases';
@@ -1554,6 +1557,47 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         }),
       );
       expect(logModalEls.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('renders unified CareDose wave header illustrations across all leftover tab and hub screens without overflow across 320px-768px', () => {
+    const assertWaveHeader = (els: ElementMatch[]) => {
+      expect(els.some((e) => e.type === 'Image')).toBe(true);
+      const safeArea = els.find((e) => e.type === 'SafeAreaView');
+      expect(safeArea?.props.edges).toEqual(['bottom', 'left', 'right']);
+    };
+
+    for (const width of [320, 360, 390, 768]) {
+      __setMockWindowWidth(width);
+
+      // Primary leftover tabs: My Medicines, Explore, Profile
+      const medsEls = collectElements(MyMedicinesScreen());
+      assertWaveHeader(medsEls);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Active medicines 2')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Low stock medicines 0')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Archived medicines 0')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Add')).toBe(true);
+
+      const exploreEls = collectElements(ExploreMedicinesScreen());
+      assertWaveHeader(exploreEls);
+      expect(exploreEls.some((e) => e.props.children === 'Popular Searches')).toBe(true);
+      expect(exploreEls.some((e) => e.props.children === 'Browse by Category')).toBe(true);
+      expect(exploreEls.some((e) => e.props.children === 'Alternatives')).toBe(true);
+
+      const profileEls = collectElements(ProfileScreen());
+      assertWaveHeader(profileEls);
+      expect(profileEls.some((e) => e.props.accessibilityLabel === 'Open Settings')).toBe(true);
+      expect(profileEls.some((e) => e.props.children === 'Health & Spending')).toBe(true);
+      expect(profileEls.some((e) => e.props.children === 'Care Tools & History')).toBe(true);
+
+      // Secondary leftover hub screens
+      assertWaveHeader(collectElements(ManageSchedulesScreen()));
+      assertWaveHeader(collectElements(DoseHistoryScreen()));
+      assertWaveHeader(collectElements(HealthLogScreen()));
+      assertWaveHeader(collectElements(ExpensesScreen()));
+      assertWaveHeader(collectElements(PurchasesScreen()));
+      assertWaveHeader(collectElements(AlternativeBrandsScreen()));
+      assertWaveHeader(collectElements(SettingsScreen()));
     }
   });
 });

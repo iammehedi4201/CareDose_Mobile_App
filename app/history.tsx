@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import historyHeaderImage from '../assets/history-header-illustration.jpg';
 import {
   DateField,
   EmptyState,
@@ -11,6 +13,7 @@ import {
   SecondaryButton,
   StatusBadge,
   StatusVariant,
+  useScreenWaveHeader,
 } from '../src/components';
 import type { DoseHistoryItemDto } from '../src/api/schedules';
 import { useMedications } from '../src/features/medications/MedicationsContext';
@@ -23,6 +26,7 @@ import {
 } from '../src/features/schedule/dose-rules';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
+import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
 
 type HistoryFilter = 'all' | 'taken' | 'skipped' | 'missed';
 
@@ -96,47 +100,66 @@ export default function DoseHistoryScreen(): React.JSX.Element {
 
   const filteredMed = activeMedFilter ? getMedicationById(activeMedFilter) : undefined;
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Dose History',
+    subtitle: 'Taken, skipped and missed dose logs.',
+    imageSource: historyHeaderImage,
+    onBack: () => {
+      if (activeMedFilter) {
+        router.push(`/medicines/${activeMedFilter}`);
+        return;
+      }
+      if (from === 'schedule' || from === 'schedules') {
+        const target = from === 'schedules' ? '/schedules' : '/schedule';
+        if (typeof router.navigate === 'function') {
+          router.navigate(target);
+        } else {
+          router.push(target);
+        }
+        return;
+      }
+      router.push('/profile');
+    },
+  });
+
   return (
     <ScreenContainer
       title="Dose History"
-      onBack={() => {
-        if (activeMedFilter) {
-          router.push(`/medicines/${activeMedFilter}`);
-          return;
-        }
-        if (from === 'schedule' || from === 'schedules') {
-          const target = from === 'schedules' ? '/schedules' : '/schedule';
-          if (typeof router.navigate === 'function') {
-            router.navigate(target);
-          } else {
-            router.push(target);
-          }
-          return;
-        }
-        router.push('/profile');
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
-      {activeMedFilter ? (
-        <View className="flex-row items-center justify-between gap-2.5 bg-mint rounded-field border border-[#C5E8D8] px-3 py-2 mb-2.5">
-          <Text className="flex-1 min-w-0 text-[12px] font-semibold text-main" numberOfLines={1}>
-            Filtered to: {filteredMed?.name ?? 'Selected medicine'}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setActiveMedFilter(null)}
-            className="shrink-0 px-2 py-1"
-          >
-            <Text className="text-[12px] font-bold text-primary">Show all</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      {/* Floating Date Range Card */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3 rounded-card border border-border bg-white p-3.5 shadow-sm"
+      >
+        {activeMedFilter ? (
+          <View className="mb-2.5 flex-row items-center justify-between gap-2.5 rounded-field border border-[#C5E8D8] bg-mint px-3 py-2">
+            <Text className="flex-1 min-w-0 text-[12px] font-semibold text-main" numberOfLines={1}>
+              Filtered to: {filteredMed?.name ?? 'Selected medicine'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setActiveMedFilter(null)}
+              className="shrink-0 px-2 py-1"
+            >
+              <Text className="text-[12px] font-bold text-primary">Show all</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-      <View className={layout.stackTwoCol ? 'flex-col' : 'flex-row gap-2.5'}>
-        <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
-          <DateField label="From" value={fromDate} onChangeDate={setFromDate} allowClear />
-        </View>
-        <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
-          <DateField label="To" value={toDate} onChangeDate={setToDate} allowClear />
+        <View className={layout.stackTwoCol ? 'flex-col' : 'flex-row gap-2.5'}>
+          <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
+            <DateField label="From" value={fromDate} onChangeDate={setFromDate} allowClear />
+          </View>
+          <View className={layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'}>
+            <DateField label="To" value={toDate} onChangeDate={setToDate} allowClear />
+          </View>
         </View>
       </View>
 
@@ -190,27 +213,53 @@ export default function DoseHistoryScreen(): React.JSX.Element {
               item.status === 'taken'
                 ? formatIsoTimestampTo12Hour(item.recordedAt)
                 : null;
+            const statusIcon =
+              item.status === 'taken'
+                ? 'check'
+                : item.status === 'skipped'
+                  ? 'skip-forward'
+                  : 'alert-circle';
+            const statusBg =
+              item.status === 'taken'
+                ? CAREDOSE_EXTENDED_COLORS.mintSurface
+                : item.status === 'skipped'
+                  ? CAREDOSE_EXTENDED_COLORS.warningSurface
+                  : CAREDOSE_EXTENDED_COLORS.errorSurface;
+            const statusColor =
+              item.status === 'taken'
+                ? CAREDOSE_EXTENDED_COLORS.primary
+                : item.status === 'skipped'
+                  ? CAREDOSE_EXTENDED_COLORS.warning
+                  : CAREDOSE_EXTENDED_COLORS.error;
             return (
               <View
                 key={item.id}
-                className="flex-row items-start justify-between gap-2.5 bg-white rounded-card border border-border p-3.5 mt-2.5"
+                className="flex-row items-start justify-between gap-2.5 bg-white rounded-card border border-border p-3.5 mt-2.5 shadow-sm"
               >
-                <View className="flex-1 min-w-0">
-                  <Text className="text-[14px] font-semibold text-main">{labelName}</Text>
-                  <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-                    {formatHistoryDateLabel(item.scheduledDateYmd)} · {item.scheduledTime12} ·{' '}
-                    {formatDoseAmountDisplay(item.doseAmount, item.doseUnit)}
-                  </Text>
-                  {takenTime12 ? (
-                    <Text className="mt-0.5 text-[11px] font-medium text-primary-dark">
-                      Taken at {takenTime12}
+                <View className="flex-row flex-1 min-w-0 items-start gap-2.5">
+                  <View
+                    className="mt-0.5 h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: statusBg }}
+                  >
+                    <Feather name={statusIcon} size={15} color={statusColor} />
+                  </View>
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-[14px] font-bold text-main">{labelName}</Text>
+                    <Text className="mt-0.5 text-[12px] text-[#5A706B]">
+                      {formatHistoryDateLabel(item.scheduledDateYmd)} · {item.scheduledTime12} ·{' '}
+                      {formatDoseAmountDisplay(item.doseAmount, item.doseUnit)}
                     </Text>
-                  ) : null}
-                  {item.note && item.note.trim().length > 0 ? (
-                    <Text className="mt-0.5 text-[11px] text-[#5A706B]">
-                      Note: {item.note.trim()}
-                    </Text>
-                  ) : null}
+                    {takenTime12 ? (
+                      <Text className="mt-0.5 text-[11px] font-medium text-primary-dark">
+                        Taken at {takenTime12}
+                      </Text>
+                    ) : null}
+                    {item.note && item.note.trim().length > 0 ? (
+                      <Text className="mt-0.5 text-[11px] text-[#5A706B]">
+                        Note: {item.note.trim()}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
                 <StatusBadge variant={item.status as StatusVariant} />
               </View>

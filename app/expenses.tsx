@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import expensesHeaderImage from '../assets/expenses-header-illustration.jpg';
 import {
   BottomSheet,
   EmptyState,
@@ -9,6 +10,7 @@ import {
   RecordPurchaseModal,
   ScreenContainer,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   formatBdtAmount,
@@ -96,20 +98,36 @@ export default function ExpensesScreen(): React.JSX.Element {
     }
   };
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Medicine Expenses',
+    subtitle: 'Actual monthly spend & future cost estimate.',
+    imageSource: expensesHeaderImage,
+    onBack: () => router.back(),
+    primaryAction: {
+      label: '+ Purchase',
+      pill: true,
+      onPress: () => setPurchaseOpen(true),
+    },
+  });
+
   return (
     <ScreenContainer
       title="Medicine Expenses"
-      subtitle="Actual monthly spend & future cost estimate"
-      onBack={() => router.back()}
-      primaryAction={{
-        label: '+ Purchase',
-        onPress: () => setPurchaseOpen(true),
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
-      {/* Month Navigator */}
-      <View className="mb-3.5 flex-row items-center justify-between rounded-card border border-border bg-white px-3 py-2.5">
+      {/* Month Navigator floating over header wave */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3.5 flex-row items-center justify-between rounded-card border border-border bg-white px-3 py-2.5 shadow-sm"
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Previous month"
@@ -142,7 +160,7 @@ export default function ExpensesScreen(): React.JSX.Element {
       </View>
 
       {/* Actual Monthly Spending vs Budget Card */}
-      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm">
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1 min-w-0">
             <Text className="text-xs font-medium text-[#5A706B]">
@@ -209,7 +227,7 @@ export default function ExpensesScreen(): React.JSX.Element {
       </View>
 
       {/* 6-Month Spending Trend */}
-      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm">
         <View className="flex-row items-center justify-between mb-3">
           <Text className="text-[15px] font-semibold text-main">
             Monthly spending trend
@@ -267,7 +285,7 @@ export default function ExpensesScreen(): React.JSX.Element {
       </View>
 
       {/* Estimated Monthly Cost (Strictly Separate from Actual Spending) */}
-      <View className="mb-3.5 rounded-card border border-[#CFE0F5] bg-[#F4F8FD] p-4">
+      <View className="mb-3.5 rounded-card border border-[#CFE0F5] bg-[#F4F8FD] p-4 shadow-sm">
         <View className="flex-row items-center justify-between gap-2 flex-wrap">
           <Text className="text-[15px] font-semibold text-main">
             Estimated future monthly cost
@@ -339,7 +357,7 @@ export default function ExpensesScreen(): React.JSX.Element {
 
       {/* Per-Medicine Cost Breakdown (Selected Month) */}
       {expensesSummary.medicationBreakdown.length > 0 ? (
-        <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+        <View className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm">
           <Text className="text-[15px] font-semibold text-main mb-2">
             Cost by medicine ({formatMonthHeading(selectedMonth)})
           </Text>
@@ -374,7 +392,7 @@ export default function ExpensesScreen(): React.JSX.Element {
       ) : null}
 
       {/* Recent Purchases Section */}
-      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm">
         <View className="flex-row items-center justify-between gap-2 mb-2">
           <Text className="text-[15px] font-semibold text-main">
             Recent purchases

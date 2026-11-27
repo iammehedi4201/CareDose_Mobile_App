@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import medicinesHeaderImage from '../../assets/medicines-header-illustration.jpg';
 import {
   BottomSheet,
   ConfirmDialog,
@@ -15,6 +16,7 @@ import {
   StatusBadge,
   SuccessToast,
   UpdateStockModal,
+  useScreenWaveHeader,
   validateRequiredFields,
 } from '../../src/components';
 import {
@@ -106,18 +108,46 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   const [editingSchedule, setEditingSchedule] = useState<LocalScheduleRecord | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: medication?.name ?? 'Medicine Details',
+    subtitle: medication
+      ? `${medication.strength ?? 'Strength: Not available'} · ${medication.dosageForm}`
+      : undefined,
+    imageSource: medicinesHeaderImage,
+    onBack: () => router.push('/medicines'),
+    primaryAction: medication
+      ? {
+          label: 'Edit',
+          iconName: 'edit-2',
+          pill: true,
+          onPress: () => {
+            setErrors({});
+            setEditOpen(true);
+          },
+        }
+      : undefined,
+  });
+
   if (!medication) {
     return (
       <ScreenContainer
         title="Medicine Details"
-        onBack={() => router.push('/medicines')}
+        hideHeader
+        topBanner={topBanner}
+        topOverlay={topOverlay}
       >
-        <EmptyState
-          title="Medicine record not found"
-          description="This medicine may have been removed or is not in your active patient list."
-          actionLabel="Back to My Medicines"
-          onAction={() => router.push('/medicines')}
-        />
+        <View style={{ marginTop: -overlapPx }}>
+          <EmptyState
+            title="Medicine record not found"
+            description="This medicine may have been removed or is not in your active patient list."
+            actionLabel="Back to My Medicines"
+            onAction={() => router.push('/medicines')}
+          />
+        </View>
       </ScreenContainer>
     );
   }
@@ -191,22 +221,16 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
   return (
     <ScreenContainer
       title={medication.name}
-      subtitle={`${medication.strength ?? 'Strength: Not available'} · ${medication.dosageForm}`}
-      onBack={() => router.push('/medicines')}
-      primaryAction={{
-        label: 'Edit',
-        onPress: () => {
-          setErrors({});
-          setEditOpen(true);
-        },
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
       {/* Top Contextual Actions matching Reference Sheet */}
       <View
         className={layout.stackTwoCol ? 'flex-col mb-3.5' : 'flex-row mb-3.5'}
-        style={{ gap: layout.gridGap }}
+        style={{ marginTop: -overlapPx, gap: layout.gridGap }}
       >
         <PrimaryButton
           compact
@@ -225,7 +249,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Medicine Information Card */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
           <Text className="text-[15px] font-semibold text-main shrink min-w-0">
             Medicine information
@@ -298,7 +322,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Stock Information Card */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
           <Text className="text-[15px] font-semibold text-main shrink min-w-0">
             Stock information
@@ -349,7 +373,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Price Information Card */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-semibold text-main shrink min-w-0">
           Price information
         </Text>
@@ -390,7 +414,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Previous Purchases Section */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
           <Text className="text-[15px] font-semibold text-main shrink min-w-0">
             Previous purchases
@@ -436,7 +460,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Schedule Section */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
           <Text className="text-[15px] font-semibold text-main shrink min-w-0">Schedule</Text>
           <Pressable
@@ -486,7 +510,7 @@ export default function PersonalMedicineDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Recent Dose History */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2">
           <Text className="text-[15px] font-semibold text-main shrink min-w-0">
             Recent dose history

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import healthHeaderImage from '../assets/health-header-illustration.jpg';
 import type { HealthReadingItemDto } from '../src/api/health-logs';
 import {
   ConfirmDialog,
@@ -12,6 +13,7 @@ import {
   LogReadingModal,
   ScreenContainer,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   convertGlucoseValue,
@@ -79,15 +81,28 @@ export default function HealthLogScreen(): React.JSX.Element {
     }
   };
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Health Log',
+    subtitle: 'Blood glucose tracking & trend.',
+    imageSource: healthHeaderImage,
+    onBack: handleBack,
+    primaryAction: {
+      label: '+ Log Reading',
+      pill: true,
+      onPress: () => setLogModalOpen(true),
+    },
+  });
+
   return (
     <ScreenContainer
       title="Health Log"
-      subtitle="Personal blood glucose tracking & history"
-      onBack={handleBack}
-      primaryAction={{
-        label: '+ Log Reading',
-        onPress: () => setLogModalOpen(true),
-      }}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
@@ -98,17 +113,11 @@ export default function HealthLogScreen(): React.JSX.Element {
         />
       ) : null}
 
-      {hasSampleReadings ? (
-        <View className="mb-3 flex-row items-center gap-2 rounded-card border border-[#CFE0F5] bg-[#F4F8FD] px-3.5 py-2.5">
-          <Feather name="info" size={14} color={CAREDOSE_EXTENDED_COLORS.info} />
-          <Text className="flex-1 text-[11px] font-medium leading-[16px] text-main">
-            Sample demo readings are currently shown. Log your own reading anytime or clear in Settings → Reset demo data.
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Latest Reading Overview Card */}
-      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+      {/* Latest Reading Overview Card floating cleanly over header wave */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm"
+      >
         <View className="flex-row items-center justify-between gap-2">
           <Text className="text-xs font-semibold text-[#5A706B]">
             {contextFilter === 'ALL' ? 'Latest logged reading' : 'Latest in selected context'}
@@ -168,7 +177,16 @@ export default function HealthLogScreen(): React.JSX.Element {
       </View>
 
       {/* 7-Reading Trend Chart Card */}
-      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+      {hasSampleReadings ? (
+        <View className="mb-3.5 flex-row items-center gap-2 rounded-card border border-[#CFE0F5] bg-[#F4F8FD] px-3.5 py-2.5 shadow-sm">
+          <Feather name="info" size={14} color={CAREDOSE_EXTENDED_COLORS.info} />
+          <Text className="flex-1 text-[11px] font-medium leading-[16px] text-main">
+            Sample demo readings are currently shown. Log your own reading anytime or clear in Settings → Reset demo data.
+          </Text>
+        </View>
+      ) : null}
+
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm">
         <View className="mb-3 flex-row items-center justify-between gap-2">
           <Text className="text-[15px] font-semibold text-main">
             Recent trend (up to 7 readings)
@@ -293,36 +311,44 @@ export default function HealthLogScreen(): React.JSX.Element {
             return (
               <View
                 key={item.id}
-                className="rounded-card border border-border bg-white p-3.5"
+                className="rounded-card border border-border bg-white p-3.5 shadow-sm"
               >
                 <View className="flex-row items-start justify-between gap-2.5">
-                  <View className="flex-1 min-w-0">
-                    <View className="flex-row flex-wrap items-center gap-2">
-                      <Text className="text-[17px] font-bold text-main">
-                        {item.displayValue} {item.unitLabel}
-                      </Text>
-                      <View className="rounded-full border border-[#CBE7DB] bg-mint px-2.5 py-0.5">
-                        <Text className="text-[11px] font-semibold text-primary">
-                          {item.contextLabel}
+                  <View className="flex-row flex-1 min-w-0 items-start gap-2.5">
+                    <View
+                      className="mt-0.5 h-9 w-9 shrink-0 items-center justify-center rounded-full bg-mint"
+                      style={{ borderWidth: 1, borderColor: '#CBE7DB' }}
+                    >
+                      <Feather name="droplet" size={15} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                    </View>
+                    <View className="flex-1 min-w-0">
+                      <View className="flex-row flex-wrap items-center gap-2">
+                        <Text className="text-[17px] font-bold text-main">
+                          {item.displayValue} {item.unitLabel}
                         </Text>
-                      </View>
-                      {item.isSample ? (
-                        <View className="rounded-full border border-[#CFE0F5] bg-[#F4F8FD] px-2 py-0.5">
-                          <Text className="text-[10px] font-semibold text-info">Sample</Text>
+                        <View className="rounded-full border border-[#CBE7DB] bg-mint px-2.5 py-0.5">
+                          <Text className="text-[11px] font-semibold text-primary">
+                            {item.contextLabel}
+                          </Text>
                         </View>
+                        {item.isSample ? (
+                          <View className="rounded-full border border-[#CFE0F5] bg-[#F4F8FD] px-2 py-0.5">
+                            <Text className="text-[10px] font-semibold text-info">Sample</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <Text className="mt-1 text-xs text-[#5A706B]">
+                        {item.measuredDateYmd} · {item.measuredTime12}
+                        {convertedVal !== null ? ` · ≈ ${convertedVal} ${preferredUnitLabel}` : ''}
+                      </Text>
+
+                      {item.note ? (
+                        <Text className="mt-1.5 text-xs leading-[17px] text-main">
+                          {item.note}
+                        </Text>
                       ) : null}
                     </View>
-
-                    <Text className="mt-1 text-xs text-[#5A706B]">
-                      {item.measuredDateYmd} · {item.measuredTime12}
-                      {convertedVal !== null ? ` · ≈ ${convertedVal} ${preferredUnitLabel}` : ''}
-                    </Text>
-
-                    {item.note ? (
-                      <Text className="mt-1.5 text-xs leading-[17px] text-main">
-                        {item.note}
-                      </Text>
-                    ) : null}
                   </View>
 
                   <Pressable

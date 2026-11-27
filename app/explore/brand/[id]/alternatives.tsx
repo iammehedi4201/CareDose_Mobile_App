@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import alternativesHeaderImage from '../../../../assets/alternatives-header-illustration.jpg';
 import {
   EmptyState,
   ErrorState,
@@ -9,6 +11,7 @@ import {
   MedicineCard,
   ScreenContainer,
   SearchInput,
+  useScreenWaveHeader,
 } from '../../../../src/components';
 import {
   CatalogueBrandSummaryDto,
@@ -19,6 +22,7 @@ import {
   formatUnitOrPackPrice,
   resolveBrandBadge,
 } from '../../../../src/features/catalogue/catalogue-helpers';
+import { CAREDOSE_EXTENDED_COLORS } from '../../../../src/theme/tokens';
 
 const INITIAL_PREVIEW_COUNT = 3;
 
@@ -90,19 +94,39 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
     ? `${targetBrand.generic?.name ?? 'Matching brands'} · ${targetBrand.strength ?? 'All strengths'} · ${targetBrand.dosageForm ?? ''}`
     : 'Remaining alternative brands';
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: targetBrand ? `${targetBrand.name} Alternatives` : 'Alternative Brands',
+    subtitle,
+    imageSource: alternativesHeaderImage,
+    onBack: () => router.push(`/explore/brand/${id ?? ''}`),
+  });
+
   return (
     <ScreenContainer
       title={targetBrand ? `${targetBrand.name} Alternatives` : 'Alternative Brands'}
-      subtitle={subtitle}
-      onBack={() => router.push(`/explore/brand/${id ?? ''}`)}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
-      <View className="bg-[#FDF5E6] rounded-card border border-[#F3D9A4] p-3 mb-3">
-        <Text className="text-[12.5px] font-bold text-warning">
-          Pharmacist / Doctor Review Required
-        </Text>
-        <Text className="mt-0.5 text-[11.5px] text-main leading-4">
-          {warningNotice}
-        </Text>
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3 flex-row items-start gap-2.5 rounded-card border border-[#F3D9A4] bg-[#FDF5E6] p-3.5 shadow-sm"
+      >
+        <View className="mt-0.5 h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white">
+          <Feather name="alert-triangle" size={15} color={CAREDOSE_EXTENDED_COLORS.warning} />
+        </View>
+        <View className="flex-1 min-w-0">
+          <Text className="text-[12.5px] font-bold text-warning">
+            Pharmacist / Doctor Review Required
+          </Text>
+          <Text className="mt-0.5 text-[11.5px] text-main leading-4">
+            {warningNotice}
+          </Text>
+        </View>
       </View>
 
       <SearchInput

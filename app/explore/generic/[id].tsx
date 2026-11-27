@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import exploreHeaderImage from '../../../assets/explore-header-illustration.jpg';
 import {
   EmptyState,
   ErrorState,
@@ -9,6 +10,7 @@ import {
   MedicineCard,
   ScreenContainer,
   SecondaryButton,
+  useScreenWaveHeader,
 } from '../../../src/components';
 import {
   CatalogueBrandSummaryDto,
@@ -98,14 +100,32 @@ export default function GenericDetailsScreen(): React.JSX.Element {
     void loadGeneric({ reset: true });
   }, [loadGeneric]);
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: loading || errorMessage ? 'Generic Details' : genericName,
+    subtitle: loading
+      ? 'Loading linked catalogue brands...'
+      : errorMessage
+        ? undefined
+        : 'Generic · Catalogue brands',
+    imageSource: exploreHeaderImage,
+    onBack: () => router.push('/explore'),
+  });
+
   if (loading) {
     return (
       <ScreenContainer
         title="Generic Details"
-        subtitle="Loading linked catalogue brands..."
-        onBack={() => router.push('/explore')}
+        hideHeader
+        topBanner={topBanner}
+        topOverlay={topOverlay}
       >
-        <LoadingSkeleton rows={4} />
+        <View style={{ marginTop: -overlapPx }}>
+          <LoadingSkeleton rows={4} />
+        </View>
       </ScreenContainer>
     );
   }
@@ -114,13 +134,17 @@ export default function GenericDetailsScreen(): React.JSX.Element {
     return (
       <ScreenContainer
         title="Generic Details"
-        onBack={() => router.push('/explore')}
+        hideHeader
+        topBanner={topBanner}
+        topOverlay={topOverlay}
       >
-        <ErrorState
-          title="Could not load generic"
-          message={errorMessage}
-          onRetry={() => void loadGeneric({ reset: true })}
-        />
+        <View style={{ marginTop: -overlapPx }}>
+          <ErrorState
+            title="Could not load generic"
+            message={errorMessage}
+            onRetry={() => void loadGeneric({ reset: true })}
+          />
+        </View>
       </ScreenContainer>
     );
   }
@@ -128,10 +152,14 @@ export default function GenericDetailsScreen(): React.JSX.Element {
   return (
     <ScreenContainer
       title={genericName}
-      subtitle="Generic · Catalogue brands"
-      onBack={() => router.push('/explore')}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
-      <View className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-4">
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="flex-row items-center bg-mint rounded-card border border-[#C5E8D8] p-3.5 mb-4 shadow-sm"
+      >
         <View className="w-[38px] h-[38px] rounded-full bg-white items-center justify-center mr-3 shrink-0">
           <Feather name="disc" size={18} color={CAREDOSE_EXTENDED_COLORS.primary} />
         </View>

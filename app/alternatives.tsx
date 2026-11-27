@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import alternativesHeaderImage from '../assets/alternatives-header-illustration.jpg';
 import {
   EmptyState,
   ErrorState,
@@ -9,6 +11,7 @@ import {
   SearchInput,
   SecondaryButton,
   StatusBadge,
+  useScreenWaveHeader,
 } from '../src/components';
 import {
   AlternativeGroupSearchItemDto,
@@ -18,6 +21,7 @@ import {
   formatMissingCatalogueValue,
   formatUnitOrPackPrice,
 } from '../src/features/catalogue/catalogue-helpers';
+import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
 
 export default function AlternativeBrandsScreen(): React.JSX.Element {
   const router = useRouter();
@@ -80,18 +84,39 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [fetchGroups]);
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: 'Alternative Brands',
+    subtitle: 'Compare brands by generic, strength & form.',
+    imageSource: alternativesHeaderImage,
+    onBack: () => router.push('/profile'),
+  });
+
   return (
     <ScreenContainer
       title="Alternative Brands"
-      onBack={() => router.push('/profile')}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
-      <View className="bg-[#FDF5E6] rounded-card border border-[#F3D9A4] p-3.5 mb-3">
-        <Text className="text-[13px] font-bold text-warning">
-          Pharmacist / Doctor Review Required
-        </Text>
-        <Text className="mt-[3px] text-[12px] text-main leading-[17px]">
-          {warningNotice}
-        </Text>
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-3 flex-row items-start gap-2.5 rounded-card border border-[#F3D9A4] bg-[#FDF5E6] p-3.5 shadow-sm"
+      >
+        <View className="mt-0.5 h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white">
+          <Feather name="alert-triangle" size={15} color={CAREDOSE_EXTENDED_COLORS.warning} />
+        </View>
+        <View className="flex-1 min-w-0">
+          <Text className="text-[13px] font-bold text-warning">
+            Pharmacist / Doctor Review Required
+          </Text>
+          <Text className="mt-[3px] text-[12px] text-main leading-[17px]">
+            {warningNotice}
+          </Text>
+        </View>
       </View>
 
       <SearchInput
@@ -124,15 +149,23 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
           {groups.map((group) => (
             <View
               key={group.id}
-              className="bg-white rounded-card border border-border p-3.5 mt-3"
+              className="bg-white rounded-card border border-border p-3.5 mt-3 shadow-sm"
             >
               <View className="flex-row items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-border">
-                <View className="flex-1 min-w-0 pr-2">
-                  <Text className="text-[15px] font-bold text-main">{group.generic.name}</Text>
-                  <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-                    {group.strengthNorm} · {group.dosageFormNorm}
-                    {group.isCombination ? ' · Combination' : ''}
-                  </Text>
+                <View className="flex-row flex-1 min-w-0 items-center gap-2.5 pr-2">
+                  <View
+                    className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-mint"
+                    style={{ borderWidth: 1, borderColor: '#CBE7DB' }}
+                  >
+                    <Feather name="layers" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
+                  </View>
+                  <View className="flex-1 min-w-0">
+                    <Text className="text-[15px] font-bold text-main">{group.generic.name}</Text>
+                    <Text className="mt-0.5 text-[12px] text-[#5A706B]">
+                      {group.strengthNorm} · {group.dosageFormNorm}
+                      {group.isCombination ? ' · Combination' : ''}
+                    </Text>
+                  </View>
                 </View>
                 <StatusBadge variant="unverified" label="Unverified group" />
               </View>
@@ -142,7 +175,7 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
                   key={brand.id}
                   accessibilityRole="button"
                   onPress={() => router.push(`/explore/brand/${brand.sourceId}`)}
-                  className={`flex-row items-center justify-between gap-2.5 py-2.5 ${
+                  className={`flex-row items-center justify-between gap-2.5 py-2.5 active:bg-background ${
                     idx === group.brands.length - 1 ? 'pb-0.5' : 'border-b border-border'
                   }`}
                 >
@@ -152,9 +185,16 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
                       {formatMissingCatalogueValue(brand.manufacturer)}
                     </Text>
                   </View>
-                  <Text className="text-[12px] font-semibold text-primary shrink-0 text-right">
-                    {formatUnitOrPackPrice(brand.primaryPack)}
-                  </Text>
+                  <View className="flex-row items-center gap-1.5 shrink-0">
+                    <Text className="text-[12px] font-semibold text-primary text-right">
+                      {formatUnitOrPackPrice(brand.primaryPack)}
+                    </Text>
+                    <Feather
+                      name="chevron-right"
+                      size={14}
+                      color={CAREDOSE_EXTENDED_COLORS.secondaryText}
+                    />
+                  </View>
                 </Pressable>
               ))}
             </View>

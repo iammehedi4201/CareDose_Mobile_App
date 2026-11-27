@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import homeHeaderImage from '../assets/home-header-illustration.jpg';
 import {
   DoseProgressCard,
@@ -10,6 +9,7 @@ import {
   LogReadingModal,
   ScreenContainer,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../src/components';
 import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
 import { formatBdtAmount } from '../src/features/expenses/expense-helpers';
@@ -47,7 +47,6 @@ const HOME_PERIODS: SchedulePeriodGroupDto[] = [
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const layout = useResponsiveLayout();
-  const insets = useSafeAreaInsets();
   const { medications } = useMedications();
   const { getLocalRangeDoses, recordDoseAction, pendingOccurrenceKeys } = useSchedules();
   const { expensesSummary } = usePurchases();
@@ -101,132 +100,32 @@ export default function HomeScreen(): React.JSX.Element {
     doses.some((d) => d.period === period),
   );
 
-  // Full-bleed Home header proportions matched to reference across mobile & tablet widths,
-  // extending seamlessly from y = 0 behind the status bar down behind the Progress Card.
-  const isWideViewport = layout.width > 500;
-  const baseArtWidth = isWideViewport
-    ? layout.width
-    : Math.round(layout.width * (layout.isCompact ? 1.1 : 1.14));
-  const baseArtHeight = isWideViewport ? 220 : Math.round(baseArtWidth * 0.5);
-  const topInset = Math.max(0, insets.top);
-  const headerArtTop = topInset > 0 ? 0 : -Math.round(baseArtHeight * 0.14);
-  const minArtHeightForInset =
-    topInset > 0
-      ? Math.max(
-          topInset + (layout.isCompact ? 140 : 162),
-          Math.round(topInset / 0.21),
-        )
-      : baseArtHeight;
-  const headerArtHeight = Math.max(baseArtHeight, minArtHeightForInset);
-  const headerArtWidth = isWideViewport
-    ? layout.width
-    : Math.max(baseArtWidth, Math.round(headerArtHeight * 2));
-  const headerTopPadding = topInset + (layout.isCompact ? 10 : 12);
-  const headerHeight = Math.max(
-    headerTopPadding + 104,
-    headerArtHeight + headerArtTop,
-  );
-  const headerOverlapPx = Math.round(Math.max(120, headerHeight - topInset) * 0.31);
-
-  const statusBarGuardOverlay =
-    topInset > 0 ? (
-      <View
-        accessible={false}
-        pointerEvents="none"
-        className="absolute left-0 right-0 top-0 z-20 overflow-hidden bg-[#DFF6EC]"
-        style={{ height: topInset }}
-      >
-        <Image
-          source={homeHeaderImage}
-          resizeMode="cover"
-          accessible={false}
-          style={{
-            position: 'absolute',
-            top: headerArtTop,
-            right: 0,
-            width: headerArtWidth,
-            height: headerArtHeight,
-          }}
-        />
-      </View>
-    ) : null;
-
-  const homeHeaderBanner = (
-    <View
-      className="relative w-full overflow-hidden bg-[#DFF6EC]"
-      style={{
-        height: headerHeight,
-        paddingTop: headerTopPadding,
-      }}
-    >
-      <Image
-        source={homeHeaderImage}
-        resizeMode="cover"
-        accessible={false}
+  const {
+    topBanner: homeHeaderBanner,
+    topOverlay: statusBarGuardOverlay,
+    overlapPx: headerOverlapPx,
+  } = useScreenWaveHeader({
+    eyebrow: `Good Morning, ${preferences.displayName}`,
+    title: 'Today',
+    subtitle: formatScheduleBarDateLabel(todayYmd),
+    imageSource: homeHeaderImage,
+    overlapRatio: 0.31,
+    rightSlot: (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open Profile"
+        onPress={() => router.push('/profile')}
+        className="h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm active:bg-mint"
         style={{
-          position: 'absolute',
-          top: headerArtTop,
-          right: 0,
-          width: headerArtWidth,
-          height: headerArtHeight,
+          borderWidth: 1,
+          borderColor: '#C5E8D8',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
         }}
-      />
-      {/* Feathered multi-step transition into #F7FAF8 background behind Progress Card */}
-      <View
-        accessible={false}
-        className="absolute bottom-0 left-0 right-0 h-14 bg-[#F7FAF8]/20"
-      />
-      <View
-        accessible={false}
-        className="absolute bottom-0 left-0 right-0 h-10 bg-[#F7FAF8]/40"
-      />
-      <View
-        accessible={false}
-        className="absolute bottom-0 left-0 right-0 h-6 bg-[#F7FAF8]/65"
-      />
-      <View
-        accessible={false}
-        className="absolute bottom-0 left-0 right-0 h-3 bg-[#F7FAF8]/90"
-      />
-
-      <View
-        className="w-full flex-row items-start justify-between gap-2"
-        style={[
-          { paddingHorizontal: layout.screenPadding },
-          layout.maxContentWidth
-            ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-            : undefined,
-        ]}
       >
-        <View className="min-w-0 flex-1 pr-3" style={{ maxWidth: layout.isCompact ? '54%' : '56%' }}>
-          <Text className="text-[11px] font-semibold text-primary" numberOfLines={1}>
-            Good Morning, {preferences.displayName}
-          </Text>
-          <Text
-            className="mt-0.5 font-bold text-main"
-            style={{
-              fontSize: layout.isCompact ? 25 : 28,
-              lineHeight: layout.isCompact ? 30 : 34,
-            }}
-          >
-            Today
-          </Text>
-          <Text className="mt-0.5 text-xs text-[#5A706B]" numberOfLines={1}>
-            {formatScheduleBarDateLabel(todayYmd)}
-          </Text>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open Profile"
-          onPress={() => router.push('/profile')}
-          className="h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C5E8D8] bg-white/95 shadow-sm active:bg-mint"
-        >
-          <Text className="text-[13px] font-bold text-primary-dark">{headerInitials}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
+        <Text className="text-[13px] font-bold text-primary-dark">{headerInitials}</Text>
+      </Pressable>
+    ),
+  });
 
   return (
     <ScreenContainer

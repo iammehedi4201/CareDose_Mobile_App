@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import exploreHeaderImage from '../../../../assets/explore-header-illustration.jpg';
 import {
   AddMedicineModal,
   EmptyState,
@@ -14,6 +15,7 @@ import {
   SecondaryButton,
   StatusBadge,
   SuccessToast,
+  useScreenWaveHeader,
 } from '../../../../src/components';
 import {
   AlternativeGroupWithCandidatesDto,
@@ -134,14 +136,32 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     void loadBrand();
   }, [loadBrand]);
 
+  const {
+    topBanner,
+    topOverlay,
+    overlapPx,
+  } = useScreenWaveHeader({
+    title: loading || !brand ? 'Medicine Details' : brand.name,
+    subtitle: loading
+      ? 'Loading catalogue record...'
+      : brand
+        ? `${brand.strength ?? 'Strength: Not available'} · ${brand.dosageForm ?? 'Form: Not available'}`
+        : undefined,
+    imageSource: exploreHeaderImage,
+    onBack: () => router.push('/explore'),
+  });
+
   if (loading) {
     return (
       <ScreenContainer
         title="Medicine Details"
-        subtitle="Loading catalogue record..."
-        onBack={() => router.push('/explore')}
+        hideHeader
+        topBanner={topBanner}
+        topOverlay={topOverlay}
       >
-        <LoadingSkeleton rows={4} />
+        <View style={{ marginTop: -overlapPx }}>
+          <LoadingSkeleton rows={4} />
+        </View>
       </ScreenContainer>
     );
   }
@@ -150,13 +170,17 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     return (
       <ScreenContainer
         title="Medicine Details"
-        onBack={() => router.push('/explore')}
+        hideHeader
+        topBanner={topBanner}
+        topOverlay={topOverlay}
       >
-        <ErrorState
-          title="Could not load brand details"
-          message={errorMessage ?? 'Brand record not found.'}
-          onRetry={() => void loadBrand(true)}
-        />
+        <View style={{ marginTop: -overlapPx }}>
+          <ErrorState
+            title="Could not load brand details"
+            message={errorMessage ?? 'Brand record not found.'}
+            onRetry={() => void loadBrand(true)}
+          />
+        </View>
       </ScreenContainer>
     );
   }
@@ -184,13 +208,17 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   return (
     <ScreenContainer
       title={brand.name}
-      subtitle={`${brand.strength ?? 'Strength: Not available'} · ${brand.dosageForm ?? 'Form: Not available'}`}
-      onBack={() => router.push('/explore')}
+      hideHeader
+      topBanner={topBanner}
+      topOverlay={topOverlay}
     >
       <SuccessToast message={toast} />
 
       {/* Top Hero + Dosage Form Thumbnail / Packaging Photo + Primary CTA */}
-      <View className="bg-mint rounded-card border border-[#C5E8D8] p-4 mb-3.5">
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="bg-mint rounded-card border border-[#C5E8D8] p-4 mb-3.5 shadow-sm"
+      >
         <View className="flex-row items-center gap-3">
           <MedicineFormThumbnail
             size="hero"
@@ -230,7 +258,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Catalogue Details */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <Text className="text-[15px] font-semibold text-main mb-0.5">Medicine details</Text>
 
         <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
@@ -293,7 +321,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
       </View>
 
       {/* Pack & Pricing Details */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5">
+      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
         <View className="flex-row items-center justify-between flex-wrap gap-2 mb-2">
           <View className="flex-1 min-w-0">
             <Text className="text-[15px] font-semibold text-main mb-0.5">
