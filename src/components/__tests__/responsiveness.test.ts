@@ -26,6 +26,10 @@ import ManageSchedulesScreen from '../../../app/schedules';
 import DoseHistoryScreen from '../../../app/history';
 import ExpensesScreen from '../../../app/expenses';
 import PurchasesScreen from '../../../app/purchases';
+import HealthLogScreen from '../../../app/health';
+import ProfileScreen from '../../../app/profile';
+import SettingsScreen from '../../../app/settings';
+import { LogReadingModal } from '../LogReadingModal';
 
 const mockRouterPush = vi.fn();
 const mockRouterNavigate = vi.fn();
@@ -117,6 +121,8 @@ vi.mock('../../features/medications/MedicationsContext', () => ({
     ],
     loading: false,
     adjustMedicationStock: vi.fn(async () => undefined),
+    refreshMedications: vi.fn(async () => {}),
+    resetDemoMedications: vi.fn(async () => {}),
   }),
 }));
 
@@ -258,6 +264,9 @@ vi.mock('../../features/schedule/SchedulesContext', () => ({
     recordDoseAction: mockRecordDoseAction,
     queryDoseHistory: mockQueryDoseHistory,
     refreshSchedules: vi.fn(async () => {}),
+    resetDemoSchedules: vi.fn(async () => {}),
+    reconcileRemindersNow: vi.fn(async () => {}),
+    snoozeDoseReminder: vi.fn(async () => ({ scheduled: false, triggerAtIso: null })),
   }),
 }));
 
@@ -321,6 +330,146 @@ function hasClass(el: ElementMatch, token: string): boolean {
   const raw = typeof el.props.className === 'string' ? el.props.className : '';
   return raw.split(/\s+/).includes(token);
 }
+
+vi.mock('../../features/profile/UserPreferencesContext', () => ({
+  UserPreferencesProvider: ({ children }: { children: React.ReactNode }) => children,
+  useUserPreferences: () => ({
+    preferences: {
+      displayName: 'Karim Hasan',
+      glucoseUnit: 'MG_DL',
+      remindersEnabled: true,
+      soundEnabled: true,
+      reminderLeadMins: 10,
+      hideMedicineInNotifications: false,
+      currency: 'BDT',
+      monthlyBudget: 2500,
+      activePatientId: 'p1',
+      activePatientName: 'Karim Hasan',
+      activePatientRelationship: 'Self',
+      activePatientTimezone: 'Asia/Dhaka',
+    },
+    patients: [],
+    loading: false,
+    saving: false,
+    error: null,
+    refreshPreferences: vi.fn(async () => {}),
+    updatePreferences: vi.fn(async () => {}),
+    updateActivePatient: vi.fn(async () => {}),
+    resetDemoPreferences: vi.fn(async () => {}),
+    clearAuthSessionAndReset: vi.fn(async () => {}),
+  }),
+}));
+
+vi.mock('../../features/health/HealthLogsContext', () => ({
+  HealthLogsProvider: ({ children }: { children: React.ReactNode }) => children,
+  useHealthLogs: () => ({
+    readings: [
+      {
+        id: 'hr-1',
+        patientId: 'p1',
+        value: '106.00',
+        displayValue: '106',
+        unit: 'MG_DL',
+        unitLabel: 'mg/dL',
+        context: 'FASTING',
+        contextLabel: 'Fasting',
+        measuredAt: '2026-11-25T01:30:00.000Z',
+        measuredDateYmd: '2026-11-25',
+        measuredTime24: '07:30',
+        measuredTime12: '07:30 AM',
+        note: 'Before breakfast',
+        createdAt: '2026-11-25T01:30:00.000Z',
+      },
+      {
+        id: 'hr-2',
+        patientId: 'p1',
+        value: '6.20',
+        displayValue: '6.2',
+        unit: 'MMOL_L',
+        unitLabel: 'mmol/L',
+        context: 'AFTER_MEAL',
+        contextLabel: 'After meal',
+        measuredAt: '2026-11-24T08:15:00.000Z',
+        measuredDateYmd: '2026-11-24',
+        measuredTime24: '14:15',
+        measuredTime12: '02:15 PM',
+        note: null,
+        createdAt: '2026-11-24T08:15:00.000Z',
+      },
+    ],
+    latestReading: {
+      id: 'hr-1',
+      patientId: 'p1',
+      value: '106.00',
+      displayValue: '106',
+      unit: 'MG_DL',
+      unitLabel: 'mg/dL',
+      context: 'FASTING',
+      contextLabel: 'Fasting',
+      measuredAt: '2026-11-25T01:30:00.000Z',
+      measuredDateYmd: '2026-11-25',
+      measuredTime24: '07:30',
+      measuredTime12: '07:30 AM',
+      note: 'Before breakfast',
+      createdAt: '2026-11-25T01:30:00.000Z',
+    },
+    filteredLatestReading: {
+      id: 'hr-1',
+      patientId: 'p1',
+      value: '106.00',
+      displayValue: '106',
+      unit: 'MG_DL',
+      unitLabel: 'mg/dL',
+      context: 'FASTING',
+      contextLabel: 'Fasting',
+      measuredAt: '2026-11-25T01:30:00.000Z',
+      measuredDateYmd: '2026-11-25',
+      measuredTime24: '07:30',
+      measuredTime12: '07:30 AM',
+      note: 'Before breakfast',
+      createdAt: '2026-11-25T01:30:00.000Z',
+    },
+    chartPoints: [
+      {
+        id: 'hr-2',
+        measuredDateYmd: '2026-11-24',
+        shortDateLabel: '11-24',
+        measuredTime12: '02:15 PM',
+        contextLabel: 'After meal',
+        originalValue: '6.2',
+        originalUnitLabel: 'mmol/L',
+        convertedValue: 112,
+        unitLabel: 'mg/dL',
+      },
+      {
+        id: 'hr-1',
+        measuredDateYmd: '2026-11-25',
+        shortDateLabel: '11-25',
+        measuredTime12: '07:30 AM',
+        contextLabel: 'Fasting',
+        originalValue: '106',
+        originalUnitLabel: 'mg/dL',
+        convertedValue: 106,
+        unitLabel: 'mg/dL',
+      },
+    ],
+    totalCount: 2,
+    contextFilter: 'ALL',
+    setContextFilter: vi.fn(),
+    hasSampleReadings: false,
+    disclaimer:
+      'Readings are stored exactly as entered for personal tracking. CareDose does not diagnose or interpret blood glucose values.',
+    loading: false,
+    saving: false,
+    deletingId: null,
+    error: null,
+    refreshHealthLogs: vi.fn(),
+    logHealthReading: vi.fn(),
+    deleteHealthReading: vi.fn(),
+    loadSampleDemoReadings: vi.fn(),
+    resetDemoHealthReadings: vi.fn(),
+  }),
+}));
 
 const REQUIRED_VIEWPORTS = [320, 360, 375, 390, 414, 430, 768] as const;
 
@@ -1173,8 +1322,10 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       __setMockWindowWidth(width);
       const els = collectElements(HomeScreen());
 
-      // Header illustration image renders on HomeScreen
+      // Header illustration image renders on HomeScreen and extends edge-to-edge into top safe area
       expect(els.some((e) => e.type === 'Image')).toBe(true);
+      const safeArea = els.find((e) => e.type === 'SafeAreaView');
+      expect(safeArea?.props.edges).toEqual(['bottom', 'left', 'right']);
 
       // Progress tiles: Scheduled 3, Overdue 1, Upcoming 2
       expect(
@@ -1295,6 +1446,57 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         }),
       );
       expect(stockModalEls.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('renders HealthLogScreen, ProfileScreen, SettingsScreen, and LogReadingModal with Single-CTA compliance across 320px-768px', () => {
+    const extractText = (els: ElementMatch[]) =>
+      els
+        .map((e) => {
+          const c = e.props.children;
+          if (typeof c === 'string' || typeof c === 'number') return String(c);
+          if (Array.isArray(c)) {
+            return c
+              .filter((x) => typeof x === 'string' || typeof x === 'number')
+              .map(String)
+              .join('');
+          }
+          return '';
+        })
+        .join(' ');
+
+    for (const width of [320, 360, 390, 768]) {
+      __setMockWindowWidth(width);
+
+      const healthEls = collectElements(HealthLogScreen());
+      const logCtas = healthEls.filter((e) => e.props.accessibilityLabel === '+ Log Reading');
+      expect(logCtas).toHaveLength(1);
+      const healthText = extractText(healthEls);
+      expect(healthText).toContain('106 mg/dL');
+      expect(healthText).toContain('6.2 mmol/L');
+      expect(healthText).toContain('does not diagnose or interpret blood glucose values');
+
+      const profileEls = collectElements(ProfileScreen());
+      const profileText = extractText(profileEls);
+      expect(profileText).toContain('Karim Hasan');
+      expect(profileText).toContain('KH');
+      expect(profileText).toContain('Asia/Dhaka');
+
+      const settingsEls = collectElements(SettingsScreen());
+      const settingsText = extractText(settingsEls);
+      expect(settingsText).toContain('Save settings');
+      expect(settingsText).toContain('Export backup');
+      expect(settingsText).toContain('Restore backup');
+      expect(settingsText).toContain('Delete account & data');
+      expect(settingsText).toContain('Reset demo data');
+
+      const logModalEls = collectElements(
+        LogReadingModal({
+          visible: true,
+          onClose: vi.fn(),
+        }),
+      );
+      expect(logModalEls.length).toBeGreaterThan(0);
     }
   });
 });

@@ -21,6 +21,20 @@ export const Keyboard = {
   dismiss: () => {},
 };
 
+export const AppState = {
+  currentState: 'active',
+  addEventListener: () => ({ remove: () => {} }),
+};
+
+export const Linking = {
+  openSettings: async (): Promise<void> => {},
+  openURL: async (): Promise<void> => {},
+};
+
+export const Share = {
+  share: async (): Promise<{ action: string }> => ({ action: 'sharedAction' }),
+};
+
 export const View = 'View';
 export const Text = 'Text';
 export const Pressable = 'Pressable';
@@ -30,4 +44,5 @@ export const Image = 'Image';
 export const ActivityIndicator = 'ActivityIndicator';
 export const Switch = 'Switch';
 export const Modal = 'Modal';
+export const StatusBar = 'StatusBar';
 export const KeyboardAvoidingView = 'KeyboardAvoidingView';

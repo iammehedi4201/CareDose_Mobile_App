@@ -19,6 +19,7 @@ import {
   getCatalogueSummary,
   searchCatalogueBrands,
   searchCatalogueGenerics,
+  searchCatalogueOfflineFallback,
 } from '../src/api/catalogue';
 import {
   formatPackSummary,
@@ -105,8 +106,27 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         setHasMore(res.hasMore);
         hasItemsRef.current = opts.reset ? res.items.length > 0 : hasItemsRef.current || res.items.length > 0;
         setItems((prev) => (opts.reset ? res.items : [...prev, ...res.items]));
-      } catch (err) {
+      } catch {
         if (reqId !== activeRequestRef.current) return;
+
+        const sqliteRes = await searchCatalogueOfflineFallback({
+          q: query.trim() || undefined,
+          form: formFilter !== 'all' ? formFilter : undefined,
+          manufacturer: manufacturerFilter ?? undefined,
+          limit: 20,
+        });
+
+        if (sqliteRes.source === 'sqlite' && sqliteRes.items.length > 0) {
+          setOfflineFallback(
+            `Showing offline cached catalogue (${sqliteRes.cachedBrandsCount} medicines saved in SQLite). Start the backend server to search all records.`,
+          );
+          hasItemsRef.current = true;
+          setItems(sqliteRes.items);
+          setTotalCount(sqliteRes.totalCount);
+          setHasMore(false);
+          setNextCursor(null);
+          return;
+        }
 
         // Fall back to sample offline records with an explicit indicator
         const q = query.trim().toLowerCase();
@@ -124,8 +144,9 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
           return true;
         });
 
-        const msg = err instanceof Error ? err.message : 'Unable to connect to CareDose server';
-        setOfflineFallback(msg);
+        setOfflineFallback(
+          'Showing offline sample records. Start the backend server to search the full catalogue.',
+        );
         hasItemsRef.current = filteredFallback.length > 0;
         setItems(filteredFallback);
         setTotalCount(filteredFallback.length);
@@ -284,7 +305,7 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
         <View className="flex-row items-center gap-2 bg-[#FDF5E6] border border-[#F3D9A4] rounded-field px-3 py-2 mb-3.5">
           <Feather name="wifi-off" size={14} color={CAREDOSE_EXTENDED_COLORS.warning} />
           <Text className="flex-1 min-w-0 text-[11px] font-semibold text-warning">
-            Showing offline sample records. Start the backend server to search the full catalogue.
+            {offlineFallback}
           </Text>
         </View>
       ) : null}

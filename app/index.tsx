@@ -2,21 +2,28 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import homeHeaderImage from '../assets/home-header-illustration.jpg';
 import {
-  BottomSheet,
   DoseProgressCard,
   EmptyState,
-  FormField,
+  LogReadingModal,
   ScreenContainer,
   SuccessToast,
-  validateRequiredFields,
 } from '../src/components';
 import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
 import { formatBdtAmount } from '../src/features/expenses/expense-helpers';
 import { usePurchases } from '../src/features/expenses/PurchasesContext';
+import {
+  computeInitials,
+  convertGlucoseValue,
+  formatGlucoseNumberDisplay,
+  formatGlucoseUnitLabel,
+} from '../src/features/health/health-helpers';
+import { useHealthLogs } from '../src/features/health/HealthLogsContext';
 import { isPersonalMedicationLowStock } from '../src/features/medications/medication-helpers';
 import { useMedications } from '../src/features/medications/MedicationsContext';
+import { useUserPreferences } from '../src/features/profile/UserPreferencesContext';
 import {
   formatDoseActionFeedback,
   formatScheduleBarDateLabel,
@@ -82,14 +89,26 @@ function summarizePeriodStatus(periodDoses: ScheduledDoseItemDto[]): PeriodStatu
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
   const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const { medications } = useMedications();
   const { getLocalRangeDoses, recordDoseAction, pendingOccurrenceKeys } = useSchedules();
   const { expensesSummary } = usePurchases();
+  const { preferences } = useUserPreferences();
+  const { latestReading } = useHealthLogs();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [quickReadingOpen, setQuickReadingOpen] = useState(false);
-  const [readingValue, setReadingValue] = useState('');
-  const [latestGlucoseValue, setLatestGlucoseValue] = useState('106');
-  const [readingErrors, setReadingErrors] = useState<Record<string, string>>({});
+
+  const preferredGlucoseUnitLabel = formatGlucoseUnitLabel(preferences.glucoseUnit);
+  const latestGlucoseDisplay = latestReading
+    ? `${formatGlucoseNumberDisplay(
+        convertGlucoseValue(
+          Number(latestReading.value),
+          latestReading.unit,
+          preferences.glucoseUnit,
+        ),
+      )} ${preferredGlucoseUnitLabel}`
+    : null;
+  const headerInitials = computeInitials(preferences.displayName);
 
   const todayYmd = getTodayLocalYmd();
   const dailyDoses = useMemo(
@@ -116,21 +135,6 @@ export default function HomeScreen(): React.JSX.Element {
     setToastMessage(formatDoseActionFeedback(outcome));
   };
 
-  const handleSaveQuickReading = (): void => {
-    const errs = validateRequiredFields(
-      { readingValue },
-      { readingValue: 'Glucose reading value' },
-    );
-    setReadingErrors(errs);
-    if (Object.keys(errs).length > 0) {
-      return;
-    }
-    setLatestGlucoseValue(readingValue.trim());
-    setQuickReadingOpen(false);
-    setReadingValue('');
-    setToastMessage('Glucose reading saved to Health Log.');
-  };
-
   const activeMeds = medications.filter((m) => !m.archived);
   const lowStockMeds = activeMeds.filter(isPersonalMedicationLowStock);
   const nextDoseBusy = nextDose ? Boolean(pendingOccurrenceKeys[nextDose.occurrenceKey]) : false;
@@ -139,58 +143,144 @@ export default function HomeScreen(): React.JSX.Element {
     doses.some((d) => d.period === period),
   );
 
-  return (
-    <ScreenContainer title="Today" hideHeader>
-      <SuccessToast message={toastMessage} />
+  // Full-bleed Home header proportions matched to reference across mobile & tablet widths,
+  // extending seamlessly from y = 0 behind the status bar down behind the Progress Card.
+  const isWideViewport = layout.width > 500;
+  const baseArtWidth = isWideViewport
+    ? layout.width
+    : Math.round(layout.width * (layout.isCompact ? 1.1 : 1.14));
+  const baseArtHeight = isWideViewport ? 220 : Math.round(baseArtWidth * 0.5);
+  const topInset = Math.max(0, insets.top);
+  const headerArtTop = topInset > 0 ? 0 : -Math.round(baseArtHeight * 0.14);
+  const minArtHeightForInset =
+    topInset > 0
+      ? Math.max(
+          topInset + (layout.isCompact ? 140 : 162),
+          Math.round(topInset / 0.21),
+        )
+      : baseArtHeight;
+  const headerArtHeight = Math.max(baseArtHeight, minArtHeightForInset);
+  const headerArtWidth = isWideViewport
+    ? layout.width
+    : Math.max(baseArtWidth, Math.round(headerArtHeight * 2));
+  const headerTopPadding = topInset + (layout.isCompact ? 10 : 12);
+  const headerHeight = Math.max(
+    headerTopPadding + 104,
+    headerArtHeight + headerArtTop,
+  );
+  const headerOverlapPx = Math.round(Math.max(120, headerHeight - topInset) * 0.31);
 
-      {/* Full-bleed Top Greeting Banner with botanical medication illustration + KH badge */}
+  const statusBarGuardOverlay =
+    topInset > 0 ? (
       <View
-        className="relative justify-start overflow-hidden bg-[#EBF7F1]"
-        style={{
-          marginHorizontal: -layout.screenPadding,
-          marginTop: -layout.screenPadding,
-          paddingHorizontal: layout.screenPadding,
-          paddingTop: layout.screenPadding + 6,
-          paddingBottom: 42,
-          minHeight: 162,
-        }}
+        accessible={false}
+        pointerEvents="none"
+        className="absolute left-0 right-0 top-0 z-20 overflow-hidden bg-[#DFF6EC]"
+        style={{ height: topInset }}
       >
         <Image
           source={homeHeaderImage}
           resizeMode="cover"
           accessible={false}
-          className="absolute inset-0 h-full w-full"
+          style={{
+            position: 'absolute',
+            top: headerArtTop,
+            right: 0,
+            width: headerArtWidth,
+            height: headerArtHeight,
+          }}
         />
-        <View
-          accessible={false}
-          className="absolute bottom-0 left-0 right-0 h-5 bg-[#F7FAF8]/65"
-        />
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="flex-1 min-w-0 pr-6">
-            <Text className="text-[13px] font-semibold text-primary" numberOfLines={1}>
-              Good Morning, Karim
-            </Text>
-            <Text className="mt-0.5 text-[28px] font-bold leading-[34px] text-main">
-              Today
-            </Text>
-            <Text className="mt-0.5 text-xs text-[#5A706B]">
-              {formatScheduleBarDateLabel(todayYmd)}
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open Profile"
-            onPress={() => router.push('/profile')}
-            className="h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C5E8D8] bg-white/95 active:bg-mint"
-          >
-            <Text className="text-[13px] font-bold text-primary-dark">KH</Text>
-          </Pressable>
-        </View>
       </View>
+    ) : null;
 
-      {/* Progress Summary Card */}
-      <View className="-mt-6">
+  const homeHeaderBanner = (
+    <View
+      className="relative w-full overflow-hidden bg-[#DFF6EC]"
+      style={{
+        height: headerHeight,
+        paddingTop: headerTopPadding,
+      }}
+    >
+      <Image
+        source={homeHeaderImage}
+        resizeMode="cover"
+        accessible={false}
+        style={{
+          position: 'absolute',
+          top: headerArtTop,
+          right: 0,
+          width: headerArtWidth,
+          height: headerArtHeight,
+        }}
+      />
+      {/* Feathered multi-step transition into #F7FAF8 background behind Progress Card */}
+      <View
+        accessible={false}
+        className="absolute bottom-0 left-0 right-0 h-14 bg-[#F7FAF8]/20"
+      />
+      <View
+        accessible={false}
+        className="absolute bottom-0 left-0 right-0 h-10 bg-[#F7FAF8]/40"
+      />
+      <View
+        accessible={false}
+        className="absolute bottom-0 left-0 right-0 h-6 bg-[#F7FAF8]/65"
+      />
+      <View
+        accessible={false}
+        className="absolute bottom-0 left-0 right-0 h-3 bg-[#F7FAF8]/90"
+      />
+
+      <View
+        className="w-full flex-row items-start justify-between gap-2"
+        style={[
+          { paddingHorizontal: layout.screenPadding },
+          layout.maxContentWidth
+            ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
+            : undefined,
+        ]}
+      >
+        <View className="min-w-0 flex-1 pr-3" style={{ maxWidth: layout.isCompact ? '54%' : '56%' }}>
+          <Text className="text-[13px] font-semibold text-primary" numberOfLines={1}>
+            Good Morning, {preferences.displayName}
+          </Text>
+          <Text
+            className="mt-0.5 font-bold text-main"
+            style={{
+              fontSize: layout.isCompact ? 25 : 28,
+              lineHeight: layout.isCompact ? 30 : 34,
+            }}
+          >
+            Today
+          </Text>
+          <Text className="mt-0.5 text-xs text-[#5A706B]" numberOfLines={1}>
+            {formatScheduleBarDateLabel(todayYmd)}
+          </Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Profile"
+          onPress={() => router.push('/profile')}
+          className="h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C5E8D8] bg-white/95 shadow-sm active:bg-mint"
+        >
+          <Text className="text-[13px] font-bold text-primary-dark">{headerInitials}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  return (
+    <ScreenContainer
+      title="Today"
+      hideHeader
+      topBanner={homeHeaderBanner}
+      topOverlay={statusBarGuardOverlay}
+    >
+      <SuccessToast message={toastMessage} />
+
+      {/* Progress Summary Card floating seamlessly over header bottom wave */}
+      <View style={{ marginTop: -headerOverlapPx }}>
         <DoseProgressCard
           variant="tiles"
           takenCount={completedCount}
@@ -475,7 +565,11 @@ export default function HomeScreen(): React.JSX.Element {
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Latest glucose ${latestGlucoseValue} mg/dL`}
+          accessibilityLabel={
+            latestGlucoseDisplay
+              ? `Latest glucose ${latestGlucoseDisplay}`
+              : 'Latest glucose not logged yet'
+          }
           onPress={() => setQuickReadingOpen(true)}
           className={`${
             layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-0'
@@ -490,11 +584,13 @@ export default function HomeScreen(): React.JSX.Element {
             </Text>
           </View>
           <Text className="mt-2 text-[20px] font-bold text-primary" numberOfLines={1}>
-            {latestGlucoseValue} mg/dL
+            {latestGlucoseDisplay ?? 'Not logged'}
           </Text>
           <View className="mt-1.5 flex-row items-center justify-between gap-2">
             <Text className="flex-1 min-w-0 text-[11px] text-[#5A706B]" numberOfLines={1}>
-              Fasting · 07:30 AM
+              {latestReading
+                ? `${latestReading.contextLabel} · ${latestReading.measuredTime12}`
+                : 'Tap to log glucose'}
             </Text>
             <Feather
               name="arrow-right"
@@ -538,23 +634,15 @@ export default function HomeScreen(): React.JSX.Element {
         </Pressable>
       </View>
 
-      <BottomSheet
+      <LogReadingModal
         visible={quickReadingOpen}
-        title="Log Reading"
         onClose={() => setQuickReadingOpen(false)}
-        onSubmit={handleSaveQuickReading}
-        submitLabel="Save reading"
-      >
-        <FormField
-          label="Reading value (mg/dL)"
-          value={readingValue}
-          onChangeText={setReadingValue}
-          placeholder="e.g. 106"
-          keyboardType="decimal-pad"
-          required
-          errorMessage={readingErrors.readingValue}
-        />
-      </BottomSheet>
+        onSaved={(saved) =>
+          setToastMessage(
+            `Saved ${saved.displayValue} ${saved.unitLabel} to Health Log.`,
+          )
+        }
+      />
     </ScreenContainer>
   );
 }

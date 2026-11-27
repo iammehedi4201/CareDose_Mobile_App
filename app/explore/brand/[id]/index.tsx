@@ -20,6 +20,7 @@ import {
   CatalogueBrandDetailDto,
   getCatalogueBrandAlternatives,
   getCatalogueBrandDetail,
+  getOfflineCachedBrandDetail,
 } from '../../../../src/api/catalogue';
 import {
   formatCurrencyAmount,
@@ -87,6 +88,25 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         setBrand(detailRes);
         setSelectedPackId(detailRes.packs[0]?.id ?? null);
       } catch (err) {
+        const cachedBrand = await getOfflineCachedBrandDetail(id);
+        if (cachedBrand) {
+          const isFullDetail = 'packs' in cachedBrand && Array.isArray(cachedBrand.packs);
+          const detailObj: CatalogueBrandDetailDto = isFullDetail
+            ? (cachedBrand as CatalogueBrandDetailDto)
+            : {
+                ...cachedBrand,
+                productUrl: null,
+                collectedAt: null,
+                packs: cachedBrand.primaryPack ? [cachedBrand.primaryPack] : [],
+                images: [],
+                safetyNotice:
+                  'Showing locally cached SQLite record. Connect to the backend server for live updates.',
+              };
+          setBrand(detailObj);
+          setSelectedPackId(detailObj.packs[0]?.id ?? null);
+          return;
+        }
+
         const fallback = OFFLINE_FALLBACK_CATALOGUE_BRANDS.find(
           (b) => b.sourceId === id || b.id === id,
         );

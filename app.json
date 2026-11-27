@@ -8,12 +8,22 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "android": {
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "color": "#087E67"
+        }
+      ],
       "expo-status-bar",
       "@react-native-community/datetimepicker"
     ]

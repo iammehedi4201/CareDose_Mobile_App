@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../theme/responsive';
 import { PrimaryTabKey } from '../theme/tokens';
@@ -11,6 +11,8 @@ export interface ScreenContainerProps extends AppHeaderProps {
   activeTabOverride?: PrimaryTabKey;
   scrollable?: boolean;
   hideHeader?: boolean;
+  topBanner?: React.ReactNode;
+  topOverlay?: React.ReactNode;
 }
 
 export function ScreenContainer({
@@ -24,12 +26,18 @@ export function ScreenContainer({
   activeTabOverride,
   scrollable = true,
   hideHeader = false,
+  topBanner,
+  topOverlay,
   children,
 }: ScreenContainerProps): React.JSX.Element {
   const layout = useResponsiveLayout();
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView
+      className="flex-1 bg-background"
+      edges={topBanner ? ['bottom', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}
+    >
+      <StatusBar barStyle="dark-content" />
       {!hideHeader ? (
         <AppHeader
           title={title}
@@ -47,19 +55,22 @@ export function ScreenContainer({
           className="flex-1"
           contentContainerStyle={{
             flexGrow: 1,
-            paddingHorizontal: layout.screenPadding,
-            paddingTop: layout.screenPadding,
             paddingBottom: 28,
           }}
           keyboardShouldPersistTaps="handled"
         >
+          {topBanner}
           <View
             className="w-full"
-            style={
+            style={[
+              {
+                paddingHorizontal: layout.screenPadding,
+                paddingTop: topBanner ? 0 : layout.screenPadding,
+              },
               layout.maxContentWidth
                 ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-                : undefined
-            }
+                : undefined,
+            ]}
           >
             {children}
           </View>
@@ -78,6 +89,7 @@ export function ScreenContainer({
         </View>
       )}
 
+      {topOverlay}
       <BottomNavigation activeTabOverride={activeTabOverride} />
     </SafeAreaView>
   );

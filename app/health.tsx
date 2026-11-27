@@ -1,228 +1,387 @@
-import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import type { HealthReadingItemDto } from '../src/api/health-logs';
 import {
-  BottomSheet,
-  DateField,
-  FormCol,
-  FormField,
-  FormRow,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  FilterChips,
+  LoadingSkeleton,
+  LogReadingModal,
   ScreenContainer,
-  SelectField,
   SuccessToast,
-  TimeField,
-  validateRequiredFields,
 } from '../src/components';
-import { useResponsiveLayout } from '../src/theme/responsive';
-
-interface GlucoseEntry {
-  id: string;
-  value: number;
-  unit: 'mg/dL' | 'mmol/L';
-  context: string;
-  date: string;
-  time: string;
-}
-
-const INITIAL_READINGS: GlucoseEntry[] = [
-  { id: 'r1', value: 106, unit: 'mg/dL', context: 'Fasting', date: '2026-11-21', time: '07:30 AM' },
-  { id: 'r2', value: 101, unit: 'mg/dL', context: 'Fasting', date: '2026-11-20', time: '07:40 AM' },
-  { id: 'r3', value: 108, unit: 'mg/dL', context: 'Before meal', date: '2026-11-19', time: '12:45 PM' },
-  { id: 'r4', value: 99, unit: 'mg/dL', context: 'Fasting', date: '2026-11-18', time: '07:20 AM' },
-  { id: 'r5', value: 112, unit: 'mg/dL', context: 'After meal', date: '2026-11-17', time: '02:30 PM' },
-  { id: 'r6', value: 104, unit: 'mg/dL', context: 'Fasting', date: '2026-11-16', time: '07:35 AM' },
-  { id: 'r7', value: 110, unit: 'mg/dL', context: 'Fasting', date: '2026-11-15', time: '07:50 AM' },
-];
+import {
+  convertGlucoseValue,
+  formatGlucoseUnitLabel,
+  HEALTH_LOG_NON_INTERPRETATION_DISCLAIMER,
+  READING_CONTEXT_FILTER_CHIPS,
+} from '../src/features/health/health-helpers';
+import { useHealthLogs } from '../src/features/health/HealthLogsContext';
+import { useUserPreferences } from '../src/features/profile/UserPreferencesContext';
+import { CAREDOSE_EXTENDED_COLORS } from '../src/theme/tokens';
 
 export default function HealthLogScreen(): React.JSX.Element {
   const router = useRouter();
-  const layout = useResponsiveLayout();
-  const [readings, setReadings] = useState<GlucoseEntry[]>(INITIAL_READINGS);
-  const [logOpen, setLogOpen] = useState(false);
-  const [val, setVal] = useState('');
-  const [unit, setUnit] = useState<'mg/dL' | 'mmol/L'>('mg/dL');
-  const [context, setContext] = useState('Fasting');
-  const [date, setDate] = useState('2026-11-21');
-  const [time, setTime] = useState('07:30 AM');
-  const [note, setNote] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { preferences } = useUserPreferences();
+  const {
+    readings,
+    filteredLatestReading,
+    chartPoints,
+    contextFilter,
+    setContextFilter,
+    hasSampleReadings,
+    disclaimer,
+    loading,
+    deletingId,
+    error,
+    refreshHealthLogs,
+    deleteHealthReading,
+    loadSampleDemoReadings,
+  } = useHealthLogs();
+
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<HealthReadingItemDto | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const handleSaveReading = (): void => {
-    const errs = validateRequiredFields(
-      { val, date, time },
-      { val: 'Glucose value', date: 'Date', time: 'Time' },
+  const preferredUnitLabel = formatGlucoseUnitLabel(preferences.glucoseUnit);
+
+  const maxChartValue = useMemo(() => {
+    const baseline = preferences.glucoseUnit === 'MMOL_L' ? 10 : 180;
+    const highest = Math.max(
+      ...chartPoints.map((point) => point.convertedValue),
+      baseline,
+      1,
     );
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) {
+    return highest;
+  }, [chartPoints, preferences.glucoseUnit]);
+
+  const handleBack = (): void => {
+    if (router.canGoBack()) {
+      router.back();
       return;
     }
-    const numeric = Number(val);
-    if (!Number.isFinite(numeric) || numeric <= 0) {
-      setErrors({ val: 'Glucose value must be a positive number' });
-      return;
-    }
-    setReadings((prev) => [
-      {
-        id: `r-${Date.now()}`,
-        value: numeric,
-        unit,
-        context,
-        date,
-        time,
-      },
-      ...prev,
-    ]);
-    setLogOpen(false);
-    setVal('');
-    setToast('Glucose reading recorded.');
+    router.push('/profile');
   };
 
-  const chartPoints = readings.slice(0, 7).reverse();
-  const maxVal = Math.max(...chartPoints.map((p) => p.value), 120);
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!deleteTarget) return;
+    const removed = deleteTarget;
+    try {
+      await deleteHealthReading(removed.id);
+      setDeleteTarget(null);
+      setToast(`Deleted ${removed.displayValue} ${removed.unitLabel} reading.`);
+    } catch (err) {
+      setDeleteTarget(null);
+      setToast(err instanceof Error ? err.message : 'Unable to delete reading.');
+    }
+  };
 
   return (
     <ScreenContainer
-      eyebrow="BLOOD GLUCOSE"
       title="Health Log"
-      onBack={() => router.push('/profile')}
+      subtitle="Personal blood glucose tracking & history"
+      onBack={handleBack}
       primaryAction={{
-        label: 'Log Reading',
-        iconName: 'plus',
-        onPress: () => setLogOpen(true),
+        label: '+ Log Reading',
+        onPress: () => setLogModalOpen(true),
       }}
     >
       <SuccessToast message={toast} />
 
-      {/* 7-Day Blood Glucose Bar Chart */}
-      <View
-        className="bg-white rounded-card border border-border mb-4"
-        style={{ padding: layout.cardPadding }}
-      >
-        <View className="flex-row items-center justify-between flex-wrap gap-2.5 mb-2.5">
-          <Text className="text-[15px] font-semibold text-main shrink min-w-0">
-            Last 7 glucose readings
+      {error ? (
+        <ErrorState
+          message={error}
+          onRetry={() => void refreshHealthLogs()}
+        />
+      ) : null}
+
+      {hasSampleReadings ? (
+        <View className="mb-3 flex-row items-center gap-2 rounded-card border border-[#CFE0F5] bg-[#F4F8FD] px-3.5 py-2.5">
+          <Feather name="info" size={14} color={CAREDOSE_EXTENDED_COLORS.info} />
+          <Text className="flex-1 text-[11px] font-medium leading-[16px] text-main">
+            Sample demo readings are currently shown. Log your own reading anytime or clear in Settings → Reset demo data.
           </Text>
-          <Text className="text-[11px] font-semibold text-[#5A706B] shrink-0">{unit}</Text>
         </View>
-        <View className="flex-row items-end justify-between h-[124px] pt-3">
-          {chartPoints.map((pt) => {
-            const barHeight = Math.max(18, Math.round((pt.value / maxVal) * 88));
+      ) : null}
+
+      {/* Latest Reading Overview Card */}
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="text-xs font-semibold text-[#5A706B]">
+            {contextFilter === 'ALL' ? 'Latest logged reading' : 'Latest in selected context'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Preferred unit ${preferredUnitLabel}. Open Settings to change`}
+            onPress={() => router.push('/settings')}
+            className="rounded-full border border-[#CBE7DB] bg-mint px-2.5 py-1 active:opacity-80"
+          >
+            <Text className="text-[11px] font-semibold text-primary">
+              Chart unit: {preferredUnitLabel}
+            </Text>
+          </Pressable>
+        </View>
+
+        {filteredLatestReading ? (
+          <View className="mt-2">
+            <View className="flex-row flex-wrap items-baseline gap-2">
+              <Text className="text-[26px] font-bold text-primary">
+                {filteredLatestReading.displayValue} {filteredLatestReading.unitLabel}
+              </Text>
+              <View className="rounded-full border border-border bg-background px-2.5 py-0.5">
+                <Text className="text-[11px] font-semibold text-main">
+                  {filteredLatestReading.contextLabel}
+                </Text>
+              </View>
+              {filteredLatestReading.isSample ? (
+                <View className="rounded-full border border-[#CFE0F5] bg-[#F4F8FD] px-2 py-0.5">
+                  <Text className="text-[10px] font-semibold text-info">Sample</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <Text className="mt-1 text-xs text-[#5A706B]">
+              {filteredLatestReading.measuredDateYmd} · {filteredLatestReading.measuredTime12}
+              {filteredLatestReading.unit !== preferences.glucoseUnit
+                ? ` · ≈ ${convertGlucoseValue(
+                    Number(filteredLatestReading.value),
+                    filteredLatestReading.unit,
+                    preferences.glucoseUnit,
+                  )} ${preferredUnitLabel}`
+                : ''}
+            </Text>
+
+            {filteredLatestReading.note ? (
+              <Text className="mt-1.5 text-xs text-main">
+                {filteredLatestReading.note}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text className="mt-2 text-xs leading-[18px] text-[#5A706B]">
+            No blood glucose readings saved yet for this view.
+          </Text>
+        )}
+      </View>
+
+      {/* 7-Reading Trend Chart Card */}
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4">
+        <View className="mb-3 flex-row items-center justify-between gap-2">
+          <Text className="text-[15px] font-semibold text-main">
+            Recent trend (up to 7 readings)
+          </Text>
+          <Text className="text-[11px] font-medium text-[#5A706B]">
+            {preferredUnitLabel}
+          </Text>
+        </View>
+
+        {chartPoints.length > 0 ? (
+          <>
+            <View className="flex-row items-end justify-between gap-1.5 pt-2">
+              {chartPoints.map((point, index) => {
+                const isLatestPoint = index === chartPoints.length - 1;
+                const heightPx =
+                  point.convertedValue > 0
+                    ? Math.max(14, Math.round((point.convertedValue / maxChartValue) * 84))
+                    : 6;
+                return (
+                  <View
+                    key={point.id}
+                    accessibilityLabel={`${point.measuredDateYmd} ${point.contextLabel}: ${point.convertedValue} ${point.unitLabel}`}
+                    className="flex-1 min-w-0 items-center"
+                  >
+                    <Text
+                      className={`mb-1 text-[10px] font-semibold ${
+                        isLatestPoint ? 'text-primary' : 'text-[#5A706B]'
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {point.convertedValue}
+                    </Text>
+                    <View className="h-[88px] w-full items-center justify-end px-0.5">
+                      <View
+                        className={`w-full max-w-[28px] rounded-t-[6px] ${
+                          isLatestPoint ? 'bg-primary' : 'bg-[#A7D7C8]'
+                        }`}
+                        style={{ height: heightPx }}
+                      />
+                    </View>
+                    <Text
+                      className={`mt-1.5 text-[10px] ${
+                        isLatestPoint ? 'font-bold text-primary' : 'font-medium text-[#5A706B]'
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {point.shortDateLabel}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text className="mt-2.5 text-[11px] leading-[16px] text-[#5A706B]">
+              Chart bars normalize mixed entries to {preferredUnitLabel}. Saved rows below keep your exact entered values.
+            </Text>
+          </>
+        ) : (
+          <View className="rounded-field border border-border bg-background px-3 py-3">
+            <Text className="text-xs leading-[18px] text-[#5A706B]">
+              Your 7-reading bar chart updates automatically once you save glucose entries.
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Meal Context Filters */}
+      <View className="mb-3">
+        <FilterChips
+          options={READING_CONTEXT_FILTER_CHIPS}
+          selectedKey={contextFilter}
+          onSelect={setContextFilter}
+        />
+      </View>
+
+      {/* Readings List / Empty / Loading */}
+      {loading && readings.length === 0 ? (
+        <LoadingSkeleton rows={3} />
+      ) : readings.length === 0 ? (
+        <View>
+          <EmptyState
+            iconName="activity"
+            title={
+              contextFilter === 'ALL'
+                ? 'No health readings logged yet'
+                : 'No readings match this filter'
+            }
+            description={
+              contextFilter === 'ALL'
+                ? 'Tap + Log Reading in the top header to record your first glucose check.'
+                : 'Switch filter chips above or log a new reading in the top header.'
+            }
+          />
+          {contextFilter === 'ALL' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Load labelled sample demo readings"
+              onPress={() => {
+                void loadSampleDemoReadings().then(() => {
+                  setToast('Labelled sample demo readings loaded.');
+                });
+              }}
+              className="mt-1 items-center py-2"
+            >
+              <Text className="text-xs font-semibold text-primary">
+                Preview with labelled sample demo readings
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <View className="mb-3.5 gap-2.5">
+          {readings.map((item) => {
+            const convertedDiffers = item.unit !== preferences.glucoseUnit;
+            const convertedVal = convertedDiffers
+              ? convertGlucoseValue(
+                  Number(item.value),
+                  item.unit,
+                  preferences.glucoseUnit,
+                )
+              : null;
+
             return (
-              <View key={pt.id} className="flex-1 min-w-0 px-[1px] items-center">
-                <Text className="text-[10px] font-semibold text-[#5A706B] mb-1">
-                  {pt.value}
-                </Text>
-                <View
-                  className="rounded-[6px] bg-primary"
-                  style={{
-                    height: barHeight,
-                    width: layout.isCompact ? 14 : 18,
-                  }}
-                />
-                <Text className="mt-1.5 text-[10px] text-[#5A706B]" numberOfLines={1}>
-                  {pt.date.slice(5)}
-                </Text>
+              <View
+                key={item.id}
+                className="rounded-card border border-border bg-white p-3.5"
+              >
+                <View className="flex-row items-start justify-between gap-2.5">
+                  <View className="flex-1 min-w-0">
+                    <View className="flex-row flex-wrap items-center gap-2">
+                      <Text className="text-[17px] font-bold text-main">
+                        {item.displayValue} {item.unitLabel}
+                      </Text>
+                      <View className="rounded-full border border-[#CBE7DB] bg-mint px-2.5 py-0.5">
+                        <Text className="text-[11px] font-semibold text-primary">
+                          {item.contextLabel}
+                        </Text>
+                      </View>
+                      {item.isSample ? (
+                        <View className="rounded-full border border-[#CFE0F5] bg-[#F4F8FD] px-2 py-0.5">
+                          <Text className="text-[10px] font-semibold text-info">Sample</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <Text className="mt-1 text-xs text-[#5A706B]">
+                      {item.measuredDateYmd} · {item.measuredTime12}
+                      {convertedVal !== null ? ` · ≈ ${convertedVal} ${preferredUnitLabel}` : ''}
+                    </Text>
+
+                    {item.note ? (
+                      <Text className="mt-1.5 text-xs leading-[17px] text-main">
+                        {item.note}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete reading ${item.displayValue} ${item.unitLabel}`}
+                    disabled={deletingId === item.id}
+                    onPress={() => setDeleteTarget(item)}
+                    className="h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-background active:bg-[#FDECEC]"
+                  >
+                    <Feather
+                      name="trash-2"
+                      size={15}
+                      color={CAREDOSE_EXTENDED_COLORS.error}
+                    />
+                  </Pressable>
+                </View>
               </View>
             );
           })}
         </View>
+      )}
+
+      {/* Non-Interpretation Notice */}
+      <View className="mb-3 rounded-card border border-border bg-white px-3.5 py-3">
+        <View className="flex-row items-start gap-2">
+          <Feather
+            name="shield"
+            size={15}
+            color={CAREDOSE_EXTENDED_COLORS.secondaryText}
+          />
+          <Text className="flex-1 text-[11px] leading-[16px] text-[#5A706B]">
+            {disclaimer || HEALTH_LOG_NON_INTERPRETATION_DISCLAIMER}
+          </Text>
+        </View>
       </View>
 
-      <Text className="text-[15px] font-semibold text-main mb-2.5">
-        Glucose readings ({readings.length})
-      </Text>
-      {readings.map((r) => (
-        <View
-          key={r.id}
-          className="flex-row items-center justify-between gap-2.5 bg-white rounded-card border border-border p-3.5 mb-2.5"
-        >
-          <View className="flex-1 min-w-0">
-            <Text className="text-[15px] font-bold text-main">
-              {r.value} {r.unit}
-            </Text>
-            <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-              {r.date} · {r.time}
-            </Text>
-          </View>
-          <View className="bg-mint px-2.5 py-1 rounded-full">
-            <Text className="text-[11px] font-semibold text-primary">{r.context}</Text>
-          </View>
-        </View>
-      ))}
+      <LogReadingModal
+        visible={logModalOpen}
+        defaultContext={contextFilter !== 'ALL' ? contextFilter : 'FASTING'}
+        onClose={() => setLogModalOpen(false)}
+        onSaved={(saved) =>
+          setToast(`Saved ${saved.displayValue} ${saved.unitLabel} (${saved.contextLabel}).`)
+        }
+      />
 
-      <BottomSheet
-        visible={logOpen}
-        title="Log Glucose Reading"
-        iconName="activity"
-        onClose={() => setLogOpen(false)}
-        onSubmit={handleSaveReading}
-        submitLabel="Save reading"
-      >
-        <FormRow>
-          <FormCol>
-            <FormField
-              label="Glucose value"
-              value={val}
-              onChangeText={setVal}
-              placeholder="e.g. 106"
-              keyboardType="decimal-pad"
-              required
-              errorMessage={errors.val}
-            />
-          </FormCol>
-          <FormCol>
-            <SelectField
-              label="Unit"
-              value={unit}
-              options={[
-                { label: 'mg/dL', value: 'mg/dL' },
-                { label: 'mmol/L', value: 'mmol/L' },
-              ]}
-              onSelect={(v) => setUnit(v as 'mg/dL' | 'mmol/L')}
-              required
-            />
-          </FormCol>
-        </FormRow>
-        <SelectField
-          label="Context"
-          value={context}
-          options={[
-            { label: 'Fasting', value: 'Fasting' },
-            { label: 'Before meal', value: 'Before meal' },
-            { label: 'After meal', value: 'After meal' },
-            { label: 'Other', value: 'Other' },
-          ]}
-          onSelect={setContext}
-          required
-        />
-        <FormRow>
-          <FormCol>
-            <DateField
-              label="Date"
-              value={date}
-              onChangeDate={setDate}
-              required
-              errorMessage={errors.date}
-            />
-          </FormCol>
-          <FormCol>
-            <TimeField
-              label="Time"
-              value={time}
-              onChangeTime={setTime}
-              required
-              errorMessage={errors.time}
-            />
-          </FormCol>
-        </FormRow>
-        <FormField
-          label="Note (optional)"
-          value={note}
-          onChangeText={setNote}
-          placeholder="Add note"
-        />
-      </BottomSheet>
+      <ConfirmDialog
+        visible={deleteTarget !== null}
+        title="Delete health reading?"
+        description={
+          deleteTarget
+            ? `Remove ${deleteTarget.displayValue} ${deleteTarget.unitLabel} (${deleteTarget.contextLabel}) from ${deleteTarget.measuredDateYmd}?`
+            : 'Remove this blood glucose entry?'
+        }
+        confirmLabel="Delete reading"
+        destructive
+        loading={deleteTarget !== null && deletingId === deleteTarget.id}
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </ScreenContainer>
   );
 }

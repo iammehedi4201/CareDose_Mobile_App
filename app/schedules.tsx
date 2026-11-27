@@ -17,6 +17,7 @@ import {
 } from '../src/components';
 import type { ScheduleStatusDto } from '../src/api/schedules';
 import { useMedications } from '../src/features/medications/MedicationsContext';
+import { useUserPreferences } from '../src/features/profile/UserPreferencesContext';
 import {
   format24To12Hour,
   formatDoseAmountDisplay,
@@ -52,6 +53,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
   const router = useRouter();
   const layout = useResponsiveLayout();
   const { medications } = useMedications();
+  const { preferences } = useUserPreferences();
   const {
     schedules,
     loading,
@@ -291,6 +293,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
               schedule.remindersEnabled,
               effectiveStatus,
               notifCapability,
+              preferences.remindersEnabled,
             );
             const busy = mutatingId === schedule.id;
 

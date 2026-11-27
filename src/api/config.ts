@@ -23,6 +23,14 @@ export async function readSavedAuthSession(): Promise<SavedAuthSession | null> {
   }
 }
 
+export async function clearSavedAuthSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore storage removal errors
+  }
+}
+
 export class ApiRequestError extends Error {
   constructor(
     public readonly statusCode: number,

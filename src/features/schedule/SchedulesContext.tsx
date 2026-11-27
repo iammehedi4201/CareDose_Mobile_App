@@ -3,9 +3,11 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiRequestError, readSavedAuthSession } from '../../api/config';
 import {
@@ -24,6 +26,7 @@ import {
   updateSchedule,
 } from '../../api/schedules';
 import { useMedications } from '../medications/MedicationsContext';
+import { useUserPreferences } from '../profile/UserPreferencesContext';
 import {
   computeStockAfterDoseTaken,
   createInitialDemoDoseEvents,
@@ -39,8 +42,11 @@ import {
   normalizeTimeTo24Hour,
 } from './dose-rules';
 import {
+  cancelDoseOccurrenceNotification,
   cancelScheduleNotifications,
   reconcileScheduleNotifications,
+  ReminderDeliveryPreferences,
+  snoozeDoseNotification,
   syncScheduleNotifications,
 } from './notifications';
 
@@ -121,6 +127,11 @@ interface SchedulesContextValue {
   }) => Promise<DoseHistoryResponseDto>;
   refreshSchedules: () => Promise<void>;
   resetDemoSchedules: () => Promise<void>;
+  reconcileRemindersNow: () => Promise<void>;
+  snoozeDoseReminder: (
+    dose: ScheduledDoseItemDto,
+    minutes?: number,
+  ) => Promise<{ scheduled: boolean; triggerAtIso: string | null }>;
 }
 
 const SchedulesContext = createContext<SchedulesContextValue | null>(null);
@@ -131,6 +142,30 @@ export function SchedulesProvider({
   children: React.ReactNode;
 }): React.JSX.Element {
   const { medications, adjustMedicationStock, getMedicationById } = useMedications();
+  const { preferences } = useUserPreferences();
+
+  const reminderPrefs = useMemo<ReminderDeliveryPreferences>(
+    () => ({
+      globalRemindersEnabled: preferences.remindersEnabled,
+      soundEnabled: preferences.soundEnabled,
+      reminderLeadMins: preferences.reminderLeadMins,
+      hideMedicineDetails: preferences.hideMedicineInNotifications,
+    }),
+    [
+      preferences.hideMedicineInNotifications,
+      preferences.reminderLeadMins,
+      preferences.remindersEnabled,
+      preferences.soundEnabled,
+    ],
+  );
+
+  const resolveNotificationMed = useCallback(
+    (medId: string) => {
+      const m = getMedicationById(medId);
+      return m ? { name: m.name, strength: m.strength } : 'Medicine';
+    },
+    [getMedicationById],
+  );
 
   const [schedules, setSchedules] = useState<LocalScheduleRecord[]>(() =>
     createInitialDemoSchedules(),
@@ -195,7 +230,9 @@ export function SchedulesProvider({
           setDoseEvents(mappedEvents);
           void reconcileScheduleNotifications(
             mappedScheds,
-            (medId) => getMedicationById(medId)?.name ?? 'Medicine',
+            resolveNotificationMed,
+            new Date(),
+            reminderPrefs,
           );
           await Promise.all([
             persistSchedules(mappedScheds),
@@ -239,6 +276,31 @@ export function SchedulesProvider({
   useEffect(() => {
     void refreshSchedules();
   }, [refreshSchedules]);
+
+  const reconcileRemindersNow = useCallback(async () => {
+    await reconcileScheduleNotifications(
+      schedules,
+      resolveNotificationMed,
+      new Date(),
+      reminderPrefs,
+    );
+  }, [schedules, resolveNotificationMed, reminderPrefs]);
+
+  useEffect(() => {
+    if (loading) return;
+    void reconcileRemindersNow();
+  }, [loading, reconcileRemindersNow]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void reconcileRemindersNow();
+      }
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [reconcileRemindersNow]);
 
   const getLocalRangeDoses = useCallback(
     (startYmd: string, daysCount = 1, now = new Date()): DailyDosesResponseDto =>
@@ -329,7 +391,12 @@ export function SchedulesProvider({
             void persistSchedules(next);
             return next;
           });
-          void syncScheduleNotifications(mapped, med?.name ?? 'Medicine');
+          void syncScheduleNotifications(
+            mapped,
+            resolveNotificationMed(mapped.patientMedicationId),
+            new Date(),
+            reminderPrefs,
+          );
           return mapped;
         } catch (err) {
           if (err instanceof ApiRequestError && !err.isNetworkError) {
@@ -360,10 +427,15 @@ export function SchedulesProvider({
         void persistSchedules(next);
         return next;
       });
-      void syncScheduleNotifications(localSchedule, med?.name ?? 'Medicine');
+      void syncScheduleNotifications(
+        localSchedule,
+        resolveNotificationMed(localSchedule.patientMedicationId),
+        new Date(),
+        reminderPrefs,
+      );
       return localSchedule;
     },
-    [getMedicationById, persistSchedules, schedules],
+    [getMedicationById, persistSchedules, reminderPrefs, resolveNotificationMed, schedules],
   );
 
   const updateScheduleById = useCallback(
@@ -409,8 +481,12 @@ export function SchedulesProvider({
             void persistSchedules(next);
             return next;
           });
-          const medName = getMedicationById(mapped.patientMedicationId)?.name ?? 'Medicine';
-          void syncScheduleNotifications(mapped, medName);
+          void syncScheduleNotifications(
+            mapped,
+            resolveNotificationMed(mapped.patientMedicationId),
+            new Date(),
+            reminderPrefs,
+          );
           return mapped;
         } catch (err) {
           if (err instanceof ApiRequestError && !err.isNetworkError) {
@@ -462,12 +538,16 @@ export function SchedulesProvider({
       });
       if (updatedItem) {
         const resolved: LocalScheduleRecord = updatedItem;
-        const medName = getMedicationById(resolved.patientMedicationId)?.name ?? 'Medicine';
-        void syncScheduleNotifications(resolved, medName);
+        void syncScheduleNotifications(
+          resolved,
+          resolveNotificationMed(resolved.patientMedicationId),
+          new Date(),
+          reminderPrefs,
+        );
       }
       return updatedItem;
     },
-    [getMedicationById, persistSchedules],
+    [persistSchedules, reminderPrefs, resolveNotificationMed],
   );
 
   const archiveScheduleById = useCallback(
@@ -618,6 +698,13 @@ export function SchedulesProvider({
               );
             }
 
+            void cancelDoseOccurrenceNotification(
+              item.occurrenceKey,
+              item.scheduleId,
+              item.scheduledDateYmd,
+              item.scheduledTime24,
+            );
+
             return {
               status: recordedStatus,
               stockDeducted: remoteRes.stockDeducted,
@@ -685,6 +772,13 @@ export function SchedulesProvider({
             await adjustMedicationStock(med.id, 'set', calc.nextStock);
           }
         }
+
+        void cancelDoseOccurrenceNotification(
+          item.occurrenceKey,
+          item.scheduleId,
+          item.scheduledDateYmd,
+          item.scheduledTime24,
+        );
 
         return {
           status: nextStatus,
@@ -801,6 +895,12 @@ export function SchedulesProvider({
     [doseEvents, medications, schedules],
   );
 
+  const snoozeDoseReminder = useCallback(
+    async (dose: ScheduledDoseItemDto, minutes = 10) =>
+      snoozeDoseNotification(dose, minutes, reminderPrefs),
+    [reminderPrefs],
+  );
+
   const resetDemoSchedules = useCallback(async () => {
     const initialScheds = createInitialDemoSchedules();
     const initialEvents = createInitialDemoDoseEvents();
@@ -829,6 +929,8 @@ export function SchedulesProvider({
         queryDoseHistory,
         refreshSchedules,
         resetDemoSchedules,
+        reconcileRemindersNow,
+        snoozeDoseReminder,
       }}
     >
       {children}

@@ -13,6 +13,7 @@ import {
 import {
   CatalogueBrandSummaryDto,
   getCatalogueGenericDetail,
+  getOfflineCachedGenericDetail,
 } from '../../../src/api/catalogue';
 import {
   formatPackSummary,
@@ -60,6 +61,19 @@ export default function GenericDetailsScreen(): React.JSX.Element {
         setNextCursor(res.brands.nextCursor);
         setBrands((prev) => (opts.reset ? res.brands.items : [...prev, ...res.brands.items]));
       } catch (err) {
+        if (opts.reset) {
+          const sqliteGeneric = await getOfflineCachedGenericDetail(id);
+          if (sqliteGeneric) {
+            setGenericName(sqliteGeneric.generic.name);
+            setWarningNotice(sqliteGeneric.warningNotice);
+            setTotalCount(sqliteGeneric.brands.totalCount);
+            setHasMore(false);
+            setNextCursor(null);
+            setBrands(sqliteGeneric.brands.items);
+            return;
+          }
+        }
+
         const fallback = OFFLINE_FALLBACK_CATALOGUE_BRANDS.filter(
           (b) => b.generic?.sourceId === id || b.generic?.id === id,
         );
