@@ -664,9 +664,9 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         }),
       );
       expect(doseEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
-      expect(doseEls.some((e) => hasClass(e, 'min-h-[40px]'))).toBe(true);
+      expect(doseEls.some((e) => hasClass(e, 'min-h-[44px]'))).toBe(true);
       expect(doseEls.some((e) => e.type === 'Image')).toBe(false);
-      // Calm aligned text block beside 34px clock icon, without oversized bold/pills
+      // Small optional medicine-type icon badge alongside prominent title & structured dose info
       expect(doseEls.some((e) => hasClass(e, 'h-[34px]') && hasClass(e, 'w-[34px]'))).toBe(true);
       const fullTitle = `${c.medicineName} ${c.strength}`;
       const titleEl = doseEls.find((e) => e.props.children === fullTitle);
@@ -676,7 +676,7 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       const timeEl = doseEls.find(
         (e) => e.props.accessibilityLabel === `Scheduled time ${c.scheduledTime}`,
       );
-      expect(Boolean(titleEl && hasClass(titleEl, 'font-semibold'))).toBe(true);
+      expect(Boolean(titleEl && hasClass(titleEl, 'font-bold'))).toBe(true);
       expect(detailsEl).toBeDefined();
       expect(Boolean(timeEl && hasClass(timeEl, 'text-primary'))).toBe(true);
       expect(hasClass(timeEl!, 'bg-mint')).toBe(false);
@@ -690,10 +690,24 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       expect(takenAction).toBeDefined();
       expect(skipAction).toBeDefined();
       expect(hasClass(takenAction!, 'flex-1')).toBe(true);
-      expect(hasClass(takenAction!, 'bg-white')).toBe(true);
+      expect(hasClass(takenAction!, 'bg-primary')).toBe(true);
       expect(hasClass(skipAction!, 'flex-1')).toBe(true);
       expect(hasClass(skipAction!, 'bg-white')).toBe(true);
     }
+
+    const takenWithTimeEls = collectElements(
+      DoseCard({
+        medicineName: 'Napa',
+        strength: '500 mg',
+        doseInstruction: '1 tablet · After breakfast',
+        scheduledTime: '08:00 AM',
+        status: 'taken',
+        recordedAtText: '08:05 AM',
+        onMarkTaken: vi.fn(),
+        onSkip: vi.fn(),
+      }),
+    );
+    expect(takenWithTimeEls.some((e) => e.props.children === 'Taken at 08:05 AM')).toBe(true);
 
     const progressEls = collectElements(
       DoseProgressCard({
@@ -907,10 +921,15 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       __setMockWindowWidth(width);
       const metrics = getResponsiveMetrics(width);
 
-      // ScheduleScreen has Add Dose + overflow menu button, Day/Week toggle, and NO bottom Manage Schedules/Dose History cards when menu is closed
+      // ScheduleScreen has clean Home-aligned banner header, Day/Week toggle, floating menu toggle, and NO bottom/open navigation cards when closed
       const scheduleEls = collectElements(ScheduleScreen());
       expect(
-        scheduleEls.some((e) => e.props.accessibilityLabel === 'Schedule options'),
+        scheduleEls.some(
+          (e) => e.props.children === 'Your medicine plan and daily routine.',
+        ),
+      ).toBe(true);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Open schedule actions menu'),
       ).toBe(true);
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Day view'),
@@ -918,6 +937,9 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Week view'),
       ).toBe(true);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Add Dose'),
+      ).toBe(false);
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Open Manage Schedules'),
       ).toBe(false);
@@ -960,35 +982,32 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       }
     }
 
-    // Opening Schedule Options overflow menu displays Manage Schedules & Dose History and navigates cleanly
+    // Opening Floating Action Menu displays Add Dose, Manage Schedules & Dose History and closes on outside tap
     mockUseStateIndex = 0;
     mockUseStateOverrides = ['day', '2026-11-23', null, false, true];
     const openMenuScheduleEls = collectElements(ScheduleScreen());
     mockUseStateOverrides = null;
     mockUseStateIndex = 0;
 
-    expect(
-      openMenuScheduleEls.some((e) => e.props.children === 'Schedule Options'),
-    ).toBe(true);
+    const addDoseMenuItem = openMenuScheduleEls.find(
+      (e) => e.props.accessibilityLabel === 'Add Dose',
+    );
     const manageMenuItem = openMenuScheduleEls.find(
       (e) => e.props.accessibilityLabel === 'Open Manage Schedules',
     );
     const historyMenuItem = openMenuScheduleEls.find(
       (e) => e.props.accessibilityLabel === 'Open Dose History',
     );
+    expect(addDoseMenuItem).toBeDefined();
     expect(manageMenuItem).toBeDefined();
     expect(historyMenuItem).toBeDefined();
     const backdropClose = openMenuScheduleEls.find(
-      (e) => e.props.accessibilityLabel === 'Close dialog',
-    );
-    const activeModal = openMenuScheduleEls.find(
-      (e) => e.type === 'Modal' && e.props.visible === true,
+      (e) => e.props.accessibilityLabel === 'Close actions menu',
     );
     expect(backdropClose).toBeDefined();
-    expect(activeModal).toBeDefined();
     expect(() => (backdropClose!.props.onPress as () => void)()).not.toThrow();
-    expect(() => (activeModal!.props.onRequestClose as () => void)()).not.toThrow();
 
+    expect(() => (addDoseMenuItem!.props.onPress as () => void)()).not.toThrow();
     (manageMenuItem!.props.onPress as () => void)();
     expect(mockRouterPush).toHaveBeenCalledWith('/schedules');
     (historyMenuItem!.props.onPress as () => void)();
@@ -1233,6 +1252,44 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Taken doses 1')).toBe(true);
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Upcoming doses 2')).toBe(true);
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Overdue doses 1')).toBe(true);
+    // Shows quick Return to today pill when viewing a past/future date and semantic period summary pills
+    expect(
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Return to today'),
+    ).toBe(true);
+    expect(multiDayEls.some((e) => e.props.children === '1 overdue')).toBe(true);
+    expect(multiDayEls.some((e) => e.props.children === '1 upcoming')).toBe(true);
+    expect(
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Collapse Morning section'),
+    ).toBe(true);
+
+    // DoseCard accepts dosageForm and passes the mapped Feather icon name (e.g. droplet for Syrup)
+    const syrupDoseTree = DoseCard({
+      medicineName: 'Adovas',
+      strength: '100 ml',
+      dosageForm: 'Syrup',
+      doseInstruction: '2 tsp · After meal',
+      scheduledTime: '08:00 PM',
+      status: 'upcoming',
+      onMarkTaken: vi.fn(),
+      onSkip: vi.fn(),
+    });
+    const containsElementProp = (
+      node: unknown,
+      key: string,
+      expected: unknown,
+    ): boolean => {
+      if (node == null || typeof node !== 'object') return false;
+      if (Array.isArray(node)) {
+        return node.some((child) => containsElementProp(child, key, expected));
+      }
+      if (React.isValidElement(node)) {
+        const props = (node.props ?? {}) as Record<string, unknown>;
+        if (props[key] === expected) return true;
+        return containsElementProp(props.children, key, expected);
+      }
+      return false;
+    };
+    expect(containsElementProp(syrupDoseTree, 'name', 'droplet')).toBe(true);
 
     // Single-dose schedule day stays clean without bottom Manage Schedules / Dose History cards
     mockDayItemsOverride = [mockDayItemsOverride[0]];

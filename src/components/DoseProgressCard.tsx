@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useResponsiveLayout } from '../theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 
 export interface DoseProgressCardProps {
@@ -20,6 +21,7 @@ export function DoseProgressCard({
   label = "Today's progress",
   variant = 'compact',
 }: DoseProgressCardProps): React.JSX.Element {
+  const layout = useResponsiveLayout();
   const safeTotal = Math.max(0, totalCount);
   const safeTaken = Math.min(safeTotal, Math.max(0, takenCount));
   const safeUpcoming = Math.max(0, upcomingCount ?? Math.max(0, safeTotal - safeTaken));
@@ -28,16 +30,86 @@ export function DoseProgressCard({
   const percent = Math.round(ratio * 100);
   const rightDeg = -135 + Math.min(ratio, 0.5) * 360;
   const leftDeg = 45 + Math.max(0, ratio - 0.5) * 360;
+  const useTwoByTwoCompactGrid = layout.width < 460;
+
+  const renderCompactMetricTile = (opts: {
+    accessibilityLabel: string;
+    value: number;
+    metricLabel: string;
+    bgColor: string;
+    borderColor: string;
+    valueColor: string;
+  }): React.JSX.Element => (
+    <View
+      key={opts.accessibilityLabel}
+      accessibilityLabel={opts.accessibilityLabel}
+      className="flex-1 min-w-0 flex-row items-center justify-between gap-2 rounded-field px-3 py-2"
+      style={{
+        backgroundColor: opts.bgColor,
+        borderColor: opts.borderColor,
+        borderWidth: 1,
+      }}
+    >
+      <Text
+        className="text-[11.5px] font-medium text-[#5A706B] flex-1 min-w-0"
+        numberOfLines={1}
+      >
+        {opts.metricLabel}
+      </Text>
+      <Text className="text-[14px] font-bold shrink-0" style={{ color: opts.valueColor }}>
+        {opts.value}
+      </Text>
+    </View>
+  );
+
+  const totalTile = renderCompactMetricTile({
+    accessibilityLabel: `Total scheduled doses ${safeTotal}`,
+    value: safeTotal,
+    metricLabel: 'Scheduled',
+    bgColor: CAREDOSE_EXTENDED_COLORS.background,
+    borderColor: CAREDOSE_EXTENDED_COLORS.border,
+    valueColor: CAREDOSE_EXTENDED_COLORS.mainText,
+  });
+
+  const takenTile = renderCompactMetricTile({
+    accessibilityLabel: `Taken doses ${safeTaken}`,
+    value: safeTaken,
+    metricLabel: 'Taken',
+    bgColor: '#F1F9F5',
+    borderColor: '#DCEFE6',
+    valueColor: CAREDOSE_EXTENDED_COLORS.success,
+  });
+
+  const upcomingTile = renderCompactMetricTile({
+    accessibilityLabel: `Upcoming doses ${safeUpcoming}`,
+    value: safeUpcoming,
+    metricLabel: 'Upcoming',
+    bgColor: '#F1F6FC',
+    borderColor: '#D4E3F6',
+    valueColor: CAREDOSE_EXTENDED_COLORS.info,
+  });
+
+  const overdueTile = renderCompactMetricTile({
+    accessibilityLabel: `Overdue doses ${safeOverdue}`,
+    value: safeOverdue,
+    metricLabel: 'Overdue',
+    bgColor: safeOverdue > 0 ? '#FDF3F3' : CAREDOSE_EXTENDED_COLORS.background,
+    borderColor: safeOverdue > 0 ? '#F7D7D6' : CAREDOSE_EXTENDED_COLORS.border,
+    valueColor: safeOverdue > 0 ? CAREDOSE_EXTENDED_COLORS.error : CAREDOSE_EXTENDED_COLORS.secondaryText,
+  });
 
   return (
     <View
       accessibilityLabel={`${label}: ${safeTaken} of ${safeTotal} doses taken`}
-      className="mt-3 rounded-[18px] border border-border bg-white px-4 py-3.5"
+      className="mt-3 rounded-card border border-border bg-white px-4 py-3.5 shadow-sm"
     >
       <View className="flex-row items-center">
         {/* Circular progress indicator: Completed (Taken) / Total */}
         <View className="relative h-[54px] w-[54px] shrink-0 items-center justify-center">
-          <View className="absolute inset-0 rounded-full border-[5px] border-[#DCEEE7]" />
+          <View
+            className="absolute inset-0 rounded-full"
+            style={{ borderWidth: 5, borderColor: '#DCEEE7' }}
+          />
           {ratio > 0 ? (
             <View className="absolute right-0 top-0 h-[54px] w-[27px] overflow-hidden">
               <View
@@ -125,29 +197,29 @@ export function DoseProgressCard({
           </View>
         </View>
       ) : (
-        <View className="mt-3 flex-row flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
-          <View className="flex-row items-center gap-1" accessibilityLabel={`Total scheduled doses ${safeTotal}`}>
-            <Text className="text-[11px] font-medium text-[#5A706B]">Total:</Text>
-            <Text className="text-[11px] font-semibold text-main">{safeTotal}</Text>
-          </View>
-          <View className="flex-row items-center gap-1" accessibilityLabel={`Taken doses ${safeTaken}`}>
-            <Text className="text-[11px] font-medium text-[#5A706B]">Taken:</Text>
-            <Text className="text-[11px] font-semibold text-success">{safeTaken}</Text>
-          </View>
-          <View className="flex-row items-center gap-1" accessibilityLabel={`Upcoming doses ${safeUpcoming}`}>
-            <Text className="text-[11px] font-medium text-[#5A706B]">Upcoming:</Text>
-            <Text className="text-[11px] font-semibold text-info">{safeUpcoming}</Text>
-          </View>
-          <View className="flex-row items-center gap-1" accessibilityLabel={`Overdue doses ${safeOverdue}`}>
-            <Text className="text-[11px] font-medium text-[#5A706B]">Overdue:</Text>
-            <Text
-              className={`text-[11px] font-semibold ${
-                safeOverdue > 0 ? 'text-error' : 'text-[#5A706B]'
-              }`}
-            >
-              {safeOverdue}
-            </Text>
-          </View>
+        <View
+          className="mt-3 pt-3 gap-2"
+          style={{ borderTopWidth: 1, borderTopColor: CAREDOSE_EXTENDED_COLORS.border }}
+        >
+          {useTwoByTwoCompactGrid ? (
+            <>
+              <View className="flex-row gap-2">
+                {totalTile}
+                {takenTile}
+              </View>
+              <View className="flex-row gap-2">
+                {upcomingTile}
+                {overdueTile}
+              </View>
+            </>
+          ) : (
+            <View className="flex-row gap-2">
+              {totalTile}
+              {takenTile}
+              {upcomingTile}
+              {overdueTile}
+            </View>
+          )}
         </View>
       )}
     </View>

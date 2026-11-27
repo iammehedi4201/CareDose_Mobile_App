@@ -1134,3 +1134,56 @@ export function resolveInitialScheduleMedication(
   }
   return null;
 }
+
+export interface PeriodStatusSummary {
+  label: string;
+  bgClass: string;
+  textClass: string;
+}
+
+/**
+ * Summarizes dose statuses within a day period using CareDose semantic pill tokens.
+ */
+export function summarizePeriodStatus(periodDoses: ScheduledDoseItemDto[]): PeriodStatusSummary {
+  if (periodDoses.length === 0) {
+    return {
+      label: '0 doses',
+      bgClass: 'bg-[#EEF2F0]',
+      textClass: 'text-[#5A706B]',
+    };
+  }
+  let overdue = 0;
+  let upcoming = 0;
+  let taken = 0;
+  for (const d of periodDoses) {
+    if (d.status === 'missed') overdue += 1;
+    else if (d.status === 'upcoming' || d.status === 'due') upcoming += 1;
+    else if (d.status === 'taken') taken += 1;
+  }
+  if (overdue > 0) {
+    return {
+      label: `${overdue} overdue`,
+      bgClass: 'bg-[#FDECEC]',
+      textClass: 'text-error',
+    };
+  }
+  if (upcoming > 0) {
+    return {
+      label: `${upcoming} upcoming`,
+      bgClass: 'bg-[#EBF3FD]',
+      textClass: 'text-info',
+    };
+  }
+  if (taken === periodDoses.length) {
+    return {
+      label: `${taken} taken`,
+      bgClass: 'bg-mint',
+      textClass: 'text-success',
+    };
+  }
+  return {
+    label: `${periodDoses.length - taken} skipped`,
+    bgClass: 'bg-[#FDF5E6]',
+    textClass: 'text-warning',
+  };
+}

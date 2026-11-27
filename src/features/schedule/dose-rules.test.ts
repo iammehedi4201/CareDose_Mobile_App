@@ -20,6 +20,7 @@ import {
   normalizeTimeTo24Hour,
   parseDoseAmountInput,
   selectNextDose,
+  summarizePeriodStatus,
 } from './dose-rules';
 
 describe('Phase 6 — Mobile Schedule & Dose History Rules', () => {
@@ -199,5 +200,47 @@ describe('Phase 6 — Mobile Schedule & Dose History Rules', () => {
       buildLocalOccurrenceDate(today, '09:15'),
     );
     expect(pausedNotMissed.counts.missed).toBe(0);
+  });
+
+  it('summarizes period statuses consistently for Home and Schedule period badges', () => {
+    const baseItem = {
+      occurrenceKey: 'k1',
+      doseEventId: null,
+      scheduleId: 's1',
+      patientMedicationId: 'm1',
+      medicineName: 'Napa',
+      strength: '500 mg',
+      dosageForm: 'Tablet',
+      doseAmount: '1',
+      doseUnit: 'tablet',
+      doseInstruction: '1 tablet',
+      scheduledDateYmd: '2026-11-23',
+      scheduledTime24: '08:00',
+      scheduledTime12: '08:00 AM',
+      scheduledFor: '2026-11-23T02:00:00.000Z',
+      period: 'Morning' as const,
+      recordedAt: null,
+      note: null,
+    };
+
+    expect(summarizePeriodStatus([])).toMatchObject({ label: '0 doses' });
+    expect(
+      summarizePeriodStatus([
+        { ...baseItem, status: 'taken' },
+        { ...baseItem, occurrenceKey: 'k2', status: 'missed' },
+      ]),
+    ).toMatchObject({ label: '1 overdue', textClass: 'text-error' });
+    expect(
+      summarizePeriodStatus([
+        { ...baseItem, status: 'taken' },
+        { ...baseItem, occurrenceKey: 'k2', status: 'due' },
+      ]),
+    ).toMatchObject({ label: '1 upcoming', textClass: 'text-info' });
+    expect(
+      summarizePeriodStatus([{ ...baseItem, status: 'taken' }]),
+    ).toMatchObject({ label: '1 taken', textClass: 'text-success' });
+    expect(
+      summarizePeriodStatus([{ ...baseItem, status: 'skipped' }]),
+    ).toMatchObject({ label: '1 skipped', textClass: 'text-warning' });
   });
 });

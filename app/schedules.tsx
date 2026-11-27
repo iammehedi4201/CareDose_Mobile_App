@@ -9,6 +9,7 @@ import {
   FilterChips,
   formatDisplayDate,
   LoadingSkeleton,
+  resolveDosageFormIcon,
   ScheduleModal,
   ScreenContainer,
   StatusBadge,
@@ -219,49 +220,60 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
       ) : null}
 
       {/* Summary bar */}
-      <View className="flex-row flex-wrap gap-2 mb-3">
+      <View className="mb-3 flex-row flex-wrap gap-2">
         <View
-          className="flex-1 min-w-[84px] rounded-card border border-border bg-white px-3 py-2.5"
+          className="flex-1 min-w-[84px] rounded-card border border-border bg-white px-3 py-2.5 shadow-sm"
           accessibilityLabel={`Total schedules ${counts.all}`}
         >
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.6px] text-[#5A706B]">
-            Total
-          </Text>
-          <Text className="mt-0.5 text-[20px] font-bold text-main">{counts.all}</Text>
+          <View className="flex-row items-center gap-1.5">
+            <Feather name="calendar" size={13} color={CAREDOSE_EXTENDED_COLORS.secondaryText} />
+            <Text className="text-[11px] font-semibold text-[#5A706B]" numberOfLines={1}>
+              Total
+            </Text>
+          </View>
+          <Text className="mt-1 text-[20px] font-bold text-main">{counts.all}</Text>
         </View>
         <View
-          className="flex-1 min-w-[84px] rounded-card border border-[#C5E8D8] bg-mint px-3 py-2.5"
+          className="flex-1 min-w-[84px] rounded-card border border-[#C5E8D8] bg-mint px-3 py-2.5 shadow-sm"
           accessibilityLabel={`Active schedules ${counts.active}`}
         >
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.6px] text-primary">
-            Active
-          </Text>
-          <Text className="mt-0.5 text-[20px] font-bold text-primary-dark">
+          <View className="flex-row items-center gap-1.5">
+            <Feather name="check-circle" size={13} color={CAREDOSE_EXTENDED_COLORS.primary} />
+            <Text className="text-[11px] font-semibold text-primary" numberOfLines={1}>
+              Active
+            </Text>
+          </View>
+          <Text className="mt-1 text-[20px] font-bold text-primary-dark">
             {counts.active}
           </Text>
         </View>
         <View
-          className="flex-1 min-w-[84px] rounded-card border border-border bg-white px-3 py-2.5"
+          className="flex-1 min-w-[84px] rounded-card border border-border bg-white px-3 py-2.5 shadow-sm"
           accessibilityLabel={`Paused schedules ${counts.paused}`}
         >
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.6px] text-[#5A706B]">
-            Paused
-          </Text>
-          <Text className="mt-0.5 text-[20px] font-bold text-main">{counts.paused}</Text>
+          <View className="flex-row items-center gap-1.5">
+            <Feather name="pause-circle" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
+            <Text className="text-[11px] font-semibold text-[#5A706B]" numberOfLines={1}>
+              Paused
+            </Text>
+          </View>
+          <Text className="mt-1 text-[20px] font-bold text-main">{counts.paused}</Text>
         </View>
       </View>
 
-      <FilterChips<ScheduleFilter>
-        options={[
-          { key: 'ALL', label: 'All', count: counts.all },
-          { key: 'ACTIVE', label: 'Active', count: counts.active },
-          { key: 'PAUSED', label: 'Paused', count: counts.paused },
-          { key: 'COMPLETED', label: 'Completed', count: counts.completed },
-          { key: 'ARCHIVED', label: 'Archived', count: counts.archived },
-        ]}
-        selectedKey={filter}
-        onSelect={setFilter}
-      />
+      <View className="mb-2.5">
+        <FilterChips<ScheduleFilter>
+          options={[
+            { key: 'ALL', label: 'All', count: counts.all },
+            { key: 'ACTIVE', label: 'Active', count: counts.active },
+            { key: 'PAUSED', label: 'Paused', count: counts.paused },
+            { key: 'COMPLETED', label: 'Completed', count: counts.completed },
+            { key: 'ARCHIVED', label: 'Archived', count: counts.archived },
+          ]}
+          selectedKey={filter}
+          onSelect={setFilter}
+        />
+      </View>
 
       {loading && schedules.length === 0 ? (
         <LoadingSkeleton rows={3} />
@@ -282,13 +294,11 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
           iconName="filter"
         />
       ) : (
-        <View className="mt-2.5 gap-3">
+        <View className="gap-3">
           {filteredSchedules.map(({ schedule, med, effectiveStatus }) => {
             const medName = med?.name ?? 'Medication';
             const subSpecs = [med?.strength, med?.dosageForm].filter(Boolean).join(' · ');
-            const formattedTimes = schedule.scheduledTimes
-              .map(format24To12Hour)
-              .join(', ');
+            const formattedTimes = schedule.scheduledTimes.map(format24To12Hour);
             const reminderInfo = describeScheduleReminderStatus(
               schedule.remindersEnabled,
               effectiveStatus,
@@ -296,53 +306,100 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
               preferences.remindersEnabled,
             );
             const busy = mutatingId === schedule.id;
+            const formIcon = resolveDosageFormIcon(med?.dosageForm);
 
             return (
               <View
                 key={schedule.id}
-                className="rounded-card border border-border bg-white"
+                className="rounded-card border border-border bg-white shadow-sm"
                 style={{ padding: layout.cardPadding }}
               >
                 <View className="flex-row items-start justify-between gap-2.5">
-                  <View className="flex-1 min-w-0">
-                    <Text
-                      className="text-[15px] font-bold leading-[20px] text-main"
-                      numberOfLines={2}
+                  <View className="flex-row flex-1 min-w-0 items-start gap-2.5">
+                    <View
+                      accessible={false}
+                      className="mt-0.5 h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full bg-mint"
                     >
-                      {medName}
-                    </Text>
-                    {subSpecs ? (
+                      <Feather
+                        name={formIcon}
+                        size={16}
+                        color={CAREDOSE_EXTENDED_COLORS.primary}
+                      />
+                    </View>
+                    <View className="flex-1 min-w-0">
                       <Text
-                        className="mt-0.5 text-xs font-medium text-[#5A706B]"
-                        numberOfLines={1}
+                        className="text-[15px] font-bold leading-[20px] text-main"
+                        numberOfLines={2}
                       >
-                        {subSpecs}
+                        {medName}
                       </Text>
-                    ) : null}
+                      {subSpecs ? (
+                        <Text
+                          className="mt-0.5 text-xs font-medium text-[#5A706B]"
+                          numberOfLines={1}
+                        >
+                          {subSpecs}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
                   <StatusBadge variant={statusToBadgeVariant(effectiveStatus)} />
                 </View>
 
-                <View className="mt-2.5 gap-1 border-t border-border pt-2.5">
-                  <Text className="text-xs font-semibold text-main">
-                    {formatDoseAmountDisplay(schedule.doseAmount, schedule.doseUnit)} ·{' '}
-                    {formatRecurrenceSummary(schedule)}
-                  </Text>
-                  <Text className="text-xs leading-[17px] text-[#5A706B]">
-                    Times: {formattedTimes}
-                  </Text>
-                  <Text className="text-xs leading-[17px] text-[#5A706B]">
-                    Starts {formatDisplayDate(schedule.startDateYmd)}
-                    {schedule.endDateYmd
-                      ? ` · Ends ${formatDisplayDate(schedule.endDateYmd)}`
-                      : ''}
-                  </Text>
-                  {schedule.instructions ? (
-                    <Text className="text-xs leading-[17px] text-[#5A706B]">
-                      Instructions: {schedule.instructions}
+                <View className="mt-3 gap-2 border-t border-border pt-2.5">
+                  <View className="flex-row items-center gap-1.5">
+                    <Feather
+                      name="repeat"
+                      size={12}
+                      color={CAREDOSE_EXTENDED_COLORS.primary}
+                    />
+                    <Text className="flex-1 min-w-0 text-xs font-semibold text-main">
+                      {formatDoseAmountDisplay(schedule.doseAmount, schedule.doseUnit)} ·{' '}
+                      {formatRecurrenceSummary(schedule)}
                     </Text>
+                  </View>
+
+                  <View className="flex-row flex-wrap items-center gap-1.5">
+                    {formattedTimes.map((timeLabel, idx) => (
+                      <View
+                        key={`${schedule.id}-time-${idx}`}
+                        className="flex-row items-center gap-1 rounded-full border border-[#CBE7DB] bg-mint px-2.5 py-0.5"
+                      >
+                        <Feather
+                          name="clock"
+                          size={11}
+                          color={CAREDOSE_EXTENDED_COLORS.primary}
+                        />
+                        <Text className="text-[11px] font-semibold text-primary-dark">
+                          {timeLabel}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View className="flex-row items-center gap-1.5">
+                    <Feather
+                      name="calendar"
+                      size={12}
+                      color={CAREDOSE_EXTENDED_COLORS.secondaryText}
+                    />
+                    <Text className="text-xs leading-[17px] text-[#5A706B]">
+                      Starts {formatDisplayDate(schedule.startDateYmd)}
+                      {schedule.endDateYmd
+                        ? ` · Ends ${formatDisplayDate(schedule.endDateYmd)}`
+                        : ''}
+                    </Text>
+                  </View>
+
+                  {schedule.instructions ? (
+                    <View className="rounded-field border border-border bg-background px-2.5 py-2">
+                      <Text className="text-xs leading-[17px] text-[#5A706B]">
+                        Instructions: {schedule.instructions}
+                      </Text>
+                    </View>
                   ) : null}
-                  <View className="mt-0.5 flex-row items-center gap-1.5">
+
+                  <View className="flex-row items-center gap-1.5">
                     <Feather
                       name={reminderInfo.active ? 'bell' : 'bell-off'}
                       size={12}
@@ -374,7 +431,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
                       disabled={busy}
                       hitSlop={4}
                       onPress={() => handleOpenEdit(schedule)}
-                      className={`min-h-[40px] flex-row items-center justify-center gap-1.5 rounded-[10px] border border-border bg-background px-3 py-2 ${
+                      className={`min-h-[42px] flex-row items-center justify-center gap-1.5 rounded-field border border-border bg-background px-3 py-2 active:bg-mint ${
                         layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-[82px]'
                       }`}
                     >
@@ -383,7 +440,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
                         size={13}
                         color={CAREDOSE_EXTENDED_COLORS.primary}
                       />
-                      <Text className="text-xs font-semibold text-primary" numberOfLines={1}>
+                      <Text className="text-xs font-semibold text-main" numberOfLines={1}>
                         Edit
                       </Text>
                     </Pressable>
@@ -401,16 +458,16 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
                             medName,
                           })
                         }
-                        className={`min-h-[40px] flex-row items-center justify-center gap-1.5 rounded-[10px] border border-border bg-background px-3 py-2 ${
+                        className={`min-h-[42px] flex-row items-center justify-center gap-1.5 rounded-field border border-border bg-white px-3 py-2 active:bg-background ${
                           layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-[82px]'
                         }`}
                       >
                         <Feather
                           name="pause-circle"
                           size={13}
-                          color={CAREDOSE_EXTENDED_COLORS.primary}
+                          color={CAREDOSE_EXTENDED_COLORS.warning}
                         />
-                        <Text className="text-xs font-semibold text-primary" numberOfLines={1}>
+                        <Text className="text-xs font-semibold text-main" numberOfLines={1}>
                           Pause
                         </Text>
                       </Pressable>
@@ -423,7 +480,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
                         disabled={busy}
                         hitSlop={4}
                         onPress={() => void handleResume(schedule, medName)}
-                        className={`min-h-[40px] flex-row items-center justify-center gap-1.5 rounded-[10px] border border-[#C5E8D8] bg-mint px-3 py-2 ${
+                        className={`min-h-[42px] flex-row items-center justify-center gap-1.5 rounded-field border border-[#C5E8D8] bg-mint px-3 py-2 active:opacity-90 ${
                           layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-[82px]'
                         }`}
                       >
@@ -453,7 +510,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
                           medName,
                         })
                       }
-                      className={`min-h-[40px] flex-row items-center justify-center gap-1.5 rounded-[10px] border border-[#F3C1BE] bg-[#FDECEC] px-3 py-2 ${
+                      className={`min-h-[42px] flex-row items-center justify-center gap-1.5 rounded-field border border-[#F3C1BE] bg-white px-3 py-2 active:bg-[#FDECEC] ${
                         layout.stackTwoCol ? 'w-full' : 'flex-1 min-w-[82px]'
                       }`}
                     >

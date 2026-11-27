@@ -13,6 +13,8 @@ export interface ScreenContainerProps extends AppHeaderProps {
   hideHeader?: boolean;
   topBanner?: React.ReactNode;
   topOverlay?: React.ReactNode;
+  floatingOverlay?: React.ReactNode;
+  contentBottomPadding?: number;
 }
 
 export function ScreenContainer({
@@ -28,9 +30,13 @@ export function ScreenContainer({
   hideHeader = false,
   topBanner,
   topOverlay,
+  floatingOverlay,
+  contentBottomPadding,
   children,
 }: ScreenContainerProps): React.JSX.Element {
   const layout = useResponsiveLayout();
+  const resolvedBottomPadding =
+    contentBottomPadding ?? (floatingOverlay ? 96 : 28);
 
   return (
     <SafeAreaView
@@ -50,23 +56,37 @@ export function ScreenContainer({
         />
       ) : null}
 
-      {scrollable ? (
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingBottom: 28,
-          }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {topBanner}
+      <View className="flex-1 relative" style={{ flex: 1, position: 'relative' }}>
+        {scrollable ? (
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingBottom: resolvedBottomPadding,
+            }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {topBanner}
+            <View
+              className="w-full"
+              style={[
+                {
+                  paddingHorizontal: layout.screenPadding,
+                  paddingTop: topBanner ? 0 : layout.screenPadding,
+                },
+                layout.maxContentWidth
+                  ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
+                  : undefined,
+              ]}
+            >
+              {children}
+            </View>
+          </ScrollView>
+        ) : (
           <View
-            className="w-full"
+            className="flex-1 w-full"
             style={[
-              {
-                paddingHorizontal: layout.screenPadding,
-                paddingTop: topBanner ? 0 : layout.screenPadding,
-              },
+              { padding: layout.screenPadding, paddingBottom: resolvedBottomPadding },
               layout.maxContentWidth
                 ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
                 : undefined,
@@ -74,20 +94,10 @@ export function ScreenContainer({
           >
             {children}
           </View>
-        </ScrollView>
-      ) : (
-        <View
-          className="flex-1 w-full"
-          style={[
-            { padding: layout.screenPadding },
-            layout.maxContentWidth
-              ? { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }
-              : undefined,
-          ]}
-        >
-          {children}
-        </View>
-      )}
+        )}
+
+        {floatingOverlay}
+      </View>
 
       {topOverlay}
       <BottomNavigation activeTabOverride={activeTabOverride} />

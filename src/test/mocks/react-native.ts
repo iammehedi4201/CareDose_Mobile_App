@@ -46,3 +46,29 @@ export const Switch = 'Switch';
 export const Modal = 'Modal';
 export const StatusBar = 'StatusBar';
 export const KeyboardAvoidingView = 'KeyboardAvoidingView';
+
+class MockAnimatedValue {
+  private _value: number;
+  constructor(initial: number) {
+    this._value = initial;
+  }
+  interpolate(): MockAnimatedValue {
+    return this;
+  }
+  setValue(next: number): void {
+    this._value = next;
+  }
+}
+
+export const Animated = {
+  Value: MockAnimatedValue,
+  View: 'View',
+  timing: () => ({ start: (cb?: () => void) => cb?.() }),
+  spring: () => ({ start: (cb?: () => void) => cb?.() }),
+  parallel: (anims: Array<{ start: (cb?: () => void) => void }>) => ({
+    start: (cb?: () => void) => {
+      anims.forEach((a) => a.start());
+      cb?.();
+    },
+  }),
+};

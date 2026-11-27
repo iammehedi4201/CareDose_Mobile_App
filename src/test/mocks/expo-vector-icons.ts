@@ -47,5 +47,8 @@ export const Feather = Object.assign(() => null, {
     'play-circle': 43,
     archive: 44,
     filter: 45,
+    menu: 48,
+    repeat: 49,
+    'skip-forward': 50,
   },
 });

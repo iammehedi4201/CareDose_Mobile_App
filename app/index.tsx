@@ -28,6 +28,7 @@ import {
   formatDoseActionFeedback,
   formatScheduleBarDateLabel,
   getTodayLocalYmd,
+  summarizePeriodStatus,
 } from '../src/features/schedule/dose-rules';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
@@ -42,49 +43,6 @@ const HOME_PERIODS: SchedulePeriodGroupDto[] = [
   'Evening',
   'Bedtime',
 ];
-
-interface PeriodStatusSummary {
-  label: string;
-  bgClass: string;
-  textClass: string;
-}
-
-function summarizePeriodStatus(periodDoses: ScheduledDoseItemDto[]): PeriodStatusSummary {
-  let overdue = 0;
-  let upcoming = 0;
-  let taken = 0;
-  for (const d of periodDoses) {
-    if (d.status === 'missed') overdue += 1;
-    else if (d.status === 'upcoming' || d.status === 'due') upcoming += 1;
-    else if (d.status === 'taken') taken += 1;
-  }
-  if (overdue > 0) {
-    return {
-      label: `${overdue} overdue`,
-      bgClass: 'bg-[#FDECEC]',
-      textClass: 'text-error',
-    };
-  }
-  if (upcoming > 0) {
-    return {
-      label: `${upcoming} upcoming`,
-      bgClass: 'bg-[#EBF3FD]',
-      textClass: 'text-info',
-    };
-  }
-  if (taken === periodDoses.length) {
-    return {
-      label: `${taken} taken`,
-      bgClass: 'bg-mint',
-      textClass: 'text-success',
-    };
-  }
-  return {
-    label: `${periodDoses.length - taken} skipped`,
-    bgClass: 'bg-[#FDF5E6]',
-    textClass: 'text-warning',
-  };
-}
 
 export default function HomeScreen(): React.JSX.Element {
   const router = useRouter();
@@ -241,7 +199,7 @@ export default function HomeScreen(): React.JSX.Element {
         ]}
       >
         <View className="min-w-0 flex-1 pr-3" style={{ maxWidth: layout.isCompact ? '54%' : '56%' }}>
-          <Text className="text-[13px] font-semibold text-primary" numberOfLines={1}>
+          <Text className="text-[11px] font-semibold text-primary" numberOfLines={1}>
             Good Morning, {preferences.displayName}
           </Text>
           <Text
