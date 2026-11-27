@@ -14,9 +14,9 @@ import {
 } from '../medications/stock-calculator';
 import {
   canConvertDoseUnitToStockUnit,
+  estimateScheduleFrequencyFactor,
   getTodayLocalYmd,
   LocalScheduleRecord,
-  normalizeScheduleFrequencyCode,
 } from '../schedule/dose-rules';
 
 const SHORT_MONTHS = [
@@ -287,22 +287,8 @@ function estimateMonthlyScheduleFactor(schedule: LocalScheduleRecord): {
   factor: number | null;
   summary: string;
 } {
-  const code = normalizeScheduleFrequencyCode(schedule.frequency);
-  const timesCount = Math.max(schedule.scheduledTimes.length, 1);
-  if (code === 'AS_NEEDED') {
-    return { factor: null, summary: 'As needed' };
-  }
-  if (code === 'ALTERNATE_DAYS') {
-    return { factor: timesCount * 15, summary: `${timesCount}x every 2 days` };
-  }
-  if (code === 'WEEKLY') {
-    return { factor: (timesCount * 30) / 7, summary: `${timesCount}x weekly` };
-  }
-  if (code === 'SELECTED_WEEKDAYS') {
-    const days = Math.max(schedule.weekdays?.length ?? 0, 1);
-    return { factor: (timesCount * days * 30) / 7, summary: `${timesCount}x · ${days} days/wk` };
-  }
-  return { factor: timesCount * 30, summary: `${timesCount}x daily` };
+  const { monthlyFactor, summary } = estimateScheduleFrequencyFactor(schedule);
+  return { factor: monthlyFactor, summary };
 }
 
 export function buildLocalExpensesSummary(params: {

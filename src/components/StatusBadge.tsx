@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 
 export type StatusVariant =
@@ -124,21 +125,55 @@ export function getStatusBadgeConfig(variant: StatusVariant, customLabel?: strin
 export interface StatusBadgeProps {
   variant: StatusVariant;
   label?: string;
+  showIcon?: boolean;
+  iconName?: keyof typeof Feather.glyphMap;
 }
 
-export function StatusBadge({ variant, label }: StatusBadgeProps): React.JSX.Element {
+const VARIANT_ICONS: Record<StatusVariant, keyof typeof Feather.glyphMap> = {
+  in_stock: 'check',
+  low_stock: 'alert-triangle',
+  out_of_stock: 'alert-circle',
+  taken: 'check',
+  skipped: 'skip-forward',
+  missed: 'alert-circle',
+  upcoming: 'clock',
+  due: 'clock',
+  unverified: 'info',
+  verified: 'check-circle',
+  active: 'check-circle',
+  paused: 'pause-circle',
+  completed: 'check',
+  archived: 'archive',
+};
+
+export function StatusBadge({
+  variant,
+  label,
+  showIcon = false,
+  iconName,
+}: StatusBadgeProps): React.JSX.Element {
   const cfg = getStatusBadgeConfig(variant, label);
+  const resolvedIcon = iconName ?? (showIcon ? VARIANT_ICONS[variant] : undefined);
+
   return (
     <View
       accessible
       accessibilityRole="text"
       accessibilityLabel={`Status: ${cfg.label}`}
-      className="max-w-full shrink-0 self-start rounded-full border px-2.5 py-1"
+      className="max-w-full shrink-0 self-start flex-row items-center rounded-full border px-2.5 py-1"
       style={{
         backgroundColor: cfg.backgroundColor,
         borderColor: cfg.borderColor,
       }}
     >
+      {resolvedIcon ? (
+        <Feather
+          name={resolvedIcon}
+          size={11}
+          color={cfg.textColor}
+          style={{ marginRight: 4 }}
+        />
+      ) : null}
       <Text numberOfLines={1} className="text-[11px] font-semibold" style={{ color: cfg.textColor }}>
         {cfg.label}
       </Text>

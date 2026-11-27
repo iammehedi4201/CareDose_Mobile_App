@@ -92,6 +92,7 @@ export function SecondaryButton({
   loading = false,
   compact = false,
   fullWidth = false,
+  pill = false,
   accessibilityLabel,
   style,
   className = '',
@@ -110,8 +111,14 @@ export function SecondaryButton({
           onPress();
         }
       }}
-      className={`flex-row items-center justify-center rounded-field border border-border bg-white ${
-        compact ? 'min-h-[40px] px-2.5 py-2' : 'min-h-[44px] px-3.5 py-2.5'
+      className={`flex-row items-center justify-center ${
+        pill ? 'rounded-full' : 'rounded-field'
+      } border border-border bg-white ${
+        compact
+          ? pill
+            ? 'min-h-[40px] px-4 py-2'
+            : 'min-h-[40px] px-2.5 py-2'
+          : 'min-h-[44px] px-3.5 py-2.5'
       } ${fullWidth ? 'w-full' : ''} ${interactive ? 'opacity-100' : 'opacity-55'} ${className}`.trim()}
       style={style}
     >

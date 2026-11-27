@@ -50,5 +50,10 @@ export const Feather = Object.assign(() => null, {
     menu: 48,
     repeat: 49,
     'skip-forward': 50,
+    'shopping-cart': 51,
+    'file-text': 52,
+    box: 53,
+    'alert-circle': 54,
+    'rotate-ccw': 55,
   },
 });

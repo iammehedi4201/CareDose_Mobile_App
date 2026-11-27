@@ -8,10 +8,9 @@ import {
   EmptyState,
   LogReadingModal,
   ScreenContainer,
-  SuccessToast,
   useScreenWaveHeader,
 } from '../src/components';
-import type { ScheduledDoseItemDto, SchedulePeriodGroupDto } from '../src/api/schedules';
+import type { ScheduledDoseItemDto } from '../src/api/schedules';
 import { formatBdtAmount } from '../src/features/expenses/expense-helpers';
 import { usePurchases } from '../src/features/expenses/PurchasesContext';
 import {
@@ -28,7 +27,9 @@ import {
   formatDoseActionFeedback,
   formatScheduleBarDateLabel,
   getTodayLocalYmd,
+  resolveTimelinePeriod,
   summarizePeriodStatus,
+  TimelinePeriodGroup,
 } from '../src/features/schedule/dose-rules';
 import { useSchedules } from '../src/features/schedule/SchedulesContext';
 import { useResponsiveLayout } from '../src/theme/responsive';
@@ -37,10 +38,9 @@ import {
   SCHEDULE_PERIOD_META,
 } from '../src/theme/tokens';
 
-const HOME_PERIODS: SchedulePeriodGroupDto[] = [
+const HOME_PERIODS: TimelinePeriodGroup[] = [
   'Morning',
   'Afternoon',
-  'Evening',
   'Bedtime',
 ];
 
@@ -89,7 +89,10 @@ export default function HomeScreen(): React.JSX.Element {
       item,
       nextStatus === 'taken' ? 'TAKEN' : 'SKIPPED',
     );
-    setToastMessage(formatDoseActionFeedback(outcome));
+    const medLabel = item.strength
+      ? `${item.medicineName} ${item.strength}`
+      : item.medicineName;
+    setToastMessage(formatDoseActionFeedback(outcome, medLabel));
   };
 
   const activeMeds = medications.filter((m) => !m.archived);
@@ -97,7 +100,7 @@ export default function HomeScreen(): React.JSX.Element {
   const nextDoseBusy = nextDose ? Boolean(pendingOccurrenceKeys[nextDose.occurrenceKey]) : false;
 
   const visiblePeriods = HOME_PERIODS.filter((period) =>
-    doses.some((d) => d.period === period),
+    doses.some((d) => resolveTimelinePeriod(d) === period),
   );
 
   const {
@@ -133,9 +136,10 @@ export default function HomeScreen(): React.JSX.Element {
       hideHeader
       topBanner={homeHeaderBanner}
       topOverlay={statusBarGuardOverlay}
+      toastMessage={toastMessage}
+      onDismissToast={() => setToastMessage(null)}
+      toastDurationMs={4000}
     >
-      <SuccessToast message={toastMessage} />
-
       {/* Progress Summary Card floating seamlessly over header bottom wave */}
       <View style={{ marginTop: -headerOverlapPx }}>
         <DoseProgressCard
@@ -308,7 +312,7 @@ export default function HomeScreen(): React.JSX.Element {
       ) : (
         <View className="overflow-hidden rounded-[18px] border border-border bg-white">
           {visiblePeriods.map((period, idx) => {
-            const periodDoses = doses.filter((d) => d.period === period);
+            const periodDoses = doses.filter((d) => resolveTimelinePeriod(d) === period);
             const periodMeta = SCHEDULE_PERIOD_META[period];
             const statusSummary = summarizePeriodStatus(periodDoses);
 

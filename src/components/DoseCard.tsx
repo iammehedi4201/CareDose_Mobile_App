@@ -145,20 +145,17 @@ export function DoseCard({
             <StatusBadge variant={status} />
           </View>
 
-          {/* Middle hierarchy: Dose amount, personal instructions, scheduled time */}
+          {/* Middle hierarchy: Dose amount & instructions inline, then scheduled time */}
           <Text
             accessibilityLabel={`Dose details ${doseInstruction}`}
-            className="mt-1.5 text-[13.5px] font-semibold leading-[19px] text-main"
+            className="mt-1 text-[13.5px] font-semibold leading-[19px] text-main"
             numberOfLines={2}
           >
             {amountLine}
+            {instructionLine ? (
+              <Text className="font-normal text-[#5A706B]">{` · ${instructionLine}`}</Text>
+            ) : null}
           </Text>
-
-          {instructionLine ? (
-            <Text className="mt-0.5 text-[12.5px] leading-[17px] text-[#5A706B]" numberOfLines={2}>
-              {instructionLine}
-            </Text>
-          ) : null}
 
           <View className="mt-1.5 flex-row items-center gap-1.5">
             <Feather name="clock" size={12} color={CAREDOSE_EXTENDED_COLORS.primary} />

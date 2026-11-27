@@ -1,5 +1,5 @@
-import React from 'react';
-import { Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 import { useResponsiveLayout } from '../theme/responsive';
@@ -96,20 +96,70 @@ export function ErrorState({
 
 export interface SuccessToastProps {
   message: string | null;
+  toastKey?: string | number;
   onDismiss?: () => void;
+  durationMs?: number;
+  floating?: boolean;
 }
 
-export function SuccessToast({ message }: SuccessToastProps): React.JSX.Element | null {
+export function SuccessToast({
+  message,
+  toastKey,
+  onDismiss,
+  durationMs = 4000,
+  floating = false,
+}: SuccessToastProps): React.JSX.Element | null {
+  useEffect(() => {
+    if (!message || !onDismiss || durationMs <= 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      onDismiss();
+    }, durationMs);
+    return () => clearTimeout(timer);
+  }, [durationMs, message, onDismiss, toastKey]);
+
   if (!message) {
     return null;
   }
+
   return (
     <View
       accessibilityRole="alert"
-      className="mb-3 flex-row items-center gap-2 rounded-field bg-success px-3.5 py-2.5"
+      accessibilityLiveRegion="polite"
+      className={`${floating ? '' : 'mb-3 '}flex-row items-center gap-2.5 rounded-card px-3.5 py-3`}
+      style={{
+        backgroundColor: CAREDOSE_EXTENDED_COLORS.success,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.24)',
+        shadowColor: '#064E3D',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.24,
+        shadowRadius: 12,
+        elevation: 10,
+      }}
     >
-      <Feather name="check-circle" size={16} color="#FFFFFF" />
-      <Text className="flex-1 min-w-0 text-xs font-semibold text-white">{message}</Text>
+      <View
+        className="h-7 w-7 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: 'rgba(255, 255, 255, 0.18)' }}
+      >
+        <Feather name="check-circle" size={15} color="#FFFFFF" />
+      </View>
+      <Text className="flex-1 min-w-0 text-[12.5px] font-semibold leading-[17px] text-white">
+        {message}
+      </Text>
+      {onDismiss ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss notification"
+          hitSlop={8}
+          onPress={onDismiss}
+          className="h-7 w-7 shrink-0 items-center justify-center rounded-full active:opacity-75"
+          style={{ backgroundColor: 'rgba(255, 255, 255, 0.14)' }}
+        >
+          <Feather name="x" size={14} color="#FFFFFF" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

@@ -12,13 +12,19 @@ import {
   createInitialDemoSchedules,
   DOSE_DUE_LEAD_MS,
   DOSE_GRACE_PERIOD_MS,
+  estimateStockDurationForMedication,
   expandLocalScheduleOccurrencesForRange,
   filterLocalDoseHistory,
   format24To12Hour,
   formatWeekRangeLabel,
+  getCurrentDayPeriod,
   getMondayOfWeekYmd,
+  getMsUntilNextPeriodBoundary,
   normalizeTimeTo24Hour,
   parseDoseAmountInput,
+  resolveDefaultExpandedPeriod,
+  resolveSectionTimelineState,
+  resolveTimelinePeriod,
   selectNextDose,
   summarizePeriodStatus,
 } from './dose-rules';
@@ -37,7 +43,9 @@ describe('Phase 6 — Mobile Schedule & Dose History Rules', () => {
 
     expect(classifyDayPeriod('08:00 AM')).toBe('Morning');
     expect(classifyDayPeriod('01:30 PM')).toBe('Afternoon');
-    expect(classifyDayPeriod('06:45 PM')).toBe('Evening');
+    expect(classifyDayPeriod('05:30 PM')).toBe('Afternoon');
+    expect(classifyDayPeriod('06:00 PM')).toBe('Bedtime');
+    expect(classifyDayPeriod('06:45 PM')).toBe('Bedtime');
     expect(classifyDayPeriod('10:00 PM')).toBe('Bedtime');
 
     expect(parseDoseAmountInput('1 tablet')).toEqual({ amount: 1, unit: 'tablet' });
@@ -242,5 +250,164 @@ describe('Phase 6 — Mobile Schedule & Dose History Rules', () => {
     expect(
       summarizePeriodStatus([{ ...baseItem, status: 'skipped' }]),
     ).toMatchObject({ label: '1 skipped', textClass: 'text-warning' });
+  });
+
+  it('resolves current day period, active/past/future timeline states, and default expanded section', () => {
+    // Before 12 PM -> Morning; 12 PM to < 6 PM -> Afternoon; >= 6 PM -> Bedtime
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 2, 0, 0))).toBe('Morning');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 8, 15, 0))).toBe('Morning');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 11, 59, 0))).toBe('Morning');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 12, 0, 0))).toBe('Afternoon');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 14, 0, 0))).toBe('Afternoon');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 17, 59, 0))).toBe('Afternoon');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 18, 0, 0))).toBe('Bedtime');
+    expect(getCurrentDayPeriod(new Date(2026, 10, 27, 22, 0, 0))).toBe('Bedtime');
+
+    // Maps legacy 'Evening' items cleanly into Afternoon (< 18:00) or Bedtime (>= 18:00)
+    expect(resolveTimelinePeriod({ period: 'Evening', scheduledTime24: '17:30' })).toBe('Afternoon');
+    expect(resolveTimelinePeriod({ period: 'Evening', scheduledTime24: '18:30' })).toBe('Bedtime');
+
+    // Dynamic past/active/future section highlighting on today vs past/future days
+    const afternoonNow = new Date(2026, 10, 27, 14, 0, 0);
+    expect(resolveSectionTimelineState('Morning', '2026-11-27', '2026-11-27', afternoonNow)).toBe('past');
+    expect(resolveSectionTimelineState('Afternoon', '2026-11-27', '2026-11-27', afternoonNow)).toBe('active');
+    expect(resolveSectionTimelineState('Bedtime', '2026-11-27', '2026-11-27', afternoonNow)).toBe('future');
+    expect(resolveSectionTimelineState('Morning', '2026-11-26', '2026-11-27', afternoonNow)).toBe('past');
+    expect(resolveSectionTimelineState('Morning', '2026-11-28', '2026-11-27', afternoonNow)).toBe('future');
+
+    // Exact boundary delay helper schedules next period change cleanly
+    const delayToNoon = getMsUntilNextPeriodBoundary(new Date(2026, 10, 27, 11, 59, 0));
+    expect(delayToNoon).toBeGreaterThanOrEqual(60_000);
+    expect(delayToNoon).toBeLessThanOrEqual(61_000);
+
+    const sampleDoses = [
+      {
+        occurrenceKey: 'm1',
+        doseEventId: null,
+        scheduleId: 's1',
+        patientMedicationId: 'p1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet',
+        scheduledDateYmd: '2026-11-27',
+        scheduledTime24: '08:00',
+        scheduledTime12: '08:00 AM',
+        scheduledFor: '2026-11-27T02:00:00.000Z',
+        period: 'Morning' as const,
+        status: 'missed' as const,
+        recordedAt: null,
+        note: null,
+      },
+      {
+        occurrenceKey: 'a1',
+        doseEventId: null,
+        scheduleId: 's1',
+        patientMedicationId: 'p1',
+        medicineName: 'Napa',
+        strength: '500 mg',
+        dosageForm: 'Tablet',
+        doseAmount: '1',
+        doseUnit: 'tablet',
+        doseInstruction: '1 tablet',
+        scheduledDateYmd: '2026-11-27',
+        scheduledTime24: '13:00',
+        scheduledTime12: '01:00 PM',
+        scheduledFor: '2026-11-27T07:00:00.000Z',
+        period: 'Afternoon' as const,
+        status: 'due' as const,
+        recordedAt: null,
+        note: null,
+      },
+      {
+        occurrenceKey: 'b1',
+        doseEventId: null,
+        scheduleId: 's1',
+        patientMedicationId: 'p1',
+        medicineName: 'Maxpro',
+        strength: '40 mg',
+        dosageForm: 'Capsule',
+        doseAmount: '1',
+        doseUnit: 'capsule',
+        doseInstruction: '1 capsule',
+        scheduledDateYmd: '2026-11-27',
+        scheduledTime24: '22:00',
+        scheduledTime12: '10:00 PM',
+        scheduledFor: '2026-11-27T16:00:00.000Z',
+        period: 'Bedtime' as const,
+        status: 'upcoming' as const,
+        recordedAt: null,
+        note: null,
+      },
+    ];
+
+    expect(
+      resolveDefaultExpandedPeriod(sampleDoses, new Date(2026, 10, 27, 9, 0, 0)),
+    ).toBe('Morning');
+    expect(
+      resolveDefaultExpandedPeriod(sampleDoses, new Date(2026, 10, 27, 13, 30, 0)),
+    ).toBe('Afternoon');
+    // From 6 PM onward, Bedtime is active and expands automatically
+    expect(
+      resolveDefaultExpandedPeriod(
+        sampleDoses.map((d) => ({ ...d, status: 'taken' as const })),
+        new Date(2026, 10, 27, 18, 15, 0),
+      ),
+    ).toBe('Bedtime');
+    expect(resolveDefaultExpandedPeriod([], new Date(2026, 10, 27, 9, 0, 0))).toBeNull();
+  });
+
+  it('estimates stock duration and schedule summary cleanly without invalid cross-unit guesses', () => {
+    const twiceDailySchedule = {
+      id: 's-twice',
+      patientMedicationId: 'm1',
+      doseAmount: 1,
+      doseUnit: 'tablet',
+      frequency: 'TWICE_DAILY',
+      scheduledTimes: ['08:00', '20:00'],
+      startDateYmd: '2026-11-27',
+      endDateYmd: null,
+      instructions: null,
+      remindersEnabled: true,
+      status: 'ACTIVE' as const,
+    };
+
+    const est = estimateStockDurationForMedication({
+      stockRemaining: 30,
+      stockUnit: 'tablets',
+      lowStockThreshold: 5,
+      archived: false,
+      schedules: [twiceDailySchedule],
+    });
+    expect(est.daysRemaining).toBe(15);
+    expect(est.dailyConsumption).toBe(2);
+    expect(est.daysLabel).toBe('≈ 15 days left');
+    expect(est.fillRatio).toBe(0.5);
+    expect(est.schedulePillText).toBe('Twice daily · 1 tablet');
+
+    // Incompatible unit (drops vs bottle) does not guess days remaining
+    const incompatible = estimateStockDurationForMedication({
+      stockRemaining: 1,
+      stockUnit: 'bottle',
+      lowStockThreshold: 1,
+      archived: false,
+      schedules: [{ ...twiceDailySchedule, doseUnit: 'drops', frequency: 'DAILY', scheduledTimes: ['20:00'] }],
+    });
+    expect(incompatible.daysRemaining).toBeNull();
+    expect(incompatible.daysLabel).toBeNull();
+    expect(incompatible.schedulePillText).toBe('Once daily · 1 drop');
+
+    const zeroStock = estimateStockDurationForMedication({
+      stockRemaining: 0,
+      stockUnit: 'tablets',
+      lowStockThreshold: 5,
+      archived: false,
+      schedules: [twiceDailySchedule],
+    });
+    expect(zeroStock.daysRemaining).toBe(0);
+    expect(zeroStock.daysLabel).toBe('Out of stock');
+    expect(zeroStock.fillRatio).toBe(0.04);
   });
 });

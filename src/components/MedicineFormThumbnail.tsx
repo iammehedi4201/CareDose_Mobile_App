@@ -316,14 +316,15 @@ export function MedicineFormThumbnail({
       accessible
       accessibilityRole="image"
       accessibilityLabel={accessibilityLabel ?? `${label} dosage form`}
-      className="bg-white rounded-field border border-border overflow-hidden shrink-0"
+      className="rounded-field border border-border overflow-hidden shrink-0"
       style={{
         width: boxWidth,
         minHeight: boxHeight,
+        backgroundColor: imageUrl ? '#FFFFFF' : '#F6FBF8',
       }}
     >
-      <View className="self-start max-w-[94%] bg-mint rounded-br-[10px] border-r border-b border-[#A9DAC9] px-[7px] py-[2.5px]">
-        <Text numberOfLines={1} className="text-[9.5px] font-bold text-primary-dark">
+      <View className="self-start max-w-[94%] bg-mint rounded-br-[10px] border-r border-b border-[#BFE5D4] px-[8px] py-[3px]">
+        <Text numberOfLines={1} className="text-[10px] font-bold text-primary-dark">
           {label}
         </Text>
       </View>

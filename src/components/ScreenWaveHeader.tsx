@@ -11,9 +11,14 @@ export interface ScreenWaveHeaderOptions {
   title: string;
   subtitle?: string;
   eyebrow?: string;
+  topBadge?: React.ReactNode;
   imageSource: ImageSourcePropType;
   onBack?: () => void;
   backLabel?: string;
+  backButtonStyle?: 'pill' | 'circle';
+  titleSize?: 'default' | 'compact';
+  titleLines?: number;
+  subtitleLines?: number;
   primaryAction?: AppHeaderAction;
   overflowAction?: AppHeaderOverflowAction;
   rightSlot?: React.ReactNode;
@@ -35,9 +40,14 @@ export function useScreenWaveHeader({
   title,
   subtitle,
   eyebrow,
+  topBadge,
   imageSource,
   onBack,
   backLabel = 'Back',
+  backButtonStyle = 'pill',
+  titleSize = 'default',
+  titleLines = 2,
+  subtitleLines = 2,
   primaryAction,
   overflowAction,
   rightSlot,
@@ -57,9 +67,13 @@ export function useScreenWaveHeader({
   const headerArtTop = topInset > 0 ? 0 : -Math.round(baseArtHeight * 0.14);
 
   const minBelowInset = hasBack
-    ? layout.isCompact
-      ? 166
-      : 180
+    ? topBadge
+      ? layout.isCompact
+        ? 188
+        : 204
+      : layout.isCompact
+        ? 166
+        : 180
     : layout.isCompact
       ? 140
       : 162;
@@ -73,9 +87,10 @@ export function useScreenWaveHeader({
   const headerArtWidth = isWideViewport
     ? layout.width
     : Math.max(baseArtWidth, Math.round(headerArtHeight * 2));
-  const headerTopPadding = topInset + (layout.isCompact ? 10 : 12);
+  const extraTopBreathing = !hasBack && !subtitle && !eyebrow ? (layout.isCompact ? 8 : 10) : 0;
+  const headerTopPadding = topInset + (layout.isCompact ? 10 : 12) + extraTopBreathing;
 
-  const minContentHeight = hasBack ? 142 : 104;
+  const minContentHeight = hasBack ? (topBadge ? 168 : 142) : 104;
   const headerHeight = Math.max(
     headerTopPadding + minContentHeight,
     headerArtHeight + headerArtTop,
@@ -163,20 +178,30 @@ export function useScreenWaveHeader({
     ) : null;
 
   const textWidthPercent = contentMaxWidthPercent ?? (layout.isCompact ? 55 : 57);
-  const titleFontSize = hasBack
-    ? layout.isCompact
-      ? 22
-      : 24
-    : layout.isCompact
-      ? 25
-      : 28;
-  const titleLineHeight = hasBack
-    ? layout.isCompact
-      ? 27
-      : 30
-    : layout.isCompact
-      ? 30
-      : 34;
+  const titleFontSize =
+    titleSize === 'compact'
+      ? layout.isCompact
+        ? 20
+        : 22
+      : hasBack
+        ? layout.isCompact
+          ? 22
+          : 24
+        : layout.isCompact
+          ? 25
+          : 28;
+  const titleLineHeight =
+    titleSize === 'compact'
+      ? layout.isCompact
+        ? 25
+        : 28
+      : hasBack
+        ? layout.isCompact
+          ? 27
+          : 30
+        : layout.isCompact
+          ? 30
+          : 34;
 
   const topBanner = (
     <View
@@ -256,31 +281,54 @@ export function useScreenWaveHeader({
       >
         {hasBack ? (
           <View className="flex-row items-center justify-between gap-2">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={6}
-              onPress={onBack}
-              className="flex-row items-center self-start rounded-full px-3 py-1.5 active:bg-mint"
-              style={{
-                minHeight: 36,
-                backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                borderWidth: 1,
-                borderColor: '#C5E8D8',
-              }}
-            >
-              <Feather name="arrow-left" size={16} color={CAREDOSE_EXTENDED_COLORS.mainText} />
-              <Text className="ml-1.5 text-[12.5px] font-semibold text-main">{backLabel}</Text>
-            </Pressable>
+            {backButtonStyle === 'circle' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={6}
+                onPress={onBack}
+                className="h-10 w-10 items-center justify-center rounded-full active:bg-mint"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.94)',
+                  borderWidth: 1,
+                  borderColor: '#C5E8D8',
+                  shadowColor: '#075D4E',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <Feather name="arrow-left" size={18} color={CAREDOSE_EXTENDED_COLORS.mainText} />
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={6}
+                onPress={onBack}
+                className="flex-row items-center self-start rounded-full px-3 py-1.5 active:bg-mint"
+                style={{
+                  minHeight: 36,
+                  backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                  borderWidth: 1,
+                  borderColor: '#C5E8D8',
+                }}
+              >
+                <Feather name="arrow-left" size={16} color={CAREDOSE_EXTENDED_COLORS.mainText} />
+                <Text className="ml-1.5 text-[12.5px] font-semibold text-main">{backLabel}</Text>
+              </Pressable>
+            )}
 
             {actionControls}
           </View>
         ) : null}
 
         <View
-          className={`flex-row items-start justify-between gap-2 ${hasBack ? 'mt-2' : ''}`}
+          className={`flex-row items-start justify-between gap-2 ${hasBack ? 'mt-2.5' : ''}`}
         >
           <View className="min-w-0 flex-1 pr-2" style={{ maxWidth: `${textWidthPercent}%` }}>
+            {topBadge ? <View className="mb-1.5 self-start">{topBadge}</View> : null}
             {eyebrow ? (
               <Text
                 className="mb-0.5 text-[10.5px] font-bold uppercase tracking-[0.7px] text-primary"
@@ -295,14 +343,14 @@ export function useScreenWaveHeader({
                 fontSize: titleFontSize,
                 lineHeight: titleLineHeight,
               }}
-              numberOfLines={2}
+              numberOfLines={titleLines}
             >
               {title}
             </Text>
             {subtitle ? (
               <Text
                 className="mt-0.5 text-xs leading-[17px] text-[#5A706B]"
-                numberOfLines={2}
+                numberOfLines={subtitleLines}
               >
                 {subtitle}
               </Text>

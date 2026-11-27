@@ -5,7 +5,6 @@ import type {
   DoseHistoryResponseDto,
   MedicationScheduleDto,
   ScheduleDayBucketDto,
-  SchedulePeriodGroupDto,
   ScheduledDoseItemDto,
   ScheduleStatusDto,
 } from '../../api/schedules';
@@ -130,28 +129,32 @@ const UNIT_CANONICAL_MAP: Record<string, string> = {
   tubes: 'tube',
 };
 
-export function formatDoseActionFeedback(outcome: {
-  status: 'taken' | 'skipped';
-  stockDeducted: boolean;
-  deductedQuantity: number;
-  stockUnit: string;
-  idempotentReplay: boolean;
-}): string {
+export function formatDoseActionFeedback(
+  outcome: {
+    status: 'taken' | 'skipped';
+    stockDeducted: boolean;
+    deductedQuantity: number;
+    stockUnit: string;
+    idempotentReplay: boolean;
+  },
+  medicineLabel?: string,
+): string {
+  const subject = medicineLabel?.trim() || 'Dose';
   if (outcome.status === 'skipped') {
     return outcome.idempotentReplay
-      ? 'Dose was already recorded as skipped.'
-      : 'Dose marked as skipped (no stock deducted).';
+      ? `${subject} was already recorded as skipped.`
+      : `${subject} marked as skipped (no stock deducted).`;
   }
   if (outcome.idempotentReplay) {
-    return 'Dose was already confirmed as taken.';
+    return `${subject} was already confirmed as taken.`;
   }
   if (outcome.stockDeducted && outcome.deductedQuantity > 0) {
     const qty = Number.isInteger(outcome.deductedQuantity)
       ? String(outcome.deductedQuantity)
       : String(Number(outcome.deductedQuantity.toFixed(2)));
-    return `Dose marked as taken (−${qty} ${outcome.stockUnit} from stock).`;
+    return `${subject} marked as taken (−${qty} ${outcome.stockUnit} from stock).`;
   }
-  return 'Dose confirmed as taken.';
+  return `${subject} confirmed as taken.`;
 }
 
 export function buildScheduledTimesForFrequency(
@@ -446,13 +449,121 @@ export function formatIsoTimestampTo12Hour(iso?: string | null): string | null {
   return format24To12Hour(`${hh}:${mm}`);
 }
 
-export function classifyDayPeriod(time24Or12: string): SchedulePeriodGroupDto {
+export type TimelinePeriodGroup = 'Morning' | 'Afternoon' | 'Bedtime';
+export type SectionTimelineState = 'active' | 'past' | 'future';
+
+export const TIMELINE_PERIOD_ORDER: readonly TimelinePeriodGroup[] = [
+  'Morning',
+  'Afternoon',
+  'Bedtime',
+];
+
+const TIMELINE_PERIOD_INDEX: Record<TimelinePeriodGroup, number> = {
+  Morning: 0,
+  Afternoon: 1,
+  Bedtime: 2,
+};
+
+export function classifyDayPeriod(time24Or12: string): TimelinePeriodGroup {
   const norm = normalizeTimeTo24Hour(time24Or12);
   const h = Number(norm.slice(0, 2));
   if (h >= 5 && h < 12) return 'Morning';
-  if (h >= 12 && h < 17) return 'Afternoon';
-  if (h >= 17 && h < 21) return 'Evening';
+  if (h >= 12 && h < 18) return 'Afternoon';
   return 'Bedtime';
+}
+
+/**
+ * Normalizes any remote/local dose item period (including legacy 'Evening')
+ * into the three Schedule timeline sections: Morning, Afternoon, Bedtime.
+ */
+export function resolveTimelinePeriod(
+  item: Pick<ScheduledDoseItemDto, 'period' | 'scheduledTime24'>,
+): TimelinePeriodGroup {
+  if (
+    item.period === 'Morning' ||
+    item.period === 'Afternoon' ||
+    item.period === 'Bedtime'
+  ) {
+    return item.period;
+  }
+  return classifyDayPeriod(item.scheduledTime24);
+}
+
+/**
+ * Determines the active timeline period strictly from the device's local clock:
+ * - Before 12:00 PM: Morning
+ * - 12:00 PM to before 6:00 PM: Afternoon
+ * - 6:00 PM onward: Bedtime
+ */
+export function getCurrentDayPeriod(now: Date = new Date()): TimelinePeriodGroup {
+  const h = now.getHours();
+  if (h < 12) return 'Morning';
+  if (h < 18) return 'Afternoon';
+  return 'Bedtime';
+}
+
+/**
+ * Resolves whether a timeline section is currently active, already past, or future
+ * relative to the selected date and current local time.
+ */
+export function resolveSectionTimelineState(
+  section: TimelinePeriodGroup,
+  selectedYmd: string,
+  todayYmd: string,
+  now: Date = new Date(),
+): SectionTimelineState {
+  if (selectedYmd < todayYmd) return 'past';
+  if (selectedYmd > todayYmd) return 'future';
+  const currentIdx = TIMELINE_PERIOD_INDEX[getCurrentDayPeriod(now)];
+  const sectionIdx = TIMELINE_PERIOD_INDEX[section];
+  if (sectionIdx === currentIdx) return 'active';
+  return sectionIdx < currentIdx ? 'past' : 'future';
+}
+
+/**
+ * Returns milliseconds until the next local timeline boundary (12:00 PM, 6:00 PM,
+ * or 12:00 AM) so open screens highlight the new active period immediately.
+ */
+export function getMsUntilNextPeriodBoundary(now: Date = new Date()): number {
+  const next = new Date(now.getTime());
+  const h = now.getHours();
+  if (h < 12) {
+    next.setHours(12, 0, 0, 50);
+  } else if (h < 18) {
+    next.setHours(18, 0, 0, 50);
+  } else {
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 50);
+  }
+  return Math.max(250, next.getTime() - now.getTime());
+}
+
+const PERIOD_FALLBACK_ORDER: Record<TimelinePeriodGroup, readonly TimelinePeriodGroup[]> = {
+  Morning: ['Morning', 'Afternoon', 'Bedtime'],
+  Afternoon: ['Afternoon', 'Bedtime', 'Morning'],
+  Bedtime: ['Bedtime', 'Afternoon', 'Morning'],
+};
+
+/**
+ * Resolves which time-of-day section should expand by default:
+ * expands the current time-of-day period when it has doses, or shifts cleanly
+ * to the closest upcoming populated period in the day.
+ */
+export function resolveDefaultExpandedPeriod(
+  dayDoses: readonly ScheduledDoseItemDto[],
+  now: Date = new Date(),
+): TimelinePeriodGroup | null {
+  if (dayDoses.length === 0) {
+    return null;
+  }
+
+  const currentPeriod = getCurrentDayPeriod(now);
+  for (const period of PERIOD_FALLBACK_ORDER[currentPeriod]) {
+    if (dayDoses.some((d) => resolveTimelinePeriod(d) === period)) {
+      return period;
+    }
+  }
+  return null;
 }
 
 export function inferSingleDoseUnitFromStockUnit(stockUnit?: string | null): string {
@@ -1185,5 +1296,138 @@ export function summarizePeriodStatus(periodDoses: ScheduledDoseItemDto[]): Peri
     label: `${periodDoses.length - taken} skipped`,
     bgClass: 'bg-[#FDF5E6]',
     textClass: 'text-warning',
+  };
+}
+
+export interface ScheduleFrequencyFactorResult {
+  monthlyFactor: number | null;
+  dailyFactor: number | null;
+  summary: string;
+}
+
+export function estimateScheduleFrequencyFactor(
+  schedule: LocalScheduleRecord,
+): ScheduleFrequencyFactorResult {
+  const code = normalizeScheduleFrequencyCode(schedule.frequency);
+  const timesCount = Math.max(schedule.scheduledTimes.length, 1);
+  if (code === 'AS_NEEDED') {
+    return { monthlyFactor: null, dailyFactor: null, summary: 'As needed' };
+  }
+  if (code === 'ALTERNATE_DAYS') {
+    return {
+      monthlyFactor: timesCount * 15,
+      dailyFactor: timesCount / 2,
+      summary: `${timesCount}x every 2 days`,
+    };
+  }
+  if (code === 'WEEKLY') {
+    return {
+      monthlyFactor: (timesCount * 30) / 7,
+      dailyFactor: timesCount / 7,
+      summary: `${timesCount}x weekly`,
+    };
+  }
+  if (code === 'SELECTED_WEEKDAYS') {
+    const days = Math.max(schedule.weekdays?.length ?? 0, 1);
+    return {
+      monthlyFactor: (timesCount * days * 30) / 7,
+      dailyFactor: (timesCount * days) / 7,
+      summary: `${timesCount}x · ${days} days/wk`,
+    };
+  }
+  return {
+    monthlyFactor: timesCount * 30,
+    dailyFactor: timesCount,
+    summary: `${timesCount}x daily`,
+  };
+}
+
+export interface StockDurationEstimate {
+  daysRemaining: number | null;
+  dailyConsumption: number | null;
+  daysLabel: string | null;
+  fillRatio: number;
+  schedulePillText: string;
+}
+
+/**
+ * Estimates days of remaining stock from active compatible schedules and computes
+ * a progress-bar fill ratio (0.04..1) for visual stock meters.
+ */
+export function estimateStockDurationForMedication(params: {
+  stockRemaining: number;
+  stockUnit: string;
+  lowStockThreshold: number;
+  archived?: boolean;
+  schedules: LocalScheduleRecord[];
+}): StockDurationEstimate {
+  const { stockRemaining, stockUnit, lowStockThreshold, archived = false, schedules } = params;
+  const activeSchedules = schedules.filter((s) => s.status === 'ACTIVE');
+
+  let dailyConsumption = 0;
+  let hasCompatibleFixedSchedule = false;
+  for (const sched of activeSchedules) {
+    if (!canConvertDoseUnitToStockUnit(sched.doseUnit, stockUnit) || sched.doseAmount <= 0) {
+      continue;
+    }
+    const { dailyFactor } = estimateScheduleFrequencyFactor(sched);
+    if (dailyFactor !== null && dailyFactor > 0) {
+      dailyConsumption += sched.doseAmount * dailyFactor;
+      hasCompatibleFixedSchedule = true;
+    }
+  }
+
+  let daysRemaining: number | null = null;
+  let daysLabel: string | null = null;
+  if (hasCompatibleFixedSchedule && dailyConsumption > 0 && !archived) {
+    if (stockRemaining <= 0) {
+      daysRemaining = 0;
+      daysLabel = 'Out of stock';
+    } else {
+      const exactDays = stockRemaining / dailyConsumption;
+      if (exactDays < 1) {
+        daysRemaining = 0;
+        daysLabel = '< 1 day left';
+      } else {
+        daysRemaining = Math.floor(exactDays);
+        daysLabel = `≈ ${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'} left`;
+      }
+    }
+  } else if (!archived && stockRemaining <= 0) {
+    daysLabel = 'Out of stock';
+  }
+
+  let fillRatio = 0;
+  if (archived) {
+    fillRatio = 0;
+  } else if (stockRemaining <= 0) {
+    fillRatio = 0.04;
+  } else if (hasCompatibleFixedSchedule && dailyConsumption > 0) {
+    const exactDays = stockRemaining / dailyConsumption;
+    fillRatio = Math.min(1, Math.max(0.08, exactDays / 30));
+  } else {
+    const referenceCap = Math.max(lowStockThreshold * 4, 20);
+    fillRatio = Math.min(1, Math.max(0.08, stockRemaining / referenceCap));
+  }
+
+  let schedulePillText = 'No schedule yet';
+  if (schedules.length === 1) {
+    const first = schedules[0];
+    schedulePillText = `${formatRecurrenceSummary(first)} · ${formatDoseAmountDisplay(
+      first.doseAmount,
+      first.doseUnit,
+    )}`;
+  } else if (schedules.length > 1) {
+    const activeCount = activeSchedules.length;
+    schedulePillText =
+      activeCount > 0 ? `${activeCount} active routines` : `${schedules.length} saved routines`;
+  }
+
+  return {
+    daysRemaining,
+    dailyConsumption: hasCompatibleFixedSchedule ? Number(dailyConsumption.toFixed(2)) : null,
+    daysLabel,
+    fillRatio: Number(fillRatio.toFixed(2)),
+    schedulePillText,
   };
 }

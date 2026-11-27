@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useResponsiveLayout } from '../theme/responsive';
+import { CAREDOSE_EXTENDED_COLORS } from '../theme/tokens';
 import { formatSimplifiedDosageForm, MedicineFormThumbnail } from './MedicineFormThumbnail';
 import { StatusBadge, StatusVariant } from './StatusBadge';
 
@@ -17,6 +18,8 @@ export interface MedicineCardProps {
   statusVariant: StatusVariant;
   statusLabel?: string;
   showStatusBadge?: boolean;
+  showStatusIcon?: boolean;
+  stackedMetrics?: boolean;
   onPress?: () => void;
   secondaryNote?: string;
   rightSubtext?: string;
@@ -66,6 +69,8 @@ export function MedicineCard({
   statusVariant,
   statusLabel,
   showStatusBadge = true,
+  showStatusIcon = false,
+  stackedMetrics = false,
   onPress,
   secondaryNote,
   rightSubtext,
@@ -76,6 +81,111 @@ export function MedicineCard({
   const cleanStrength = strength && strength.trim().length > 0 ? strength.trim() : null;
   const cleanForm = formatSimplifiedDosageForm(dosageForm);
   const cleanGeneric = genericName && genericName.trim().length > 0 ? genericName.trim() : null;
+  const stockMetricColor =
+    statusVariant === 'low_stock'
+      ? CAREDOSE_EXTENDED_COLORS.warning
+      : statusVariant === 'out_of_stock'
+        ? CAREDOSE_EXTENDED_COLORS.error
+        : statusVariant === 'archived'
+          ? CAREDOSE_EXTENDED_COLORS.secondaryText
+          : CAREDOSE_EXTENDED_COLORS.primary;
+
+  if (stackedMetrics) {
+    const hasMetrics = Boolean(stockText || rightSubtext || priceText);
+    return (
+      <Pressable
+        accessibilityRole={onPress ? 'button' : 'summary'}
+        accessibilityLabel={`${name}, ${metaLine}`}
+        disabled={!onPress}
+        onPress={onPress}
+        className="mb-2.5 rounded-card border border-border bg-white shadow-sm active:opacity-95"
+        style={{ padding: layout.cardPadding }}
+      >
+        <View className="flex-row items-stretch">
+          <View className="mr-3 shrink-0 self-center">
+            <MedicineFormThumbnail
+              size="card"
+              dosageForm={dosageForm}
+              imageUrl={imageUrl}
+              accessibilityLabel={`${name} ${dosageForm ?? 'medicine'}`}
+            />
+          </View>
+
+          <View className="flex-1 min-w-0 justify-between pr-2">
+            <View>
+              <Text
+                className="font-bold text-main"
+                style={{ fontSize: layout.isCompact ? 14 : 15, lineHeight: 20 }}
+                numberOfLines={2}
+              >
+                {name}
+              </Text>
+              <Text className="mt-[3px] text-[12px] leading-[17px] text-[#5A706B]" numberOfLines={2}>
+                {metaLine}
+              </Text>
+              {manufacturer ? (
+                <Text className="mt-[2px] text-[11.5px] font-medium text-primary-dark" numberOfLines={1}>
+                  {manufacturer}
+                </Text>
+              ) : null}
+              {secondaryNote ? (
+                <Text className="mt-1 text-xs text-main" numberOfLines={2}>
+                  {secondaryNote}
+                </Text>
+              ) : null}
+            </View>
+
+            {showStatusBadge ? (
+              <View className="mt-2.5">
+                <StatusBadge
+                  variant={statusVariant}
+                  label={statusLabel}
+                  showIcon={showStatusIcon}
+                />
+              </View>
+            ) : null}
+          </View>
+
+          {hasMetrics ? (
+            <View className="shrink-0 items-end justify-between pl-1">
+              <View className="items-end">
+                {stockText ? (
+                  <Text
+                    className="text-right font-bold"
+                    style={{
+                      color: stockMetricColor,
+                      fontSize: layout.isCompact ? 13.5 : 15,
+                      lineHeight: 20,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {stockText}
+                  </Text>
+                ) : null}
+                {rightSubtext ? (
+                  <Text
+                    className="mt-0.5 text-right text-[11.5px] font-medium text-[#5A706B]"
+                    numberOfLines={1}
+                  >
+                    {rightSubtext}
+                  </Text>
+                ) : null}
+              </View>
+
+              {priceText ? (
+                <Text
+                  className="mt-2.5 text-right text-[12px] font-semibold text-main"
+                  numberOfLines={1}
+                >
+                  {priceText}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
@@ -164,7 +274,7 @@ export function MedicineCard({
           {showStatusBadge || priceText ? (
             <View className="mt-2.5 flex-row flex-wrap items-center justify-between gap-2">
               {showStatusBadge ? (
-                <StatusBadge variant={statusVariant} label={statusLabel} />
+                <StatusBadge variant={statusVariant} label={statusLabel} showIcon={showStatusIcon} />
               ) : (
                 <View />
               )}

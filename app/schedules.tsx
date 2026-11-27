@@ -197,7 +197,6 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
     overlapPx,
   } = useScreenWaveHeader({
     title: 'Manage Schedules',
-    subtitle: 'Manage your recurring medicine schedules.',
     imageSource: schedulesHeaderImage,
     onBack: () => {
       if (typeof router.navigate === 'function') {

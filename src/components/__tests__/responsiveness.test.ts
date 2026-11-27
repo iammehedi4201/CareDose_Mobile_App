@@ -24,6 +24,7 @@ import HomeScreen from '../../../app/index';
 import ScheduleScreen from '../../../app/schedule';
 import ManageSchedulesScreen from '../../../app/schedules';
 import MyMedicinesScreen from '../../../app/medicines';
+import PersonalMedicineDetailsScreen from '../../../app/medicines/[id]';
 import ExploreMedicinesScreen from '../../../app/explore';
 import AlternativeBrandsScreen from '../../../app/alternatives';
 import DoseHistoryScreen from '../../../app/history';
@@ -56,6 +57,7 @@ let mockSchedulesOverride: unknown[] | null = null;
 let mockDayItemsOverride: unknown[] | null = null;
 let mockUseStateOverrides: unknown[] | null = null;
 let mockUseStateIndex = 0;
+let mockLocalSearchParamsOverride: Record<string, string> = {};
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
@@ -89,12 +91,12 @@ vi.mock('expo-router', () => ({
     back: mockRouterBack,
   }),
   usePathname: () => '/',
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockLocalSearchParamsOverride,
 }));
 
 vi.mock('../../features/medications/MedicationsContext', () => ({
-  useMedications: () => ({
-    medications: [
+  useMedications: () => {
+    const meds = [
       {
         id: 'med-1',
         name: 'Napa',
@@ -121,12 +123,19 @@ vi.mock('../../features/medications/MedicationsContext', () => ({
         lowStockThreshold: 5,
         archived: false,
       },
-    ],
-    loading: false,
-    adjustMedicationStock: vi.fn(async () => undefined),
-    refreshMedications: vi.fn(async () => {}),
-    resetDemoMedications: vi.fn(async () => {}),
-  }),
+    ];
+    return {
+      medications: meds,
+      loading: false,
+      getMedicationById: (targetId: string) => meds.find((m) => m.id === targetId),
+      updateMedication: vi.fn(async () => undefined),
+      archiveMedication: vi.fn(async () => undefined),
+      restoreMedication: vi.fn(async () => undefined),
+      adjustMedicationStock: vi.fn(async () => undefined),
+      refreshMedications: vi.fn(async () => {}),
+      resetDemoMedications: vi.fn(async () => {}),
+    };
+  },
 }));
 
 vi.mock('../../features/expenses/PurchasesContext', () => ({
@@ -245,9 +254,14 @@ vi.mock('../../features/schedule/SchedulesContext', () => ({
       daysCount,
       timezone: 'Local',
       days: Array.from({ length: daysCount }, (_, idx) => {
-        const items = idx === 0 && mockDayItemsOverride ? mockDayItemsOverride : [];
+        const dayDate = idx === 0 ? startYmd : `2026-11-${23 + idx}`;
+        const items =
+          mockDayItemsOverride &&
+          (daysCount === 1 ? idx === 0 : dayDate === '2026-11-23' || dayDate === '2026-11-27')
+            ? mockDayItemsOverride
+            : [];
         return {
-          date: idx === 0 ? startYmd : `2026-11-${23 + idx}`,
+          date: dayDate,
           totalCount: items.length || 1,
           takenCount: 0,
           skippedCount: 0,
@@ -924,21 +938,24 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       __setMockWindowWidth(width);
       const metrics = getResponsiveMetrics(width);
 
-      // ScheduleScreen has clean Home-aligned banner header, Day/Week toggle, floating menu toggle, and NO bottom/open navigation cards when closed
+      // ScheduleScreen has clean Home-aligned banner header (no subtitle), always-visible Week strip, floating menu toggle, and NO Day toggle or Skip buttons
       const scheduleEls = collectElements(ScheduleScreen());
       expect(
         scheduleEls.some(
           (e) => e.props.children === 'Your medicine plan and daily routine.',
         ),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Open schedule actions menu'),
       ).toBe(true);
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Day view'),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Week view'),
+      ).toBe(false);
+      expect(
+        scheduleEls.some((e) => e.props.accessibilityLabel === 'Previous week'),
       ).toBe(true);
       expect(
         scheduleEls.some((e) => e.props.accessibilityLabel === 'Add Dose'),
@@ -987,7 +1004,7 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
 
     // Opening Floating Action Menu displays Add Dose, Manage Schedules & Dose History and closes on outside tap
     mockUseStateIndex = 0;
-    mockUseStateOverrides = ['day', '2026-11-23', null, false, true];
+    mockUseStateOverrides = ['2026-11-23', null, false, true];
     const openMenuScheduleEls = collectElements(ScheduleScreen());
     mockUseStateOverrides = null;
     mockUseStateIndex = 0;
@@ -1240,14 +1257,25 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
         note: null,
       },
     ];
+    // Multi-dose schedule day on a past date vs active day periods:
+    // Legacy 'Evening' (6:00 PM) groups cleanly into Bedtime (3 separate sections: Morning, Afternoon, Bedtime)
+    const testTodayYmd = '2026-11-27';
     mockUseStateIndex = 0;
-    mockUseStateOverrides = ['day', '2026-11-23', null, false, false];
+    mockUseStateOverrides = [
+      testTodayYmd,
+      'Dose marked as taken (−1 tablet from stock).',
+      false,
+      false,
+      null,
+      {},
+      new Date(2026, 10, 27, 13, 30, 0).getTime(),
+    ];
     const multiDayEls = collectElements(ScheduleScreen());
     mockUseStateOverrides = null;
     mockUseStateIndex = 0;
 
     expect(
-      multiDayEls.some((e) => e.props.accessibilityLabel === 'Daily progress: 1 of 5 doses taken'),
+      multiDayEls.some((e) => e.props.accessibilityLabel === "Today's progress: 1 of 5 doses taken"),
     ).toBe(true);
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Total scheduled doses 5')).toBe(
       true,
@@ -1255,15 +1283,112 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Taken doses 1')).toBe(true);
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Upcoming doses 2')).toBe(true);
     expect(multiDayEls.some((e) => e.props.accessibilityLabel === 'Overdue doses 1')).toBe(true);
-    // Shows quick Return to today pill when viewing a past/future date and semantic period summary pills
+    // Calendar header has no redundant calendar icon or week-range banner text
+    expect(multiDayEls.some((e) => e.props.name === 'calendar')).toBe(false);
+    expect(multiDayEls.some((e) => e.props.children === 'Nov 23 – 29, 2026')).toBe(false);
+    // Only Afternoon starts expanded; Morning (past) and Bedtime (future) start collapsed with distinct states
+    const afternoonSection = multiDayEls.find(
+      (e) => e.props.accessibilityLabel === 'Collapse Afternoon section',
+    );
+    const morningSection = multiDayEls.find(
+      (e) => e.props.accessibilityLabel === 'Expand Morning section',
+    );
+    const bedtimeSection = multiDayEls.find(
+      (e) => e.props.accessibilityLabel === 'Expand Bedtime section',
+    );
+    expect(afternoonSection?.props.accessibilityHint).toBe('Current active time period');
+    expect(morningSection?.props.accessibilityHint).toBe('Past time period');
+    expect(bedtimeSection?.props.accessibilityHint).toBe('Future time period');
+    expect(multiDayEls.some((e) => e.props.children === 'Now')).toBe(true);
     expect(
-      multiDayEls.some((e) => e.props.accessibilityLabel === 'Return to today'),
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Expand Evening section'),
+    ).toBe(false);
+    // Schedule cards expose Taken only (never Skip) and render floating dismissible top toast overlay
+    expect(
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Mark Seclo 20 mg as taken'),
+    ).toBe(true);
+    expect(
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Skip Seclo 20 mg'),
+    ).toBe(false);
+    expect(
+      multiDayEls.some((e) => e.props.accessibilityLabel === 'Dismiss notification'),
     ).toBe(true);
     expect(multiDayEls.some((e) => e.props.children === '1 overdue')).toBe(true);
-    expect(multiDayEls.some((e) => e.props.children === '1 upcoming')).toBe(true);
+    expect(multiDayEls.some((e) => e.props.children === '2 upcoming')).toBe(true);
+
+    // During Morning (9:00 AM): Morning is active & expanded; Afternoon and Bedtime are future & collapsed
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = [
+      testTodayYmd,
+      null,
+      false,
+      false,
+      null,
+      {},
+      new Date(2026, 10, 27, 9, 0, 0).getTime(),
+    ];
+    const morningEls = collectElements(ScheduleScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
     expect(
-      multiDayEls.some((e) => e.props.accessibilityLabel === 'Collapse Morning section'),
-    ).toBe(true);
+      morningEls.find((e) => e.props.accessibilityLabel === 'Collapse Morning section')?.props
+        .accessibilityHint,
+    ).toBe('Current active time period');
+    expect(
+      morningEls.find((e) => e.props.accessibilityLabel === 'Expand Afternoon section')?.props
+        .accessibilityHint,
+    ).toBe('Future time period');
+    expect(
+      morningEls.find((e) => e.props.accessibilityLabel === 'Expand Bedtime section')?.props
+        .accessibilityHint,
+    ).toBe('Future time period');
+
+    // From 6:00 PM onward (6:30 PM): Bedtime is active & expanded; Morning and Afternoon are past & collapsed
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = [
+      testTodayYmd,
+      null,
+      false,
+      false,
+      null,
+      {},
+      new Date(2026, 10, 27, 18, 30, 0).getTime(),
+    ];
+    const bedtimeEls = collectElements(ScheduleScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
+    expect(
+      bedtimeEls.find((e) => e.props.accessibilityLabel === 'Collapse Bedtime section')?.props
+        .accessibilityHint,
+    ).toBe('Current active time period');
+    expect(
+      bedtimeEls.find((e) => e.props.accessibilityLabel === 'Expand Morning section')?.props
+        .accessibilityHint,
+    ).toBe('Past time period');
+    expect(
+      bedtimeEls.find((e) => e.props.accessibilityLabel === 'Expand Afternoon section')?.props
+        .accessibilityHint,
+    ).toBe('Past time period');
+
+    // Viewing a past date shows Return to today pill and marks timeline sections as past
+    mockUseStateIndex = 0;
+    mockUseStateOverrides = [
+      '2026-11-23',
+      null,
+      false,
+      false,
+      null,
+      {},
+      new Date(2026, 10, 27, 13, 30, 0).getTime(),
+    ];
+    const pastDateEls = collectElements(ScheduleScreen());
+    mockUseStateOverrides = null;
+    mockUseStateIndex = 0;
+    expect(pastDateEls.some((e) => e.props.accessibilityLabel === 'Return to today')).toBe(true);
+    expect(
+      pastDateEls.find((e) => e.props.accessibilityLabel === 'Collapse Afternoon section')?.props
+        .accessibilityHint,
+    ).toBe('Past time period');
 
     // DoseCard accepts dosageForm and passes the mapped Feather icon name (e.g. droplet for Syrup)
     const syrupDoseTree = DoseCard({
@@ -1297,7 +1422,7 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     // Single-dose schedule day stays clean without bottom Manage Schedules / Dose History cards
     mockDayItemsOverride = [mockDayItemsOverride[0]];
     mockUseStateIndex = 0;
-    mockUseStateOverrides = ['week', '2026-11-23', null, false, false];
+    mockUseStateOverrides = ['2026-11-23', null, false, false];
     const weekSingleEls = collectElements(ScheduleScreen());
     mockUseStateOverrides = null;
     mockUseStateIndex = 0;
@@ -1598,6 +1723,30 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       assertWaveHeader(collectElements(PurchasesScreen()));
       assertWaveHeader(collectElements(AlternativeBrandsScreen()));
       assertWaveHeader(collectElements(SettingsScreen()));
+
+      // Personal Medicine Details screen with circular actions, stock hero card, and collapsible accordions
+      mockLocalSearchParamsOverride = { id: 'med-1' };
+      const detailEls = collectElements(PersonalMedicineDetailsScreen());
+      assertWaveHeader(detailEls);
+      expect(detailEls.some((e) => e.props.accessibilityLabel === 'Go back')).toBe(true);
+      expect(detailEls.some((e) => e.props.accessibilityLabel === 'Medicine options')).toBe(true);
+      expect(detailEls.some((e) => e.props.accessibilityLabel === 'Record Purchase')).toBe(true);
+      expect(detailEls.some((e) => e.props.accessibilityLabel === 'Archive Medicine')).toBe(true);
+      const infoAccordion = detailEls.find(
+        (e) =>
+          e.props.accessibilityRole === 'button' &&
+          typeof e.props.accessibilityLabel === 'string' &&
+          e.props.accessibilityLabel.startsWith('Medicine Information'),
+      );
+      expect(infoAccordion?.props.accessibilityState).toEqual({ expanded: true });
+      const priceAccordion = detailEls.find(
+        (e) =>
+          e.props.accessibilityRole === 'button' &&
+          typeof e.props.accessibilityLabel === 'string' &&
+          e.props.accessibilityLabel.startsWith('Price Information'),
+      );
+      expect(priceAccordion?.props.accessibilityState).toEqual({ expanded: false });
+      mockLocalSearchParamsOverride = {};
     }
   });
 });
