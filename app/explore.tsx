@@ -251,7 +251,6 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
-    eyebrow: 'BANGLADESH DIRECTORY',
     title: 'Explore Medicines',
     subtitle: brandsCountLabel,
     imageSource: exploreHeaderImage,

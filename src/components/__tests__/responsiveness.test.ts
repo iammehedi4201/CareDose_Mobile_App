@@ -1695,13 +1695,29 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     for (const width of [320, 360, 390, 768]) {
       __setMockWindowWidth(width);
 
-      // Primary leftover tabs: My Medicines, Explore, Profile
+      // Primary leftover tabs: My Medicines (simplified without duplicate summary cards), Explore, Profile
       const medsEls = collectElements(MyMedicinesScreen());
       assertWaveHeader(medsEls);
-      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Active medicines 2')).toBe(true);
-      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Low stock medicines 0')).toBe(true);
-      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Archived medicines 0')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Active medicines 2')).toBe(false);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Low stock medicines 0')).toBe(false);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Archived medicines 0')).toBe(false);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Search medicines')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'All (2)')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Active (2)')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Low Stock (0)')).toBe(true);
+      expect(medsEls.some((e) => e.props.accessibilityLabel === 'Archived (0)')).toBe(true);
       expect(medsEls.some((e) => e.props.accessibilityLabel === 'Add')).toBe(true);
+      const chipScroll = medsEls.find((e) => e.type === 'ScrollView' && e.props.horizontal === true);
+      expect(chipScroll).toBeDefined();
+
+      // Verify interactive search & filter chips filter the displayed medicine cards
+      mockUseStateIndex = 0;
+      mockUseStateOverrides = ['seclo', 'active', null, false];
+      const filteredMedsEls = collectElements(MyMedicinesScreen());
+      mockUseStateOverrides = null;
+      mockUseStateIndex = 0;
+      expect(filteredMedsEls.some((e) => e.props.children === 'Seclo')).toBe(true);
+      expect(filteredMedsEls.some((e) => e.props.children === 'Napa')).toBe(false);
 
       const exploreEls = collectElements(ExploreMedicinesScreen());
       assertWaveHeader(exploreEls);
@@ -1747,6 +1763,48 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       );
       expect(priceAccordion?.props.accessibilityState).toEqual({ expanded: false });
       mockLocalSearchParamsOverride = {};
+    }
+  });
+
+  it('keeps Schedule and My Medicines header artwork bottom clear of card overlap and fade haze across 320px-768px', () => {
+    const assertClearHeaderBottom = (els: ElementMatch[]) => {
+      const bannerEl = els.find(
+        (e) =>
+          e.type === 'View' &&
+          hasClass(e, 'relative') &&
+          hasClass(e, 'overflow-hidden') &&
+          typeof e.style.height === 'number',
+      );
+      expect(bannerEl).toBeDefined();
+      const headerHeight = bannerEl!.style.height as number;
+
+      const overlappingCard = els.find(
+        (e) => e.type === 'View' && typeof e.style.marginTop === 'number' && (e.style.marginTop as number) < 0,
+      );
+      expect(overlappingCard).toBeDefined();
+      const overlapPx = Math.abs(overlappingCard!.style.marginTop as number);
+      expect(overlapPx).toBeGreaterThan(0);
+
+      // Card starts at >= 78% of header height so right-side bottom illustration elements remain clear
+      expect((headerHeight - overlapPx) / headerHeight).toBeGreaterThanOrEqual(0.78);
+
+      // Bottom surface fade layers never extend higher than the card overlap zone
+      const fadeLayers = els.filter(
+        (e) =>
+          e.type === 'View' &&
+          typeof e.style.backgroundColor === 'string' &&
+          (e.style.backgroundColor as string).startsWith('rgba(247, 250, 248,'),
+      );
+      expect(fadeLayers.length).toBeGreaterThan(0);
+      for (const layer of fadeLayers) {
+        expect(layer.style.height as number).toBeLessThanOrEqual(overlapPx);
+      }
+    };
+
+    for (const width of [320, 360, 390, 768]) {
+      __setMockWindowWidth(width);
+      assertClearHeaderBottom(collectElements(ScheduleScreen()));
+      assertClearHeaderBottom(collectElements(MyMedicinesScreen()));
     }
   });
 });

@@ -25,7 +25,6 @@ import {
 } from "../src/features/medications/stock-calculator";
 import { useMedications } from "../src/features/medications/MedicationsContext";
 import { useResponsiveLayout } from "../src/theme/responsive";
-import { CAREDOSE_EXTENDED_COLORS } from "../src/theme/tokens";
 
 export default function MyMedicinesScreen(): React.JSX.Element {
   const router = useRouter();
@@ -71,7 +70,7 @@ export default function MyMedicinesScreen(): React.JSX.Element {
     titleSize: "compact",
     titleLines: 1,
     contentMaxWidthPercent: layout.isCompact ? 58 : 60,
-    overlapRatio: 0.34,
+    overlapRatio: 0.18,
   });
 
   const floatingAddButton = (
@@ -127,149 +126,30 @@ export default function MyMedicinesScreen(): React.JSX.Element {
       toastKey={toast?.key}
       onDismissToast={() => setToast(null)}
     >
-      {/* Floating Stock Overview Tiles matching Home & Schedule summary cards */}
-      <View style={{ marginTop: -overlapPx }} className="mb-3 flex-row gap-2">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Active medicines ${counts.active}`}
-          onPress={() =>
-            setFilter((prev) => (prev === "active" ? "all" : "active"))
-          }
-          className="flex-1 min-w-0 rounded-card bg-white px-3 py-2.5 shadow-sm active:opacity-90"
-          style={{
-            borderWidth: 1,
-            borderColor:
-              filter === "active"
-                ? CAREDOSE_EXTENDED_COLORS.primary
-                : CAREDOSE_EXTENDED_COLORS.border,
-          }}
-        >
-          <View className="flex-row items-center gap-1.5">
-            <Feather
-              name="package"
-              size={13}
-              color={CAREDOSE_EXTENDED_COLORS.primary}
-            />
-            <Text
-              className="text-[11px] font-semibold text-[#5A706B]"
-              numberOfLines={1}
-            >
-              Active
-            </Text>
-          </View>
-          <Text className="mt-1 text-[20px] font-bold text-main">
-            {counts.active}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Low stock medicines ${counts.lowStock}`}
-          onPress={() =>
-            setFilter((prev) => (prev === "low_stock" ? "all" : "low_stock"))
-          }
-          className="flex-1 min-w-0 rounded-card px-3 py-2.5 shadow-sm active:opacity-90"
-          style={{
-            backgroundColor:
-              counts.lowStock > 0
-                ? CAREDOSE_EXTENDED_COLORS.warningSurface
-                : CAREDOSE_EXTENDED_COLORS.mintSurface,
-            borderWidth: 1,
-            borderColor:
-              filter === "low_stock"
-                ? CAREDOSE_EXTENDED_COLORS.primary
-                : counts.lowStock > 0
-                  ? "#F3D9A4"
-                  : "#CBE7DB",
-          }}
-        >
-          <View className="flex-row items-center gap-1.5">
-            <Feather
-              name={counts.lowStock > 0 ? "alert-triangle" : "check-circle"}
-              size={13}
-              color={
-                counts.lowStock > 0
-                  ? CAREDOSE_EXTENDED_COLORS.warning
-                  : CAREDOSE_EXTENDED_COLORS.primary
-              }
-            />
-            <Text
-              className="text-[11px] font-semibold"
-              style={{
-                color:
-                  counts.lowStock > 0
-                    ? CAREDOSE_EXTENDED_COLORS.warning
-                    : CAREDOSE_EXTENDED_COLORS.primary,
-              }}
-              numberOfLines={1}
-            >
-              Low stock
-            </Text>
-          </View>
-          <Text
-            className="mt-1 text-[20px] font-bold"
-            style={{
-              color:
-                counts.lowStock > 0
-                  ? CAREDOSE_EXTENDED_COLORS.warning
-                  : CAREDOSE_EXTENDED_COLORS.primaryDark,
-            }}
-          >
-            {counts.lowStock}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Archived medicines ${counts.archived}`}
-          onPress={() =>
-            setFilter((prev) => (prev === "archived" ? "all" : "archived"))
-          }
-          className="flex-1 min-w-0 rounded-card bg-white px-3 py-2.5 shadow-sm active:opacity-90"
-          style={{
-            borderWidth: 1,
-            borderColor:
-              filter === "archived"
-                ? CAREDOSE_EXTENDED_COLORS.primary
-                : CAREDOSE_EXTENDED_COLORS.border,
-          }}
-        >
-          <View className="flex-row items-center gap-1.5">
-            <Feather
-              name="archive"
-              size={13}
-              color={CAREDOSE_EXTENDED_COLORS.secondaryText}
-            />
-            <Text
-              className="text-[11px] font-semibold text-[#5A706B]"
-              numberOfLines={1}
-            >
-              Archived
-            </Text>
-          </View>
-          <Text className="mt-1 text-[20px] font-bold text-main">
-            {counts.archived}
-          </Text>
-        </Pressable>
-      </View>
-
-      <SearchInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search medicines"
-      />
-
-      <View className="mt-2 mb-3">
-        <FilterChips
-          options={[
-            { key: "all", label: "All", count: medications.length },
-            { key: "active", label: "Active", count: counts.active },
-            { key: "low_stock", label: "Low stock", count: counts.lowStock },
-            { key: "archived", label: "Archived", count: counts.archived },
-          ]}
-          selectedKey={filter}
-          onSelect={setFilter}
+      {/* Compact Search & Horizontally Scrollable Status Filter Chips directly below header */}
+      <View
+        style={{ marginTop: -overlapPx }}
+        className="mb-2.5 rounded-card border border-border bg-white p-2.5 shadow-sm"
+      >
+        <SearchInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search medicines"
         />
+
+        <View className="mt-2">
+          <FilterChips
+            compact
+            options={[
+              { key: "all", label: "All", count: medications.length },
+              { key: "active", label: "Active", count: counts.active },
+              { key: "low_stock", label: "Low Stock", count: counts.lowStock },
+              { key: "archived", label: "Archived", count: counts.archived },
+            ]}
+            selectedKey={filter}
+            onSelect={setFilter}
+          />
+        </View>
       </View>
 
       {filteredMeds.length === 0 ? (

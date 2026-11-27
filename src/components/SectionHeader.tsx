@@ -38,8 +38,7 @@ export function SectionHeader({
   const containerStyle = isActive
     ? {
         backgroundColor: '#D6EFE3',
-        borderColor: CAREDOSE_EXTENDED_COLORS.primary,
-        borderWidth: 1.5,
+        borderWidth: 0,
         shadowColor: '#075D4E',
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.14,
@@ -49,8 +48,7 @@ export function SectionHeader({
     : isPast
       ? {
           backgroundColor: '#EFF3F1',
-          borderColor: '#DCE4E0',
-          borderWidth: 1,
+          borderWidth: 0,
           shadowOpacity: 0,
           elevation: 0,
         }
@@ -68,14 +66,12 @@ export function SectionHeader({
   const iconBadgeStyle = isActive
     ? {
         backgroundColor: CAREDOSE_EXTENDED_COLORS.primary,
-        borderColor: CAREDOSE_EXTENDED_COLORS.primaryDark,
-        borderWidth: 1,
+        borderWidth: 0,
       }
     : isPast
       ? {
           backgroundColor: '#E3EAE6',
-          borderColor: '#D4DED9',
-          borderWidth: 1,
+          borderWidth: 0,
         }
       : {
           backgroundColor: '#F3FAF6',
@@ -104,14 +100,12 @@ export function SectionHeader({
   const chevronContainerStyle = isActive
     ? {
         backgroundColor: CAREDOSE_EXTENDED_COLORS.surface,
-        borderColor: '#78C2AA',
-        borderWidth: 1,
+        borderWidth: 0,
       }
     : isPast
       ? {
           backgroundColor: '#E6ECE9',
-          borderColor: '#D4DED9',
-          borderWidth: 1,
+          borderWidth: 0,
         }
       : {
           backgroundColor: '#F7FAF8',

@@ -36,7 +36,8 @@ export interface ScreenWaveHeaderResult {
  * Shared 2:1 edge-to-edge mint wave banner with status-bar guard overlay and smooth
  * background feather fade matching CareDose Home and Schedule screens.
  */
-export function useScreenWaveHeader({
+export function 
+useScreenWaveHeader({
   title,
   subtitle,
   eyebrow,
@@ -62,7 +63,9 @@ export function useScreenWaveHeader({
   const baseArtWidth = isWideViewport
     ? layout.width
     : Math.round(layout.width * (layout.isCompact ? 1.1 : 1.14));
-  const baseArtHeight = isWideViewport ? 220 : Math.round(baseArtWidth * 0.5);
+  const baseArtHeight = isWideViewport
+    ? Math.min(340, Math.max(240, Math.round(layout.width * 0.4)))
+    : Math.round(baseArtWidth * 0.5);
   const topInset = Math.max(0, insets.top);
   const headerArtTop = topInset > 0 ? 0 : -Math.round(baseArtHeight * 0.14);
 
@@ -97,6 +100,15 @@ export function useScreenWaveHeader({
   );
   const overlapFactor = overlapRatio ?? (hasBack ? 0.17 : 0.31);
   const overlapPx = Math.round(Math.max(120, headerHeight - topInset) * overlapFactor);
+  // Confine the bottom surface feather within the card-overlap zone so right-side
+  // artwork sitting above the card stays crisp and never washes out.
+  const bottomFadeHeight = overlapPx > 0 ? Math.max(16, Math.min(32, overlapPx)) : 18;
+  const bottomFadeSteps = [
+    { height: bottomFadeHeight, alpha: 0.2 },
+    { height: Math.round(bottomFadeHeight * 0.68), alpha: 0.42 },
+    { height: Math.round(bottomFadeHeight * 0.38), alpha: 0.68 },
+    { height: Math.max(5, Math.round(bottomFadeHeight * 0.18)), alpha: 0.92 },
+  ];
 
   const topOverlay =
     topInset > 0 ? (
@@ -224,51 +236,21 @@ export function useScreenWaveHeader({
           height: headerArtHeight,
         }}
       />
-      {/* Feathered multi-step fade into #F7FAF8 surface */}
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 54,
-          backgroundColor: 'rgba(247, 250, 248, 0.20)',
-        }}
-      />
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 38,
-          backgroundColor: 'rgba(247, 250, 248, 0.42)',
-        }}
-      />
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 22,
-          backgroundColor: 'rgba(247, 250, 248, 0.68)',
-        }}
-      />
-      <View
-        accessible={false}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 11,
-          backgroundColor: 'rgba(247, 250, 248, 0.92)',
-        }}
-      />
+      {/* Feathered multi-step fade into #F7FAF8 surface confined to bottom overlap margin */}
+      {bottomFadeSteps.map((step) => (
+        <View
+          key={step.alpha}
+          accessible={false}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: step.height,
+            backgroundColor: `rgba(247, 250, 248, ${step.alpha})`,
+          }}
+        />
+      ))}
 
       <View
         className="w-full"

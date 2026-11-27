@@ -11,18 +11,27 @@ export interface FilterChipsProps<T extends string = string> {
   options: readonly FilterChipOption<T>[];
   selectedKey: T;
   onSelect: (key: T) => void;
+  compact?: boolean;
 }
 
 export function FilterChips<T extends string = string>({
   options,
   selectedKey,
   onSelect,
+  compact = false,
 }: FilterChipsProps<T>): React.JSX.Element {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+      bounces={false}
+      contentContainerStyle={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: compact ? 6 : 8,
+        paddingVertical: compact ? 2 : 4,
+        paddingRight: 4,
+      }}
     >
       {options.map((opt) => {
         const isSelected = opt.key === selectedKey;
@@ -35,11 +44,12 @@ export function FilterChips<T extends string = string>({
             accessibilityLabel={displayLabel}
             accessibilityState={{ selected: isSelected }}
             onPress={() => onSelect(opt.key)}
-            className={`min-h-[38px] items-center justify-center rounded-full border px-3.5 py-2 ${
-              isSelected ? 'border-primary bg-primary' : 'border-border bg-white'
-            }`}
+            className={`items-center justify-center rounded-full border ${
+              compact ? 'min-h-[36px] px-3 py-1.5' : 'min-h-[38px] px-3.5 py-2'
+            } ${isSelected ? 'border-primary bg-primary' : 'border-border bg-white'}`}
           >
             <Text
+              numberOfLines={1}
               className={`text-xs font-semibold ${
                 isSelected ? 'text-white' : 'text-main'
               }`}

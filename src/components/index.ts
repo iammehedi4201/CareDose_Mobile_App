@@ -2,6 +2,7 @@ export * from './AddMedicineModal';
 export * from './AppHeader';
 export * from './BottomNavigation';
 export * from './Buttons';
+export * from './CareDoseSplashOverlay';
 export * from './DoseCard';
 export * from './DoseProgressCard';
 export * from './FeedbackStates';

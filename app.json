@@ -4,16 +4,29 @@
     "slug": "caredose",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#EAF7F1",
     "scheme": "caredose",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "icon": "./assets/icon.png"
+    },
     "android": {
+      "icon": "./assets/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EAF7F1"
+      },
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -25,7 +38,28 @@
         }
       ],
       "expo-status-bar",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#EAF7F1",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "android": {
+            "backgroundColor": "#EAF7F1",
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 180,
+            "resizeMode": "contain"
+          },
+          "ios": {
+            "backgroundColor": "#EAF7F1",
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 180,
+            "resizeMode": "contain"
+          }
+        }
+      ]
     ]
   }
 }

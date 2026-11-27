@@ -7,6 +7,7 @@ export default defineConfig({
       'react-native': path.resolve(__dirname, 'src/test/mocks/react-native.ts'),
       '@expo/vector-icons': path.resolve(__dirname, 'src/test/mocks/expo-vector-icons.ts'),
       'expo-constants': path.resolve(__dirname, 'src/test/mocks/expo-constants.ts'),
+      'expo-splash-screen': path.resolve(__dirname, 'src/test/mocks/expo-splash-screen.ts'),
       '@react-native-community/datetimepicker': path.resolve(
         __dirname,
         'src/test/mocks/datetimepicker.ts',
