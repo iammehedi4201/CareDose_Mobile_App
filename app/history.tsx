@@ -175,7 +175,7 @@ export default function DoseHistoryScreen(): React.JSX.Element {
       />
 
       {loading ? (
-        <LoadingSkeleton rows={3} />
+        <LoadingSkeleton variant="dose_history" rows={3} />
       ) : loadError ? (
         <ErrorState
           title="Unable to load dose history"

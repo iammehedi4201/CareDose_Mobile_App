@@ -222,3 +222,50 @@ export function mapApiMedicationToRecord(dto: PatientMedicationDto): PersonalMed
     archived: dto.status === 'ARCHIVED',
   };
 }
+
+/**
+ * Ranks personal medications for quick search dropdown suggestions, prioritizing
+ * exact and prefix brand matches (e.g., "n" -> Napa, Neuro-B).
+ */
+export function rankPersonalMedicineSuggestions(
+  medications: PersonalMedicationRecord[],
+  query: string,
+  limit = 5,
+): PersonalMedicationRecord[] {
+  const q = query.trim().toLowerCase();
+  if (!q || medications.length === 0) return [];
+
+  const scored: Array<{ med: PersonalMedicationRecord; tier: number }> = [];
+  for (const med of medications) {
+    const nameLower = med.name.trim().toLowerCase();
+    const genericLower = (med.genericName ?? '').trim().toLowerCase();
+    const strengthLower = (med.strength ?? '').trim().toLowerCase();
+    const mfrLower = (med.manufacturer ?? '').trim().toLowerCase();
+
+    let tier: number | null = null;
+    if (nameLower === q) tier = 0;
+    else if (nameLower.startsWith(q)) tier = 1;
+    else if (nameLower.includes(` ${q}`)) tier = 2;
+    else if (genericLower.startsWith(q)) tier = 3;
+    else if (
+      nameLower.includes(q) ||
+      genericLower.includes(q) ||
+      strengthLower.includes(q) ||
+      mfrLower.includes(q)
+    ) {
+      tier = 4;
+    }
+
+    if (tier !== null) {
+      scored.push({ med, tier });
+    }
+  }
+
+  return scored
+    .sort((a, b) => {
+      if (a.tier !== b.tier) return a.tier - b.tier;
+      return a.med.name.localeCompare(b.med.name);
+    })
+    .slice(0, Math.max(1, limit))
+    .map((entry) => entry.med);
+}

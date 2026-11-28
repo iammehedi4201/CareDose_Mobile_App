@@ -444,7 +444,7 @@ export default function ScheduleScreen(): React.JSX.Element {
       {/* Loading / Empty / Chronological Period Timelines */}
       {loading && dayDoses.length === 0 ? (
         <View className="mt-3">
-          <LoadingSkeleton rows={3} />
+          <LoadingSkeleton variant="schedule_timeline" rows={2} />
         </View>
       ) : dayDoses.length === 0 ? (
         <View className="mt-3">

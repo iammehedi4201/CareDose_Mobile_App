@@ -98,7 +98,13 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
     eyebrow: 'EQUIVALENTS',
     title: targetBrand ? `${targetBrand.name} Alternatives` : 'Alternative Brands',
     imageSource: alternativesHeaderImage,
-    onBack: () => router.push(`/explore/brand/${id ?? ''}`),
+    onBack: () => {
+      if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+        router.back();
+      } else {
+        router.push(`/explore/brand/${id ?? ''}`);
+      }
+    },
   });
 
   return (
@@ -156,7 +162,7 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
       </View>
 
       {loading ? (
-        <LoadingSkeleton rows={4} />
+        <LoadingSkeleton variant="explore_results" rows={4} />
       ) : errorMessage ? (
         <ErrorState
           title="Could not load alternative brands"

@@ -257,11 +257,17 @@ export async function searchOfflineSqliteBrands(params: {
 
   const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   const limit = Math.max(1, Math.min(50, params.limit ?? 20));
+  const orderSql = q
+    ? `CASE WHEN LOWER(name) = ? THEN 0 WHEN LOWER(name) LIKE ? THEN 1 ELSE 2 END ASC, name ASC`
+    : 'name ASC';
+  if (q) {
+    binds.push(q, `${q}%`);
+  }
   binds.push(params.genericId ? 100 : limit);
 
   try {
     const rows = await db.getAllAsync<BrandOfflineRow>(
-      `SELECT payload_json FROM catalogue_brands_offline ${whereSql} ORDER BY name ASC LIMIT ?`,
+      `SELECT payload_json FROM catalogue_brands_offline ${whereSql} ORDER BY ${orderSql} LIMIT ?`,
       ...binds,
     );
     const items = rows

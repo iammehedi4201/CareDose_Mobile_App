@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Slot, useRouter } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CareDoseSplashOverlay } from '../src/components/CareDoseSplashOverlay';
+import { CatalogueExploreProvider } from '../src/features/catalogue/CatalogueExploreContext';
 import { PurchasesProvider } from '../src/features/expenses/PurchasesContext';
 import { HealthLogsProvider } from '../src/features/health/HealthLogsContext';
 import {
@@ -100,11 +101,13 @@ export default function RootLayout(): React.JSX.Element {
           <SchedulesProvider>
             <PurchasesProvider>
               <HealthLogsProvider>
-                <View className="flex-1 bg-background" style={{ flex: 1 }}>
-                  <NotificationRuntimeBridge />
-                  <Slot />
-                  <SplashCoordinator />
-                </View>
+                <CatalogueExploreProvider>
+                  <View className="flex-1 bg-background" style={{ flex: 1 }}>
+                    <NotificationRuntimeBridge />
+                    <Slot />
+                    <SplashCoordinator />
+                  </View>
+                </CatalogueExploreProvider>
               </HealthLogsProvider>
             </PurchasesProvider>
           </SchedulesProvider>

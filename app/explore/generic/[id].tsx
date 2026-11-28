@@ -108,7 +108,13 @@ export default function GenericDetailsScreen(): React.JSX.Element {
     eyebrow: 'GENERIC',
     title: loading || errorMessage ? 'Generic Details' : genericName,
     imageSource: exploreHeaderImage,
-    onBack: () => router.push('/explore'),
+    onBack: () => {
+      if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/explore');
+      }
+    },
   });
 
   if (loading) {
@@ -120,7 +126,7 @@ export default function GenericDetailsScreen(): React.JSX.Element {
         topOverlay={topOverlay}
       >
         <View style={{ marginTop: -overlapPx }}>
-          <LoadingSkeleton rows={4} />
+          <LoadingSkeleton variant="generic_details" rows={4} />
         </View>
       </ScreenContainer>
     );

@@ -10,6 +10,7 @@ import { PrimaryButton, SecondaryButton } from '../Buttons';
 import { DoseCard } from '../DoseCard';
 import { DoseProgressCard } from '../DoseProgressCard';
 import { EmptyState, ErrorState, LoadingSkeleton, SuccessToast } from '../FeedbackStates';
+import { computeSearchInputMetrics, SearchInput } from '../SearchInput';
 import { FormCol, FormRow } from '../FormFields';
 import { MedicineCard } from '../MedicineCard';
 import { BottomSheet, ConfirmDialog } from '../Overlays';
@@ -26,6 +27,7 @@ import ManageSchedulesScreen from '../../../app/schedules';
 import MyMedicinesScreen from '../../../app/medicines';
 import PersonalMedicineDetailsScreen from '../../../app/medicines/[id]';
 import ExploreMedicinesScreen from '../../../app/explore';
+import CatalogueBrandDetailsScreen from '../../../app/explore/brand/[id]/index';
 import AlternativeBrandsScreen from '../../../app/alternatives';
 import DoseHistoryScreen from '../../../app/history';
 import ExpensesScreen from '../../../app/expenses';
@@ -58,6 +60,7 @@ let mockDayItemsOverride: unknown[] | null = null;
 let mockUseStateOverrides: unknown[] | null = null;
 let mockUseStateIndex = 0;
 let mockLocalSearchParamsOverride: Record<string, string> = {};
+let mockRouterCanGoBackValue = true;
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
@@ -89,6 +92,7 @@ vi.mock('expo-router', () => ({
     push: mockRouterPush,
     navigate: mockRouterNavigate,
     back: mockRouterBack,
+    canGoBack: () => mockRouterCanGoBackValue,
   }),
   usePathname: () => '/',
   useLocalSearchParams: () => mockLocalSearchParamsOverride,
@@ -634,11 +638,17 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     );
     expect(
       variantEls.some(
-        (e) =>
-          e.type === 'Text' &&
-          (e.props.children === '200 mg/5 ml' || e.props.children === 'Powder for Suspension'),
+        (e) => e.type === 'Text' && e.props.children === '200 mg/5 ml',
       ),
     ).toBe(true);
+    // Form label already shown inside MedicineFormThumbnail badge — never repeated on right
+    const nonThumbTexts = variantEls.filter(
+      (e) =>
+        e.type === 'Text' &&
+        e.props.children === 'Powder for Suspension' &&
+        !hasClass(e, 'text-[10px]'),
+    );
+    expect(nonThumbTexts).toHaveLength(0);
 
     const doseCases = [
       {
@@ -837,12 +847,113 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
     );
     const errorEls = collectElements(ErrorState({ message: 'Network error', onRetry: vi.fn() }));
     const skeletonEls = collectElements(LoadingSkeleton({ rows: 2 }));
+    const exploreSkeleton = collectElements(LoadingSkeleton({ variant: 'explore_results', rows: 2 }));
+    const detailSkeleton = collectElements(LoadingSkeleton({ variant: 'brand_details' }));
+    const scheduleSkeleton = collectElements(LoadingSkeleton({ variant: 'schedule_timeline', rows: 2 }));
 
     expect(toastEls.some((e) => e.type === 'Text' && hasClass(e, 'min-w-0'))).toBe(true);
     expect(emptyEls[0].style.padding).toBe(16);
     expect(errorEls[0].style.padding).toBe(16);
     expect(skeletonEls.some((e) => e.style.padding === 12)).toBe(true);
     expect(skeletonEls.some((e) => hasClass(e, 'min-w-0'))).toBe(true);
+    expect(exploreSkeleton.some((e) => e.props.accessibilityLabel === 'Loading medicines')).toBe(true);
+    expect(detailSkeleton.some((e) => e.props.accessibilityLabel === 'Loading medicine details')).toBe(true);
+    expect(scheduleSkeleton.some((e) => e.props.accessibilityLabel === 'Loading schedule timeline')).toBe(true);
+
+    // Skeletons must match page structure without fake thumbnail image boxes (84/88px) or arbitrary border-[#...] classes
+    const manageScheduleSkeletonCompact = collectElements(
+      LoadingSkeleton({ variant: 'manage_schedules', rows: 1 }),
+    );
+    const healthSkeleton = collectElements(LoadingSkeleton({ variant: 'health_log', rows: 1 }));
+    const historySkeleton = collectElements(LoadingSkeleton({ variant: 'dose_history', rows: 1 }));
+    const altSkeleton = collectElements(LoadingSkeleton({ variant: 'alternatives_groups', rows: 1 }));
+    const genericDetailSkeleton = collectElements(
+      LoadingSkeleton({ variant: 'generic_details', rows: 1 }),
+    );
+
+    for (const els of [
+      exploreSkeleton,
+      detailSkeleton,
+      scheduleSkeleton,
+      manageScheduleSkeletonCompact,
+      healthSkeleton,
+      historySkeleton,
+      altSkeleton,
+      genericDetailSkeleton,
+    ]) {
+      expect(
+        els.some((e) => e.style.height === 84 || e.style.height === 88),
+      ).toBe(false);
+      expect(
+        els.some(
+          (e) =>
+            typeof e.props.className === 'string' &&
+            e.props.className.includes('border-[#'),
+        ),
+      ).toBe(false);
+    }
+
+    // Schedule timeline skeleton mirrors DoseProgressCard (54px ring + 4 metric tiles) and DoseCard CTA
+    expect(scheduleSkeleton.some((e) => hasClass(e, 'h-[54px]'))).toBe(true);
+    expect(scheduleSkeleton.some((e) => hasClass(e, 'h-[44px]'))).toBe(true);
+    // Explore skeleton preserves pill row structure matching MedicineCard highlightVariants
+    expect(exploreSkeleton.some((e) => hasClass(e, 'h-5') && hasClass(e, 'rounded-full'))).toBe(
+      true,
+    );
+    // Manage schedules skeleton stacks buttons on 320px compact screens and switches to row on wide screens
+    expect(manageScheduleSkeletonCompact.some((e) => hasClass(e, 'flex-col'))).toBe(true);
+    __setMockWindowWidth(768);
+    const manageScheduleSkeletonWide = collectElements(
+      LoadingSkeleton({ variant: 'manage_schedules', rows: 1 }),
+    );
+    expect(manageScheduleSkeletonWide.some((e) => hasClass(e, 'flex-col'))).toBe(false);
+    __setMockWindowWidth(320);
+
+    // Redesigned responsive SearchInput + dropdown suggestions check
+    expect(computeSearchInputMetrics(320).height).toBe(44);
+    expect(computeSearchInputMetrics(390).height).toBe(48);
+    expect(computeSearchInputMetrics(320).fontSize).toBe(13.5);
+    expect(computeSearchInputMetrics(390).fontSize).toBe(14.5);
+
+    const searchWithSuggestions = collectElements(
+      SearchInput({
+        value: 'n',
+        onChangeText: vi.fn(),
+        showSuggestions: true,
+        suggestions: [
+          {
+            id: 'n1',
+            title: 'Napa 500 mg',
+            subtitle: 'Paracetamol · Beximco Pharmaceuticals',
+            badge: 'Tablet',
+            meta: '৳ 0.80 / unit',
+          },
+          {
+            id: 'n2',
+            title: 'Neuro-B',
+            subtitle: 'Vitamin B1+B6+B12 · Square Pharmaceuticals',
+            badge: 'Tablet',
+            meta: '৳ 8.00 / unit',
+          },
+        ],
+        onSelectSuggestion: vi.fn(),
+        onFillSuggestion: vi.fn(),
+      }),
+    );
+    expect(
+      searchWithSuggestions.some(
+        (e) => e.props.accessibilityLabel === 'Medicine search suggestions',
+      ),
+    ).toBe(true);
+    expect(
+      searchWithSuggestions.some((e) => e.props.accessibilityLabel === 'Select Napa 500 mg'),
+    ).toBe(true);
+    expect(
+      searchWithSuggestions.some((e) => e.props.accessibilityLabel === 'Search Napa 500 mg'),
+    ).toBe(true);
+    expect(
+      searchWithSuggestions.every((e) => (e.style.elevation ?? 0) === 0),
+    ).toBe(true);
   });
 
   it('computes keyboard-aware BottomSheet backdrop padding and maxHeight without overlap', () => {
@@ -1722,8 +1833,116 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
       const exploreEls = collectElements(ExploreMedicinesScreen());
       assertWaveHeader(exploreEls);
       expect(exploreEls.some((e) => e.props.children === 'Popular Searches')).toBe(true);
-      expect(exploreEls.some((e) => e.props.children === 'Browse by Category')).toBe(true);
+      expect(exploreEls.some((e) => e.props.children === 'Browse Generics')).toBe(true);
       expect(exploreEls.some((e) => e.props.children === 'Alternatives')).toBe(true);
+      expect(exploreEls.some((e) => e.props.children === 'Browse by Category')).toBe(false);
+      expect(
+        exploreEls.some(
+          (e) =>
+            typeof e.props.children === 'string' &&
+            e.props.children.includes('Bangladesh Medicine Directory'),
+        ),
+      ).toBe(false);
+
+      // Brand / Medicine Details from Explore: unified identity card, Pack & Pricing, Alternatives, and safety warning
+      mockLocalSearchParamsOverride = { id: '1' };
+      mockUseStateIndex = 0;
+      mockUseStateOverrides = [
+        {
+          id: '1',
+          sourceId: '1',
+          name: 'Celofen',
+          strength: '100 mg',
+          strengthNorm: '100mg',
+          dosageForm: 'Tablet',
+          dosageFormNorm: 'tablet',
+          manufacturer: 'ACI Limited',
+          category: 'allopathic',
+          releaseMarker: null,
+          verification: 'UNVERIFIED',
+          fieldStatus: {
+            generic: 'PRESENT',
+            strength: 'PRESENT',
+            dosageForm: 'PRESENT',
+            manufacturer: 'PRESENT',
+            price: 'PRESENT',
+          },
+          warnings: [],
+          hasPriceWarning: false,
+          generic: { id: '3', sourceId: '3', name: 'Aceclofenac', slug: 'aceclofenac' },
+          primaryPack: {
+            id: 'p1',
+            packQuantity: '5 x 10',
+            packUnits: 50,
+            stripUnits: 10,
+            unitPrice: '4.01',
+            packPrice: '200.50',
+            currency: 'BDT',
+            unitPriceLabel: 'Unit Price',
+            priceSource: 'brand_page',
+            sourceUrl: null,
+            collectedAt: null,
+            verification: 'UNVERIFIED',
+            warnings: [],
+            hasPriceWarning: false,
+          },
+          primaryImageUrl: null,
+          primaryImageStatus: null,
+          productUrl: null,
+          collectedAt: null,
+          packs: [
+            {
+              id: 'p1',
+              packQuantity: '5 x 10',
+              packUnits: 50,
+              stripUnits: 10,
+              unitPrice: '4.01',
+              packPrice: '200.50',
+              currency: 'BDT',
+              unitPriceLabel: 'Unit Price',
+              priceSource: 'brand_page',
+              sourceUrl: null,
+              collectedAt: null,
+              verification: 'UNVERIFIED',
+              warnings: [],
+              hasPriceWarning: false,
+            },
+          ],
+          images: [],
+          safetyNotice:
+            'Clinical verification notice: always confirm strength and pack with your pharmacist.',
+        },
+        [],
+        'Always consult a qualified doctor or pharmacist before changing medicine brands.',
+        false,
+        false,
+        null,
+        null,
+        false,
+        'p1',
+        null,
+      ];
+      const brandDetailEls = collectElements(CatalogueBrandDetailsScreen());
+      mockUseStateOverrides = null;
+      mockUseStateIndex = 0;
+      mockLocalSearchParamsOverride = {};
+      assertWaveHeader(brandDetailEls);
+      expect(brandDetailEls.some((e) => e.props.children === 'Medicine details')).toBe(false);
+      expect(brandDetailEls.some((e) => e.props.children === 'Pack & Pricing')).toBe(true);
+      expect(brandDetailEls.some((e) => e.props.children === '+ Add to My Medicines')).toBe(true);
+      expect(
+        brandDetailEls.some(
+          (e) =>
+            typeof e.props.children === 'string' &&
+            e.props.children.includes('consult a qualified doctor or pharmacist'),
+        ),
+      ).toBe(true);
+      const backBtn = brandDetailEls.find((e) => e.props.accessibilityLabel === 'Go back');
+      expect(backBtn).toBeDefined();
+      mockRouterBack.mockClear();
+      mockRouterCanGoBackValue = true;
+      (backBtn!.props.onPress as () => void)();
+      expect(mockRouterBack).toHaveBeenCalledTimes(1);
 
       const profileEls = collectElements(ProfileScreen());
       assertWaveHeader(profileEls);

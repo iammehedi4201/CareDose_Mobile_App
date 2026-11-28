@@ -34,6 +34,8 @@ import {
   resolveBrandBadge,
   resolvePackQuantityUnit,
 } from '../../../../src/features/catalogue/catalogue-helpers';
+import { formatSimplifiedDosageForm } from '../../../../src/components/MedicineFormThumbnail';
+import { useResponsiveLayout } from '../../../../src/theme/responsive';
 import { CAREDOSE_EXTENDED_COLORS } from '../../../../src/theme/tokens';
 
 const INITIAL_ALTERNATIVES_LIMIT = 3;
@@ -41,6 +43,7 @@ const INITIAL_ALTERNATIVES_LIMIT = 3;
 export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const layout = useResponsiveLayout();
 
   const [brand, setBrand] = useState<CatalogueBrandDetailDto | null>(null);
   const [altGroups, setAltGroups] = useState<AlternativeGroupWithCandidatesDto[]>([]);
@@ -136,6 +139,19 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     void loadBrand();
   }, [loadBrand]);
 
+  const handleBack = (): void => {
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/explore');
+    }
+  };
+
+  const simplifiedForm = formatSimplifiedDosageForm(brand?.dosageForm);
+  const headerSubtitle = brand
+    ? [brand.strength?.trim(), simplifiedForm].filter(Boolean).join(' · ') || undefined
+    : undefined;
+
   const {
     topBanner,
     topOverlay,
@@ -143,13 +159,9 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
   } = useScreenWaveHeader({
     eyebrow: 'BRAND DETAILS',
     title: loading || !brand ? 'Medicine Details' : brand.name,
-    subtitle: loading
-      ? 'Loading catalogue record...'
-      : brand
-        ? `${brand.strength ?? 'Strength: Not available'} · ${brand.dosageForm ?? 'Form: Not available'}`
-        : undefined,
+    subtitle: headerSubtitle,
     imageSource: exploreHeaderImage,
-    onBack: () => router.push('/explore'),
+    onBack: handleBack,
   });
 
   if (loading) {
@@ -161,7 +173,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         topOverlay={topOverlay}
       >
         <View style={{ marginTop: -overlapPx }}>
-          <LoadingSkeleton rows={4} />
+          <LoadingSkeleton variant="brand_details" />
         </View>
       </ScreenContainer>
     );
@@ -205,6 +217,14 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     brand.packs,
     { includeStripsInPack: true },
   );
+  const combinedSafetyNotice =
+    brand.safetyNotice && brand.safetyNotice !== warningNotice
+      ? `${brand.safetyNotice} ${warningNotice}`
+      : warningNotice;
+  const hasMoreGenericBrands =
+    Boolean(brand.generic) &&
+    typeof brand.sameGenericBrandsCount === 'number' &&
+    brand.sameGenericBrandsCount > allCandidateBrands.length + 1;
 
   return (
     <ScreenContainer
@@ -215,12 +235,12 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     >
       <SuccessToast message={toast} />
 
-      {/* Top Hero + Dosage Form Thumbnail / Packaging Photo + Primary CTA */}
+      {/* Unified Primary Identity & Action Card */}
       <View
         style={{ marginTop: -overlapPx }}
-        className="bg-mint rounded-card border border-[#C5E8D8] p-4 mb-3.5 shadow-sm"
+        className="mb-3 rounded-card border border-[#CBE7DB] bg-white p-4 shadow-sm"
       >
-        <View className="flex-row items-center gap-3">
+        <View className="flex-row items-start gap-3">
           <MedicineFormThumbnail
             size="hero"
             dosageForm={brand.dosageForm}
@@ -228,26 +248,63 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
             accessibilityLabel={`${brand.name} ${brand.dosageForm ?? 'medicine'}`}
           />
           <View className="flex-1 min-w-0">
-            <Text className="text-[17px] font-bold text-main">{brand.name}</Text>
+            <Text className="text-[18px] font-bold leading-6 text-main">{brand.name}</Text>
+
             {brand.generic ? (
-              <Text className="mt-0.5 text-[13px] font-semibold text-primary-dark" numberOfLines={1}>
-                {brand.generic.name}
-              </Text>
-            ) : null}
-            <Text className="mt-0.5 text-[12px] text-[#5A706B]">
-              {formatMissingCatalogueValue(brand.manufacturer)}
-            </Text>
-            <Text className="mt-1 text-[11px] text-[#7D928D]">
-              MedEx reference data (unverified)
-            </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`View all ${brand.generic.name} brands`}
+                onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
+                className="mt-1 flex-row items-center self-start active:opacity-80"
+              >
+                <Text className="text-[13px] font-semibold text-primary" numberOfLines={1}>
+                  {brand.generic.name}
+                </Text>
+                <Feather name="chevron-right" size={14} color={CAREDOSE_EXTENDED_COLORS.primary} />
+              </Pressable>
+            ) : (
+              <Text className="mt-1 text-[12.5px] text-[#5A706B]">Generic: Not available</Text>
+            )}
+
+            <View className="mt-2 flex-row flex-wrap items-center gap-1.5">
+              <View className="rounded-full border border-[#CBE7DB] bg-mint px-2.5 py-0.5">
+                <Text className="text-[11px] font-bold text-primary-dark">
+                  {formatMissingCatalogueValue(brand.strength)}
+                </Text>
+              </View>
+              {brand.releaseMarker ? (
+                <View className="rounded-full border border-[#CFE0F5] bg-[#F4F8FD] px-2.5 py-0.5">
+                  <Text className="text-[11px] font-semibold text-info">
+                    {brand.releaseMarker}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        {primaryImage ? (
-          <Text className="mt-2 text-[11px] text-[#5A706B]">
-            Photo source: {primaryImage.sourceName} · Unverified match · Permission unrecorded
-          </Text>
-        ) : null}
+        <View className="mt-3 border-t border-border pt-2.5 gap-1.5">
+          <View className="flex-row items-center justify-between gap-3">
+            <Text className="text-[12px] text-[#5A706B] shrink-0">Manufacturer</Text>
+            <Text className="flex-1 min-w-0 text-right text-[12.5px] font-semibold text-main" numberOfLines={1}>
+              {formatMissingCatalogueValue(brand.manufacturer)}
+            </Text>
+          </View>
+          <View className="flex-row items-center justify-between gap-3">
+            <Text className="text-[12px] text-[#5A706B] shrink-0">{activeUnitDetails.label}</Text>
+            <Text className="flex-1 min-w-0 text-right text-[12.5px] font-semibold text-main" numberOfLines={1}>
+              {activeUnitDetails.value}
+            </Text>
+          </View>
+          {primaryImage ? (
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className="text-[11px] text-[#7D928D] shrink-0">Photo attribution</Text>
+              <Text className="flex-1 min-w-0 text-right text-[11px] text-[#5A706B]" numberOfLines={1}>
+                {primaryImage.sourceName} (unverified match)
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         <View className="mt-3.5">
           <PrimaryButton
@@ -258,77 +315,18 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         </View>
       </View>
 
-      {/* Catalogue Details */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
-        <Text className="text-[15px] font-semibold text-main mb-0.5">Medicine details</Text>
-
-        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
-          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Generic</Text>
-          {brand.generic ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
-            >
-              <Text className="text-[13px] font-semibold text-primary shrink-0">
-                {brand.generic.name}
-              </Text>
-            </Pressable>
-          ) : (
-            <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-              Not available
-            </Text>
-          )}
-        </View>
-        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
-          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Strength</Text>
-          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-            {formatMissingCatalogueValue(brand.strength)}
-          </Text>
-        </View>
-        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
-          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Dosage form</Text>
-          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-            {formatMissingCatalogueValue(brand.dosageForm)}
-          </Text>
-        </View>
-        <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
-          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
-            {activeUnitDetails.label}
-          </Text>
-          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-            {activeUnitDetails.value}
-          </Text>
-        </View>
-        <View
-          className={`flex-row items-center justify-between py-2 gap-3 ${
-            brand.releaseMarker ? 'border-b border-border' : 'pb-0.5'
-          }`}
-        >
-          <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Manufacturer</Text>
-          <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-            {formatMissingCatalogueValue(brand.manufacturer)}
-          </Text>
-        </View>
-        {brand.releaseMarker ? (
-          <View className="flex-row items-center justify-between py-2 pb-0.5 gap-3">
-            <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
-              Release marker
-            </Text>
-            <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-              {brand.releaseMarker}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Pack & Pricing Details */}
-      <View className="bg-white rounded-card border border-border p-4 mb-3.5 shadow-sm">
-        <View className="flex-row items-center justify-between flex-wrap gap-2 mb-2">
-          <View className="flex-1 min-w-0">
-            <Text className="text-[15px] font-semibold text-main mb-0.5">
-              Pack &amp; price{brand.packs.length > 1 ? ` (${brand.packs.length} options)` : ''}
-            </Text>
-            <Text className="text-[11px] text-[#7D928D]">MedEx reference price (unverified)</Text>
+      {/* Pack & Pricing Options Card */}
+      <View className="mb-3.5 rounded-card border border-border bg-white p-4 shadow-sm">
+        <View className="mb-2 flex-row items-center justify-between flex-wrap gap-2">
+          <View className="flex-row items-center gap-2">
+            <Text className="text-[15px] font-bold text-main">Pack &amp; Pricing</Text>
+            {brand.packs.length > 1 ? (
+              <View className="rounded-full border border-[#CBE7DB] bg-mint px-2 py-0.5">
+                <Text className="text-[10.5px] font-bold text-primary-dark">
+                  {brand.packs.length} options
+                </Text>
+              </View>
+            ) : null}
           </View>
           {brand.hasPriceWarning ? (
             <StatusBadge variant="low_stock" label="Price warning" />
@@ -336,143 +334,141 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         </View>
 
         {!activePack ? (
-          <Text className="text-[12px] text-[#5A706B] py-1.5">
+          <Text className="py-1 text-[12.5px] text-[#5A706B]">
             No pack pricing records available in catalogue.
           </Text>
         ) : (
           <View>
             {brand.packs.length > 1 ? (
-              <View className="mt-1 mb-2.5">
-                <Text className="text-[11px] font-semibold text-[#5A706B] mb-2">
-                  Select a pack size to inspect:
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {brand.packs.map((pack) => {
-                    const isSelected = pack.id === activePack.id;
-                    const pricePreview = pack.packPrice
-                      ? formatCurrencyAmount(pack.packPrice, pack.currency)
-                      : pack.unitPrice
-                        ? `${formatCurrencyAmount(pack.unitPrice, pack.currency)}/unit`
-                        : 'Price N/A';
-                    return (
-                      <Pressable
-                        key={pack.id}
-                        accessibilityRole="button"
-                        onPress={() => setSelectedPackId(pack.id)}
-                        className={`px-3 py-2 rounded-[10px] border min-w-[104px] ${
-                          isSelected
-                            ? 'border-primary bg-[#EAF5F1]'
-                            : 'border-[#CBD5E1] bg-[#F8FAFC]'
+              <View className="mb-3 flex-row flex-wrap gap-2">
+                {brand.packs.map((pack) => {
+                  const isSelected = pack.id === activePack.id;
+                  const pricePreview = pack.packPrice
+                    ? formatCurrencyAmount(pack.packPrice, pack.currency)
+                    : pack.unitPrice
+                      ? `${formatCurrencyAmount(pack.unitPrice, pack.currency)}/unit`
+                      : 'Price N/A';
+                  return (
+                    <Pressable
+                      key={pack.id}
+                      accessibilityRole="button"
+                      onPress={() => setSelectedPackId(pack.id)}
+                      className={`min-w-[104px] rounded-[10px] border px-3 py-2 ${
+                        isSelected
+                          ? 'border-primary bg-mint'
+                          : 'border-border bg-background'
+                      }`}
+                    >
+                      <Text
+                        className={`text-[12px] font-bold ${
+                          isSelected ? 'text-primary-dark' : 'text-main'
                         }`}
                       >
-                        <Text
-                          className={`text-[12px] font-semibold ${
-                            isSelected ? 'text-primary-dark' : 'text-main'
-                          }`}
-                        >
-                          {formatPackSummary(pack)}
-                        </Text>
-                        <Text
-                          className={`mt-0.5 text-[11px] font-semibold ${
-                            isSelected ? 'text-primary' : 'text-[#5A706B]'
-                          }`}
-                        >
-                          {pricePreview}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                        {formatPackSummary(pack)}
+                      </Text>
+                      <Text
+                        className={`mt-0.5 text-[11px] font-semibold ${
+                          isSelected ? 'text-primary' : 'text-[#5A706B]'
+                        }`}
+                      >
+                        {pricePreview}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : null}
 
-            <View className="border-t border-border pt-1">
-              <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
-                <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">Pack size</Text>
-                <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-                  {formatPackSummary(activePack)}
-                </Text>
-              </View>
-              <View className="flex-row items-center justify-between py-2 border-b border-border gap-3">
-                <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
-                  {activePackUnitDetails.label}
-                </Text>
-                <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-                  {activePackUnitDetails.value}
-                </Text>
-              </View>
+            <View className="rounded-field border border-border bg-background p-3">
               <View
-                className={`flex-row items-center justify-between py-2 gap-3 ${
-                  !activePack.unitPrice && activePack.warnings.length === 0
-                    ? 'pb-0.5'
-                    : 'border-b border-border'
-                }`}
+                className={layout.stackTwoCol ? 'flex-col' : 'flex-row items-center justify-between'}
+                style={{ gap: 10 }}
               >
-                <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
-                  Pack price
-                </Text>
-                <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-                  {formatCurrencyAmount(activePack.packPrice, activePack.currency)}
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[11px] text-[#5A706B]">Pack price</Text>
+                  <Text className="mt-0.5 text-[16px] font-bold text-primary">
+                    {formatCurrencyAmount(activePack.packPrice, activePack.currency)}
+                  </Text>
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-[11px] text-[#5A706B]">Unit price</Text>
+                  <Text className="mt-0.5 text-[14px] font-bold text-main">
+                    {activePack.unitPrice
+                      ? formatCurrencyAmount(activePack.unitPrice, activePack.currency)
+                      : 'Not listed'}
+                  </Text>
+                </View>
+              </View>
+
+              <View className="mt-2.5 border-t border-border pt-2 gap-1.5">
+                <View className="flex-row items-center justify-between gap-3">
+                  <Text className="text-[12px] text-[#5A706B] shrink-0">Pack size</Text>
+                  <Text className="flex-1 min-w-0 text-right text-[12.5px] font-semibold text-main">
+                    {formatPackSummary(activePack)}
+                  </Text>
+                </View>
+                <View className="flex-row items-center justify-between gap-3">
+                  <Text className="text-[12px] text-[#5A706B] shrink-0">
+                    {activePackUnitDetails.label}
+                  </Text>
+                  <Text className="flex-1 min-w-0 text-right text-[12.5px] font-semibold text-main">
+                    {activePackUnitDetails.value}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text className="mt-2 text-[11px] text-[#7D928D]">
+              MedEx reference pricing (unverified)
+            </Text>
+
+            {activePack.warnings.length > 0 ? (
+              <View className="mt-2 flex-row items-start gap-1.5 rounded-[8px] border border-[#F3D9A4] bg-[#FDF5E6] p-2.5">
+                <Feather name="alert-triangle" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
+                <Text className="flex-1 min-w-0 text-[11px] font-semibold text-warning">
+                  {activePack.warnings.map(formatPackWarningReason).join(' ')}
                 </Text>
               </View>
-              {activePack.unitPrice ? (
-                <View
-                  className={`flex-row items-center justify-between py-2 gap-3 ${
-                    activePack.warnings.length === 0 ? 'pb-0.5' : 'border-b border-border'
-                  }`}
-                >
-                  <Text className="text-[12px] text-[#5A706B] shrink-0 max-w-[46%]">
-                    Unit price
-                  </Text>
-                  <Text className="flex-1 min-w-0 text-[13px] font-semibold text-main text-right">
-                    {formatCurrencyAmount(activePack.unitPrice, activePack.currency)}
-                  </Text>
-                </View>
-              ) : null}
-              {activePack.warnings.length > 0 ? (
-                <View className="flex-row items-start gap-1.5 bg-[#FDF5E6] p-2 rounded-[8px] mt-1.5">
-                  <Feather name="alert-triangle" size={13} color={CAREDOSE_EXTENDED_COLORS.warning} />
-                  <Text className="flex-1 min-w-0 text-[11px] text-warning font-semibold">
-                    {activePack.warnings.map(formatPackWarningReason).join(' ')}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+            ) : null}
           </View>
         )}
       </View>
 
-      {/* Potential Matching Brands — Initially 3 + "Load More" to Searchable Alternatives Screen */}
-      <View className="flex-row items-center justify-between gap-2.5 mb-2">
-        <View className="flex-1 min-w-0">
-          <Text className="text-[15px] font-semibold text-main mb-0.5">
-            Potential matching brands{!altLoading ? ` (${allCandidateBrands.length})` : ''}
-          </Text>
-          <Text className="text-[11px] text-[#5A706B] mt-[1px]">
-            Same generic, {brand.strength ?? 'strength'} · {brand.dosageForm ?? 'form'}
-          </Text>
-        </View>
+      {/* Alternative Brands Section */}
+      <View className="mb-2 flex-row items-center justify-between gap-2.5">
+        <Text className="flex-1 min-w-0 text-[15px] font-bold text-main">
+          Alternative Brands{!altLoading ? ` (${allCandidateBrands.length})` : ''}
+        </Text>
         {allCandidateBrands.length > INITIAL_ALTERNATIVES_LIMIT ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push(`/explore/brand/${brand.sourceId}/alternatives`)}
           >
-            <Text className="text-[13px] font-semibold text-primary shrink-0">See all</Text>
+            <Text className="shrink-0 text-[13px] font-semibold text-primary">See all</Text>
           </Pressable>
-        ) : brand.generic && brand.sameGenericBrandsCount ? (
+        ) : hasMoreGenericBrands && brand.generic ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
           >
-            <Text className="text-[13px] font-semibold text-primary shrink-0">
-              All {brand.sameGenericBrandsCount} generic brands
+            <Text className="shrink-0 text-[12.5px] font-semibold text-primary">
+              All {brand.generic.name} brands
             </Text>
           </Pressable>
         ) : null}
       </View>
 
+      {isCombination ? (
+        <View className="mb-2 flex-row items-center gap-1.5 rounded-field border border-[#CBE7DB] bg-mint px-3 py-1.5">
+          <Feather name="alert-circle" size={13} color={CAREDOSE_EXTENDED_COLORS.primaryDark} />
+          <Text className="flex-1 min-w-0 text-[11.5px] font-semibold text-primary-dark">
+            Combination product — verify every active ingredient carefully.
+          </Text>
+        </View>
+      ) : null}
+
       {altLoading ? (
-        <LoadingSkeleton rows={2} />
+        <LoadingSkeleton variant="explore_results" rows={2} />
       ) : altError ? (
         <ErrorState
           title="Unable to load matching brands"
@@ -481,16 +477,21 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
         />
       ) : initialMatchingBrands.length === 0 ? (
         <EmptyState
-          title="No matching brands listed"
-          description="No other imported catalogue brands share this exact generic, strength, and dosage form."
+          title="No exact matching brands"
+          description="No other imported brands share this exact generic, strength, and dosage form."
+          actionLabel={
+            hasMoreGenericBrands && brand.generic
+              ? `View all ${brand.sameGenericBrandsCount} ${brand.generic.name} brands`
+              : undefined
+          }
+          onAction={
+            hasMoreGenericBrands && brand.generic
+              ? () => router.push(`/explore/generic/${brand.generic?.sourceId}`)
+              : undefined
+          }
         />
       ) : (
         <View className="mb-1">
-          {isCombination ? (
-            <Text className="text-[11px] font-semibold text-[#5A706B] mb-1.5">
-              Combination product · {brand.strength ?? 'Multiple ingredients'} · {brand.dosageForm}
-            </Text>
-          ) : null}
           {initialMatchingBrands.map((alt) => {
             const altBadge = resolveBrandBadge(alt);
             return (
@@ -507,6 +508,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
                 statusVariant={altBadge.variant}
                 statusLabel={altBadge.label}
                 showStatusBadge={altBadge.showBadge}
+                highlightVariants
                 onPress={() => router.push(`/explore/brand/${alt.sourceId}`)}
               />
             );
@@ -516,29 +518,27 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
             <View className="mt-1 mb-2.5">
               <SecondaryButton
                 fullWidth
-                label={`Load More (${remainingMatchingCount} remaining)`}
+                label={`View all ${allCandidateBrands.length} matching brands`}
                 onPress={() => router.push(`/explore/brand/${brand.sourceId}/alternatives`)}
+              />
+            </View>
+          ) : hasMoreGenericBrands && brand.generic ? (
+            <View className="mt-1 mb-2.5">
+              <SecondaryButton
+                fullWidth
+                label={`View all ${brand.sameGenericBrandsCount?.toLocaleString()} ${brand.generic.name} brands`}
+                onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
               />
             </View>
           ) : null}
         </View>
       )}
 
-      {brand.generic &&
-      typeof brand.sameGenericBrandsCount === 'number' &&
-      brand.sameGenericBrandsCount > allCandidateBrands.length + 1 ? (
-        <View className="mt-1 mb-2.5">
-          <SecondaryButton
-            fullWidth
-            label={`View all ${brand.sameGenericBrandsCount.toLocaleString()} ${brand.generic.name} brands (all strengths & forms)`}
-            onPress={() => router.push(`/explore/generic/${brand.generic?.sourceId}`)}
-          />
-        </View>
-      ) : null}
-
-      <View className="bg-[#FDF5E6] rounded-field border border-[#F3D9A4] p-3 mt-1 mb-2.5">
-        <Text className="text-[11px] text-warning font-semibold leading-4">
-          {warningNotice}
+      {/* Safety & Interchangeability Notice (preserved verbatim for clinical safety) */}
+      <View className="mt-1 mb-2.5 flex-row items-start gap-2 rounded-field border border-[#F3D9A4] bg-[#FDF5E6] p-3">
+        <Feather name="alert-triangle" size={14} color={CAREDOSE_EXTENDED_COLORS.warning} />
+        <Text className="flex-1 min-w-0 text-[11px] font-semibold leading-4 text-warning">
+          {combinedSafetyNotice}
         </Text>
       </View>
 

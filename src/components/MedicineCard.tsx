@@ -79,8 +79,13 @@ export function MedicineCard({
   const layout = useResponsiveLayout();
   const metaLine = formatMedicineMeta(strength, dosageForm, genericName);
   const cleanStrength = strength && strength.trim().length > 0 ? strength.trim() : null;
-  const cleanForm = formatSimplifiedDosageForm(dosageForm);
   const cleanGeneric = genericName && genericName.trim().length > 0 ? genericName.trim() : null;
+  // Thumbnail on the left already displays the dosage form badge, so avoid repeating form text on the right
+  const conciseMetaLine = cleanGeneric
+    ? cleanStrength
+      ? `${cleanGeneric} · ${cleanStrength}`
+      : cleanGeneric
+    : cleanStrength ?? 'Strength: Not available';
   const stockMetricColor =
     statusVariant === 'low_stock'
       ? CAREDOSE_EXTENDED_COLORS.warning
@@ -121,7 +126,7 @@ export function MedicineCard({
                 {name}
               </Text>
               <Text className="mt-[3px] text-[12px] leading-[17px] text-[#5A706B]" numberOfLines={2}>
-                {metaLine}
+                {conciseMetaLine}
               </Text>
               {manufacturer ? (
                 <Text className="mt-[2px] text-[11.5px] font-medium text-primary-dark" numberOfLines={1}>
@@ -193,7 +198,7 @@ export function MedicineCard({
       accessibilityLabel={`${name}, ${metaLine}`}
       disabled={!onPress}
       onPress={onPress}
-      className="mb-2.5 rounded-card border border-border bg-white shadow-sm"
+      className="mb-2.5 rounded-card border border-border bg-white shadow-sm active:opacity-95"
       style={{ padding: layout.cardPadding }}
     >
       <View className="flex-row items-start">
@@ -208,11 +213,15 @@ export function MedicineCard({
 
         <View className="flex-1 min-w-0">
           <View className="flex-row items-start justify-between gap-2">
-            <Text className="flex-1 min-w-0 text-sm font-semibold text-main" numberOfLines={2}>
+            <Text className="flex-1 min-w-0 text-[15px] font-bold text-main" numberOfLines={2}>
               {name}
             </Text>
             {stockText ? (
-              <Text className="shrink-0 text-right text-[13px] font-bold text-main">
+              <Text
+                className={`shrink-0 text-right text-[13px] font-bold ${
+                  highlightVariants ? 'text-primary' : 'text-main'
+                }`}
+              >
                 {stockText}
               </Text>
             ) : null}
@@ -220,22 +229,9 @@ export function MedicineCard({
 
           {highlightVariants ? (
             <>
-              <View className="mt-1 flex-row flex-wrap items-center gap-1.5">
-                <View className="max-w-full rounded-full border border-[#C5E8D8] bg-mint px-2 py-0.5">
-                  <Text className="text-[11px] font-bold text-primary-dark">
-                    {cleanStrength ?? 'Strength: N/A'}
-                  </Text>
-                </View>
-                <View className="max-w-full rounded-full border border-border bg-background px-2 py-0.5">
-                  <Text className="text-[11px] font-semibold text-main">
-                    {cleanForm ?? 'Form: N/A'}
-                  </Text>
-                </View>
-              </View>
-
               {(cleanGeneric || rightSubtext) ? (
-                <View className="mt-1 flex-row flex-wrap items-start justify-between gap-1.5">
-                  <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={1}>
+                <View className="mt-0.5 flex-row flex-wrap items-center justify-between gap-1.5">
+                  <Text className="flex-1 min-w-0 text-[12.5px] font-medium text-[#4A665F]" numberOfLines={1}>
                     {cleanGeneric ?? 'Generic: Not available'}
                   </Text>
                   {rightSubtext ? (
@@ -245,44 +241,70 @@ export function MedicineCard({
                   ) : null}
                 </View>
               ) : null}
+
+              <View className="mt-1.5 flex-row flex-wrap items-center gap-1.5">
+                <View className="max-w-full rounded-full border border-[#CBE7DB] bg-mint px-2 py-0.5">
+                  <Text className="text-[11px] font-bold text-primary-dark">
+                    {cleanStrength ?? 'Strength: N/A'}
+                  </Text>
+                </View>
+                {showStatusBadge ? (
+                  <StatusBadge variant={statusVariant} label={statusLabel} showIcon={showStatusIcon} />
+                ) : null}
+              </View>
+
+              {(manufacturer || priceText || secondaryNote) ? (
+                <View className="mt-1.5 flex-row items-center justify-between gap-2">
+                  <Text className="flex-1 min-w-0 text-[11.5px] text-[#6A807B]" numberOfLines={1}>
+                    {manufacturer ?? secondaryNote ?? ''}
+                  </Text>
+                  {priceText ? (
+                    <Text className="shrink-0 text-right text-[11.5px] font-medium text-[#5A706B]">
+                      {priceText}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
             </>
           ) : (
-            <View className="mt-[3px] flex-row flex-wrap items-start justify-between gap-1.5">
-              <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={2}>
-                {metaLine}
-              </Text>
-              {rightSubtext ? (
-                <Text className="shrink-0 text-[11px] font-medium text-[#5A706B]">
-                  {rightSubtext}
+            <>
+              <View className="mt-[3px] flex-row flex-wrap items-start justify-between gap-1.5">
+                <Text className="flex-1 min-w-0 text-xs text-[#5A706B]" numberOfLines={2}>
+                  {conciseMetaLine}
+                </Text>
+                {rightSubtext ? (
+                  <Text className="shrink-0 text-[11px] font-medium text-[#5A706B]">
+                    {rightSubtext}
+                  </Text>
+                ) : null}
+              </View>
+
+              {manufacturer ? (
+                <Text className="mt-[3px] text-[11.5px] font-medium text-primary-dark" numberOfLines={1}>
+                  {manufacturer}
                 </Text>
               ) : null}
-            </View>
-          )}
 
-          {manufacturer ? (
-            <Text className="mt-[3px] text-[11.5px] font-medium text-primary-dark" numberOfLines={1}>
-              {manufacturer}
-            </Text>
-          ) : null}
-
-          {secondaryNote ? (
-            <Text className="mt-1 text-xs text-main" numberOfLines={2}>
-              {secondaryNote}
-            </Text>
-          ) : null}
-
-          {showStatusBadge || priceText ? (
-            <View className="mt-2.5 flex-row flex-wrap items-center justify-between gap-2">
-              {showStatusBadge ? (
-                <StatusBadge variant={statusVariant} label={statusLabel} showIcon={showStatusIcon} />
-              ) : (
-                <View />
-              )}
-              {priceText ? (
-                <Text className="shrink text-xs font-semibold text-[#5A706B]">{priceText}</Text>
+              {secondaryNote ? (
+                <Text className="mt-1 text-xs text-main" numberOfLines={2}>
+                  {secondaryNote}
+                </Text>
               ) : null}
-            </View>
-          ) : null}
+
+              {showStatusBadge || priceText ? (
+                <View className="mt-2.5 flex-row flex-wrap items-center justify-between gap-2">
+                  {showStatusBadge ? (
+                    <StatusBadge variant={statusVariant} label={statusLabel} showIcon={showStatusIcon} />
+                  ) : (
+                    <View />
+                  )}
+                  {priceText ? (
+                    <Text className="shrink text-xs font-semibold text-[#5A706B]">{priceText}</Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
       </View>
     </Pressable>

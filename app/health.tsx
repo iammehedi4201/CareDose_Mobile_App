@@ -268,7 +268,7 @@ export default function HealthLogScreen(): React.JSX.Element {
 
       {/* Readings List / Empty / Loading */}
       {loading && readings.length === 0 ? (
-        <LoadingSkeleton rows={3} />
+        <LoadingSkeleton variant="health_log" rows={3} />
       ) : readings.length === 0 ? (
         <View>
           <EmptyState

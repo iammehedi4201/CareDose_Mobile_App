@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Keyboard, View } from "react-native";
 import { useRouter } from "expo-router";
 import medicinesHeaderImage from "../assets/medicines-header-illustration.jpg";
 import {
@@ -10,12 +10,14 @@ import {
   MedicineCard,
   ScreenContainer,
   SearchInput,
+  SearchSuggestionItem,
   useScreenWaveHeader,
 } from "../src/components";
 import {
   filterPersonalMedications,
   isPersonalMedicationLowStock,
   MedFilter,
+  rankPersonalMedicineSuggestions,
   resolveMedicationStatusVariant,
 } from "../src/features/medications/medication-helpers";
 import {
@@ -37,6 +39,10 @@ export default function MyMedicinesScreen(): React.JSX.Element {
     null,
   );
   const [addOpen, setAddOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [dismissedSuggestionQuery, setDismissedSuggestionQuery] = useState<string | null>(
+    null,
+  );
 
   const showToast = (message: string): void => {
     setToast({ key: Date.now(), message });
@@ -63,6 +69,18 @@ export default function MyMedicinesScreen(): React.JSX.Element {
     () => filterPersonalMedications(medications, { query, filter }),
     [medications, query, filter],
   );
+
+  const suggestionItems = useMemo<SearchSuggestionItem[]>(() => {
+    if (query.trim().length === 0) return [];
+    return rankPersonalMedicineSuggestions(medications, query, 5).map((med) => ({
+      id: med.id,
+      title: med.name,
+      subtitle:
+        [med.genericName, med.strength].filter(Boolean).join(" · ") || undefined,
+      badge: med.dosageForm,
+      meta: formatStockWithUnit(med.stockRemaining, med.stockUnit),
+    }));
+  }, [medications, query]);
 
   const { topBanner, topOverlay, overlapPx } = useScreenWaveHeader({
     eyebrow: "MY CARE",
@@ -100,8 +118,37 @@ export default function MyMedicinesScreen(): React.JSX.Element {
       >
         <SearchInput
           value={query}
-          onChangeText={setQuery}
+          onChangeText={(next) => {
+            setDismissedSuggestionQuery(null);
+            setQuery(next);
+          }}
+          onClear={() => setDismissedSuggestionQuery(null)}
+          onFocusChange={setSearchFocused}
+          onSubmitEditing={() => setDismissedSuggestionQuery(query)}
           placeholder="Search medicines"
+          suggestions={suggestionItems}
+          showSuggestions={
+            searchFocused &&
+            query.trim().length > 0 &&
+            dismissedSuggestionQuery !== query
+          }
+          suggestionsHeader="Your Medicines"
+          onSelectSuggestion={(item) => {
+            setDismissedSuggestionQuery(query);
+            setSearchFocused(false);
+            if (typeof Keyboard?.dismiss === "function") {
+              Keyboard.dismiss();
+            }
+            router.push(`/medicines/${item.id}`);
+          }}
+          onFillSuggestion={(item) => {
+            setDismissedSuggestionQuery(item.title);
+            setSearchFocused(false);
+            if (typeof Keyboard?.dismiss === "function") {
+              Keyboard.dismiss();
+            }
+            setQuery(item.title);
+          }}
         />
 
         <View className="mt-2">

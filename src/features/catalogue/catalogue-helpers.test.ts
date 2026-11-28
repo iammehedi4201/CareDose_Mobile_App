@@ -9,6 +9,7 @@ import {
   formatUnitOrPackPrice,
   getStripUnitsLabel,
   isSolidDosageForm,
+  rankMedicineSuggestions,
   resolveBrandBadge,
   resolvePackQuantityUnit,
 } from './catalogue-helpers';
@@ -175,5 +176,71 @@ describe('Phase 4 — Mobile Catalogue Formatting & Safety Helpers', () => {
         'Nebuliser Solution',
       ),
     ).toEqual({ label: 'Pack quantity', value: '5 respules per pack' });
+  });
+
+  it('ranks medicine suggestions with exact and prefix matches before substring or generic hits and deduplicates variants', () => {
+    const sample = (
+      id: string,
+      name: string,
+      strength: string | null,
+      dosageForm: string,
+      genericName: string,
+    ): CatalogueBrandSummaryDto => ({
+      id,
+      sourceId: id,
+      name,
+      strength,
+      strengthNorm: strength?.toLowerCase().replace(/\s+/g, '') ?? null,
+      dosageForm,
+      dosageFormNorm: dosageForm.toLowerCase(),
+      manufacturer: 'Sample Pharma',
+      category: 'allopathic',
+      releaseMarker: null,
+      verification: 'UNVERIFIED',
+      fieldStatus: {
+        generic: 'PRESENT',
+        strength: strength ? 'PRESENT' : 'MISSING',
+        dosageForm: 'PRESENT',
+        manufacturer: 'PRESENT',
+        price: 'PRESENT',
+      },
+      warnings: [],
+      hasPriceWarning: false,
+      generic: {
+        id: `g-${genericName}`,
+        sourceId: `g-${genericName}`,
+        name: genericName,
+        slug: genericName.toLowerCase(),
+      },
+      primaryPack: null,
+      primaryImageUrl: null,
+      primaryImageStatus: null,
+    });
+
+    const ranked = rankMedicineSuggestions(
+      [
+        sample('1', 'Monas', '10 mg', 'Tablet', 'Montelukast'),
+        sample('2', 'Algin', '50 mg', 'Tablet', 'Tiemonium'),
+        sample('3', 'Naprox', '500 mg', 'Tablet', 'Naproxen'),
+        sample('4', 'Napa', '500 mg', 'Tablet', 'Paracetamol'),
+        sample('5', 'Napa', '500 mg', 'Tablet', 'Paracetamol'),
+        sample('6', 'Napa Extra', '500 mg+65 mg', 'Tablet', 'Paracetamol + Caffeine'),
+        sample('7', 'Ace', '500 mg', 'Tablet', 'Nimesulide'),
+        sample('8', 'Maxpro', '20 mg', 'Capsule', 'Esomeprazole'),
+      ],
+      'n',
+      6,
+    );
+
+    expect(ranked.map((b) => `${b.id}:${b.name}`)).toEqual([
+      '4:Napa',
+      '6:Napa Extra',
+      '3:Naprox',
+      '7:Ace',
+      '2:Algin',
+      '1:Monas',
+    ]);
+    expect(rankMedicineSuggestions([], 'n')).toEqual([]);
+    expect(rankMedicineSuggestions(ranked, '   ')).toEqual([]);
   });
 });

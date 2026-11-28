@@ -596,3 +596,69 @@ export const OFFLINE_FALLBACK_CATALOGUE_BRANDS: CatalogueBrandSummaryDto[] = [
     primaryImageStatus: null,
   },
 ];
+
+function computeBrandSuggestionTier(
+  brand: CatalogueBrandSummaryDto,
+  q: string,
+): number | null {
+  const nameLower = brand.name.trim().toLowerCase();
+  const genericLower = (brand.generic?.name ?? '').trim().toLowerCase();
+  const strengthLower = (brand.strength ?? '').trim().toLowerCase();
+  const mfrLower = (brand.manufacturer ?? '').trim().toLowerCase();
+
+  if (nameLower === q) return 0;
+  if (nameLower.startsWith(q)) return 1;
+  if (nameLower.includes(` ${q}`)) return 2;
+  if (genericLower.startsWith(q)) return 3;
+  if (nameLower.includes(q)) return 4;
+  if (
+    genericLower.includes(q) ||
+    strengthLower.includes(q) ||
+    mfrLower.includes(q)
+  ) {
+    return 5;
+  }
+  return null;
+}
+
+/**
+ * Ranks and deduplicates catalogue brand suggestions for live search dropdowns.
+ * Prioritizes exact and prefix matches on brand name (e.g. "n" -> Napa, Neuro-B)
+ * before substring or generic/manufacturer matches.
+ */
+export function rankMedicineSuggestions(
+  items: CatalogueBrandSummaryDto[],
+  query: string,
+  limit = 6,
+): CatalogueBrandSummaryDto[] {
+  const q = query.trim().toLowerCase();
+  if (!q || items.length === 0) return [];
+
+  const deduped = new Map<string, { item: CatalogueBrandSummaryDto; tier: number }>();
+
+  for (const item of items) {
+    const tier = computeBrandSuggestionTier(item, q);
+    if (tier === null) continue;
+
+    const dedupeKey = [
+      item.name.trim().toLowerCase(),
+      (item.strengthNorm ?? item.strength ?? '').trim().toLowerCase(),
+      (item.dosageFormNorm ?? item.dosageForm ?? '').trim().toLowerCase(),
+    ].join('|');
+
+    const existing = deduped.get(dedupeKey);
+    if (!existing || tier < existing.tier) {
+      deduped.set(dedupeKey, { item, tier });
+    }
+  }
+
+  return Array.from(deduped.values())
+    .sort((a, b) => {
+      if (a.tier !== b.tier) return a.tier - b.tier;
+      const nameCmp = a.item.name.localeCompare(b.item.name);
+      if (nameCmp !== 0) return nameCmp;
+      return (a.item.strength ?? '').localeCompare(b.item.strength ?? '');
+    })
+    .slice(0, Math.max(1, limit))
+    .map((entry) => entry.item);
+}

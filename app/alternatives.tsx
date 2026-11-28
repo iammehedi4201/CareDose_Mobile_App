@@ -127,7 +127,7 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
 
       {loading ? (
         <View className="mt-3">
-          <LoadingSkeleton rows={3} />
+          <LoadingSkeleton variant="alternatives_groups" rows={3} />
         </View>
       ) : errorMessage ? (
         <View className="mt-3">

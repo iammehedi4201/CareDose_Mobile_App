@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../theme/responsive';
@@ -20,6 +20,9 @@ export interface ScreenContainerProps extends AppHeaderProps {
   onDismissToast?: () => void;
   toastDurationMs?: number;
   contentBottomPadding?: number;
+  initialScrollOffset?: number;
+  onScrollOffsetChange?: (offsetY: number) => void;
+  scrollResetKey?: string;
 }
 
 export function ScreenContainer({
@@ -41,6 +44,9 @@ export function ScreenContainer({
   onDismissToast,
   toastDurationMs = 4000,
   contentBottomPadding,
+  initialScrollOffset,
+  onScrollOffsetChange,
+  scrollResetKey,
   children,
 }: ScreenContainerProps): React.JSX.Element {
   const layout = useResponsiveLayout();
@@ -48,6 +54,22 @@ export function ScreenContainer({
   const resolvedBottomPadding =
     contentBottomPadding ?? (floatingOverlay ? 96 : 28);
   const topToastInset = Math.max(0, insets.top) + 10;
+
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
+  const pendingScrollRestoreRef = useRef<number | null>(
+    typeof initialScrollOffset === 'number' && initialScrollOffset > 0
+      ? initialScrollOffset
+      : null,
+  );
+  const prevResetKeyRef = useRef<string | undefined>(scrollResetKey);
+
+  useEffect(() => {
+    if (scrollResetKey !== undefined && prevResetKeyRef.current !== scrollResetKey) {
+      prevResetKeyRef.current = scrollResetKey;
+      pendingScrollRestoreRef.current = null;
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  }, [scrollResetKey]);
 
   return (
     <SafeAreaView
@@ -70,12 +92,39 @@ export function ScreenContainer({
       <View className="flex-1 relative" style={{ flex: 1, position: 'relative' }}>
         {scrollable ? (
           <ScrollView
+            ref={scrollRef}
             className="flex-1"
             contentContainerStyle={{
               flexGrow: 1,
               paddingBottom: resolvedBottomPadding,
             }}
             keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={32}
+            onScroll={
+              onScrollOffsetChange
+                ? (event) => {
+                    onScrollOffsetChange(event.nativeEvent.contentOffset.y);
+                  }
+                : undefined
+            }
+            onContentSizeChange={
+              onScrollOffsetChange || pendingScrollRestoreRef.current !== null
+                ? (_contentWidth, contentHeight) => {
+                    const target = pendingScrollRestoreRef.current;
+                    if (target !== null && contentHeight >= target + 12) {
+                      pendingScrollRestoreRef.current = null;
+                      const restore = () => {
+                        scrollRef.current?.scrollTo({ y: target, animated: false });
+                      };
+                      if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(restore);
+                      } else {
+                        restore();
+                      }
+                    }
+                  }
+                : undefined
+            }
           >
             {topBanner}
             <View

@@ -295,7 +295,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
       </View>
 
       {loading && schedules.length === 0 ? (
-        <LoadingSkeleton rows={3} />
+        <LoadingSkeleton variant="manage_schedules" rows={3} />
       ) : enrichedSchedules.length === 0 ? (
         <EmptyState
           title="No schedules yet. Create a medication schedule to organise your daily doses."
