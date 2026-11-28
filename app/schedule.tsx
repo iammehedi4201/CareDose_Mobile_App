@@ -223,9 +223,9 @@ export default function ScheduleScreen(): React.JSX.Element {
     topOverlay: statusBarGuardOverlay,
     overlapPx: headerOverlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'DAILY ROUTINE',
     title: 'Schedule',
     imageSource: scheduleHeaderImage,
-    overlapRatio: 0.19,
   });
 
   const floatingMenu = (

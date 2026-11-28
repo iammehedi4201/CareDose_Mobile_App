@@ -1803,8 +1803,69 @@ describe('CareDose Multi-Viewport UI Responsiveness (320px - 768px)', () => {
 
     for (const width of [320, 360, 390, 768]) {
       __setMockWindowWidth(width);
+      assertClearHeaderBottom(collectElements(HomeScreen()));
       assertClearHeaderBottom(collectElements(ScheduleScreen()));
       assertClearHeaderBottom(collectElements(MyMedicinesScreen()));
+      assertClearHeaderBottom(collectElements(ExploreMedicinesScreen()));
+      assertClearHeaderBottom(collectElements(ProfileScreen()));
+      assertClearHeaderBottom(collectElements(ManageSchedulesScreen()));
+      assertClearHeaderBottom(collectElements(DoseHistoryScreen()));
+      assertClearHeaderBottom(collectElements(HealthLogScreen()));
+      assertClearHeaderBottom(collectElements(ExpensesScreen()));
+      assertClearHeaderBottom(collectElements(PurchasesScreen()));
+      assertClearHeaderBottom(collectElements(AlternativeBrandsScreen()));
+      assertClearHeaderBottom(collectElements(SettingsScreen()));
+      mockLocalSearchParamsOverride = { id: 'med-1' };
+      assertClearHeaderBottom(collectElements(PersonalMedicineDetailsScreen()));
+      mockLocalSearchParamsOverride = {};
     }
+
+    // Also ensure elevated OS fontScale preserves safe clearance across narrow screens
+    __setMockWindowWidth(360, 812, 1.3);
+    assertClearHeaderBottom(collectElements(ScheduleScreen()));
+    assertClearHeaderBottom(collectElements(MyMedicinesScreen()));
+    assertClearHeaderBottom(collectElements(ExploreMedicinesScreen()));
+
+    // Verify section headers omit subtitles everywhere except Home and unify floating create buttons
+    __setMockWindowWidth(390);
+    const extractStrings = (els: ElementMatch[]) =>
+      els.flatMap((e) => (typeof e.props.children === 'string' ? [e.props.children] : []));
+
+    const homeStrings = extractStrings(collectElements(HomeScreen()));
+    expect(homeStrings.some((t) => /\d{4}/.test(t) || /(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)/.test(t))).toBe(true);
+
+    const nonSubtitleChecks: Array<[ElementMatch[], string[]]> = [
+      [collectElements(ScheduleScreen()), ['Morning, afternoon & bedtime doses.']],
+      [collectElements(MyMedicinesScreen()), ['Manage your medicine stock.']],
+      [collectElements(ExploreMedicinesScreen()), ['19,590 brands · 1,585 generics']],
+      [collectElements(ProfileScreen()), ['Manage your care profile and tools.']],
+      [collectElements(ManageSchedulesScreen()), ['Create, pause & edit medicine timings.']],
+      [collectElements(ExpensesScreen()), ['Actual monthly spend & future cost estimate.']],
+      [collectElements(PurchasesScreen()), ['Recorded packs & stock refills.']],
+      [collectElements(HealthLogScreen()), ['Blood glucose tracking & trend.']],
+      [collectElements(DoseHistoryScreen()), ['Taken, skipped and missed dose logs.']],
+      [collectElements(AlternativeBrandsScreen()), ['Compare brands by generic, strength & form.']],
+      [collectElements(SettingsScreen()), ['Reminders, offline cache, backup & privacy.']],
+    ];
+    for (const [screenEls, forbiddenSubtitles] of nonSubtitleChecks) {
+      const strs = extractStrings(screenEls);
+      for (const s of forbiddenSubtitles) {
+        expect(strs).not.toContain(s);
+      }
+    }
+
+    // Standard floating bottom-right pill create buttons on Manage Schedules, Expenses, Purchases, Health & Medicines
+    for (const [screenEls, label] of [
+      [collectElements(MyMedicinesScreen()), 'Add'],
+      [collectElements(ManageSchedulesScreen()), 'Add Schedule'],
+      [collectElements(ExpensesScreen()), '+ Purchase'],
+      [collectElements(PurchasesScreen()), '+ Record'],
+      [collectElements(HealthLogScreen()), '+ Log Reading'],
+    ] as Array<[ElementMatch[], string]>) {
+      const fab = screenEls.find((e) => e.props.accessibilityLabel === label);
+      expect(fab).toBeDefined();
+    }
+
+    __setMockWindowWidth(375);
   });
 });

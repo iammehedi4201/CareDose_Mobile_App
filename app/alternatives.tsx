@@ -89,8 +89,8 @@ export default function AlternativeBrandsScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'EQUIVALENTS',
     title: 'Alternative Brands',
-    subtitle: 'Compare brands by generic, strength & form.',
     imageSource: alternativesHeaderImage,
     onBack: () => router.push('/profile'),
   });

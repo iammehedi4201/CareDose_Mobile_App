@@ -105,8 +105,8 @@ export default function DoseHistoryScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'ADHERENCE',
     title: 'Dose History',
-    subtitle: 'Taken, skipped and missed dose logs.',
     imageSource: historyHeaderImage,
     onBack: () => {
       if (activeMedFilter) {

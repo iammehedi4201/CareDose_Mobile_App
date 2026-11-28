@@ -9,6 +9,7 @@ import {
   EmptyState,
   ErrorState,
   FilterChips,
+  FloatingAddButton,
   LoadingSkeleton,
   LogReadingModal,
   ScreenContainer,
@@ -86,16 +87,19 @@ export default function HealthLogScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'VITALS',
     title: 'Health Log',
-    subtitle: 'Blood glucose tracking & trend.',
     imageSource: healthHeaderImage,
     onBack: handleBack,
-    primaryAction: {
-      label: '+ Log Reading',
-      pill: true,
-      onPress: () => setLogModalOpen(true),
-    },
   });
+
+  const floatingLogReadingButton = (
+    <FloatingAddButton
+      label="Log Reading"
+      accessibilityLabel="+ Log Reading"
+      onPress={() => setLogModalOpen(true)}
+    />
+  );
 
   return (
     <ScreenContainer
@@ -103,6 +107,7 @@ export default function HealthLogScreen(): React.JSX.Element {
       hideHeader
       topBanner={topBanner}
       topOverlay={topOverlay}
+      floatingOverlay={floatingLogReadingButton}
     >
       <SuccessToast message={toast} />
 
@@ -275,8 +280,8 @@ export default function HealthLogScreen(): React.JSX.Element {
             }
             description={
               contextFilter === 'ALL'
-                ? 'Tap + Log Reading in the top header to record your first glucose check.'
-                : 'Switch filter chips above or log a new reading in the top header.'
+                ? 'Tap + Log Reading below to record your first glucose check.'
+                : 'Switch filter chips above or log a new reading below.'
             }
           />
           {contextFilter === 'ALL' ? (

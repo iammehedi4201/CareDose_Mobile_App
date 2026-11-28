@@ -105,12 +105,8 @@ export default function GenericDetailsScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'GENERIC',
     title: loading || errorMessage ? 'Generic Details' : genericName,
-    subtitle: loading
-      ? 'Loading linked catalogue brands...'
-      : errorMessage
-        ? undefined
-        : 'Generic · Catalogue brands',
     imageSource: exploreHeaderImage,
     onBack: () => router.push('/explore'),
   });

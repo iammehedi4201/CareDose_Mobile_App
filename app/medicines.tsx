@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 import medicinesHeaderImage from "../assets/medicines-header-illustration.jpg";
 import {
   AddMedicineModal,
   EmptyState,
   FilterChips,
+  FloatingAddButton,
   MedicineCard,
   ScreenContainer,
   SearchInput,
@@ -65,54 +65,21 @@ export default function MyMedicinesScreen(): React.JSX.Element {
   );
 
   const { topBanner, topOverlay, overlapPx } = useScreenWaveHeader({
+    eyebrow: "MY CARE",
     title: "My Medicines",
     imageSource: medicinesHeaderImage,
     titleSize: "compact",
     titleLines: 1,
-    contentMaxWidthPercent: layout.isCompact ? 58 : 60,
-    overlapRatio: 0.18,
+    contentMaxWidthPercent: layout.isCompact ? 56 : 58,
+    overlapRatio: 0.08,
   });
 
   const floatingAddButton = (
-    <View
-      pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        bottom: 14,
-        left: layout.screenPadding,
-        right: layout.screenPadding,
-        zIndex: 40,
-        alignItems: "center",
-      }}
-    >
-      <View
-        pointerEvents="box-none"
-        className="w-full flex-row justify-end"
-        style={
-          layout.maxContentWidth
-            ? { maxWidth: layout.maxContentWidth }
-            : undefined
-        }
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add"
-          onPress={() => setAddOpen(true)}
-          className="flex-row items-center justify-center rounded-full bg-primary px-5 active:opacity-90"
-          style={{
-            minHeight: 48,
-            shadowColor: "#075D4E",
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.24,
-            shadowRadius: 12,
-            elevation: 6,
-          }}
-        >
-          <Feather name="plus" size={18} color="#FFFFFF" />
-          <Text className="ml-1.5 text-[15px] font-bold text-white">Add</Text>
-        </Pressable>
-      </View>
-    </View>
+    <FloatingAddButton
+      label="Add"
+      accessibilityLabel="Add"
+      onPress={() => setAddOpen(true)}
+    />
   );
 
   return (

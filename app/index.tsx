@@ -26,6 +26,7 @@ import { useUserPreferences } from '../src/features/profile/UserPreferencesConte
 import {
   formatDoseActionFeedback,
   formatScheduleBarDateLabel,
+  getCurrentDayPeriod,
   getTodayLocalYmd,
   resolveTimelinePeriod,
   summarizePeriodStatus,
@@ -103,16 +104,24 @@ export default function HomeScreen(): React.JSX.Element {
     doses.some((d) => resolveTimelinePeriod(d) === period),
   );
 
+  const dayPeriod = getCurrentDayPeriod();
+  const timeGreeting =
+    dayPeriod === 'Morning'
+      ? 'Good Morning'
+      : dayPeriod === 'Afternoon'
+        ? 'Good Afternoon'
+        : 'Good Evening';
+
   const {
     topBanner: homeHeaderBanner,
     topOverlay: statusBarGuardOverlay,
     overlapPx: headerOverlapPx,
   } = useScreenWaveHeader({
-    eyebrow: `Good Morning, ${preferences.displayName}`,
+    eyebrow: `${timeGreeting}, ${preferences.displayName}`,
     title: 'Today',
     subtitle: formatScheduleBarDateLabel(todayYmd),
     imageSource: homeHeaderImage,
-    overlapRatio: 0.31,
+    overlapRatio: 0.12,
     rightSlot: (
       <Pressable
         accessibilityRole="button"

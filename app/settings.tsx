@@ -421,8 +421,8 @@ export default function SettingsScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'PREFERENCES',
     title: 'Settings',
-    subtitle: 'Reminders, offline cache, backup & privacy.',
     imageSource: settingsHeaderImage,
     onBack: () => router.push('/profile'),
   });

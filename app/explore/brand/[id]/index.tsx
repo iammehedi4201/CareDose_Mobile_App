@@ -141,6 +141,7 @@ export default function CatalogueBrandDetailsScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'BRAND DETAILS',
     title: loading || !brand ? 'Medicine Details' : brand.name,
     subtitle: loading
       ? 'Loading catalogue record...'

@@ -226,10 +226,6 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
     return false;
   }, [isFiltered, items]);
 
-  const brandsCountLabel = summary
-    ? `${summary.counts.brands.toLocaleString()} brands · ${summary.counts.generics.toLocaleString()} generics`
-    : '19,590 brands · 1,585 generics';
-
   const genericsSubtitle = summary
     ? `${summary.counts.generics.toLocaleString()} generics`
     : '1,585 generics';
@@ -251,10 +247,9 @@ export default function ExploreMedicinesScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'CATALOGUE',
     title: 'Explore Medicines',
-    subtitle: brandsCountLabel,
     imageSource: exploreHeaderImage,
-    overlapRatio: 0.25,
   });
 
   return (

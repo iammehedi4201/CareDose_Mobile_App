@@ -8,6 +8,7 @@ import {
   EmptyState,
   ErrorState,
   FilterChips,
+  FloatingAddButton,
   formatDisplayDate,
   LoadingSkeleton,
   resolveDosageFormIcon,
@@ -196,6 +197,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'ROUTINES',
     title: 'Manage Schedules',
     imageSource: schedulesHeaderImage,
     onBack: () => {
@@ -205,13 +207,15 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
         router.push('/schedule');
       }
     },
-    primaryAction: {
-      label: 'Add Schedule',
-      iconName: 'plus',
-      pill: true,
-      onPress: handleOpenCreate,
-    },
   });
+
+  const floatingAddScheduleButton = (
+    <FloatingAddButton
+      label="Add Schedule"
+      accessibilityLabel="Add Schedule"
+      onPress={handleOpenCreate}
+    />
+  );
 
   return (
     <ScreenContainer
@@ -219,6 +223,7 @@ export default function ManageSchedulesScreen(): React.JSX.Element {
       hideHeader
       topBanner={topBanner}
       topOverlay={topOverlay}
+      floatingOverlay={floatingAddScheduleButton}
     >
       <SuccessToast message={toast} />
 

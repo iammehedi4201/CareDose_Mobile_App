@@ -90,17 +90,13 @@ export default function BrandAlternativesListScreen(): React.JSX.Element {
     });
   }, [effectivePool, query]);
 
-  const subtitle = targetBrand
-    ? `${targetBrand.generic?.name ?? 'Matching brands'} · ${targetBrand.strength ?? 'All strengths'} · ${targetBrand.dosageForm ?? ''}`
-    : 'Remaining alternative brands';
-
   const {
     topBanner,
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'EQUIVALENTS',
     title: targetBrand ? `${targetBrand.name} Alternatives` : 'Alternative Brands',
-    subtitle,
     imageSource: alternativesHeaderImage,
     onBack: () => router.push(`/explore/brand/${id ?? ''}`),
   });

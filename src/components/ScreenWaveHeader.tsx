@@ -72,14 +72,18 @@ useScreenWaveHeader({
   const minBelowInset = hasBack
     ? topBadge
       ? layout.isCompact
-        ? 188
-        : 204
+        ? 184
+        : 200
       : layout.isCompact
-        ? 166
-        : 180
+        ? 148
+        : 160
     : layout.isCompact
-      ? 140
-      : 162;
+      ? subtitle
+        ? 136
+        : 124
+      : subtitle
+        ? 154
+        : 138;
 
   const minArtHeightForInset =
     topInset > 0
@@ -90,24 +94,34 @@ useScreenWaveHeader({
   const headerArtWidth = isWideViewport
     ? layout.width
     : Math.max(baseArtWidth, Math.round(headerArtHeight * 2));
-  const extraTopBreathing = !hasBack && !subtitle && !eyebrow ? (layout.isCompact ? 8 : 10) : 0;
-  const headerTopPadding = topInset + (layout.isCompact ? 10 : 12) + extraTopBreathing;
+  const headerTopPadding = topInset + (layout.isCompact ? 8 : 10);
 
-  const minContentHeight = hasBack ? (topBadge ? 168 : 142) : 104;
+  // Trim excess empty mint gradient below the artwork (~70-74% Y) so the header
+  // transitions snugly into the next section without dead vertical gap.
+  const visibleArtScale = isWideViewport ? 0.9 : 0.84;
+  const visibleArtHeight = Math.round(headerArtHeight * visibleArtScale) + headerArtTop;
+
+  const fontScaleBoost = Math.min(1.25, Math.max(1, layout.fontScale * 0.98));
+  const estimatedBodyHeight =
+    (hasBack ? (topBadge ? 148 : 88) : 52) +
+    (eyebrow ? 16 : 0) +
+    (subtitle ? 20 * Math.min(2, subtitleLines) : 0);
+  const minContentHeight = Math.round(estimatedBodyHeight * fontScaleBoost);
+  const overlapFactor = overlapRatio ?? (hasBack ? 0.08 : 0.09);
   const headerHeight = Math.max(
-    headerTopPadding + minContentHeight,
-    headerArtHeight + headerArtTop,
+    headerTopPadding + minContentHeight + Math.round((layout.isCompact ? 105 : 120) * overlapFactor),
+    visibleArtHeight,
   );
-  const overlapFactor = overlapRatio ?? (hasBack ? 0.17 : 0.31);
-  const overlapPx = Math.round(Math.max(120, headerHeight - topInset) * overlapFactor);
+  const effectiveArtHeight = Math.max(headerArtHeight, headerHeight - headerArtTop);
+  const overlapPx = Math.round(Math.max(100, headerHeight - topInset) * overlapFactor);
   // Confine the bottom surface feather within the card-overlap zone so right-side
   // artwork sitting above the card stays crisp and never washes out.
-  const bottomFadeHeight = overlapPx > 0 ? Math.max(16, Math.min(32, overlapPx)) : 18;
+  const bottomFadeHeight = overlapPx > 0 ? Math.min(28, overlapPx) : 14;
   const bottomFadeSteps = [
     { height: bottomFadeHeight, alpha: 0.2 },
-    { height: Math.round(bottomFadeHeight * 0.68), alpha: 0.42 },
-    { height: Math.round(bottomFadeHeight * 0.38), alpha: 0.68 },
-    { height: Math.max(5, Math.round(bottomFadeHeight * 0.18)), alpha: 0.92 },
+    { height: Math.max(4, Math.round(bottomFadeHeight * 0.68)), alpha: 0.42 },
+    { height: Math.max(3, Math.round(bottomFadeHeight * 0.38)), alpha: 0.68 },
+    { height: Math.max(2, Math.round(bottomFadeHeight * 0.18)), alpha: 0.92 },
   ];
 
   const topOverlay =
@@ -135,7 +149,7 @@ useScreenWaveHeader({
             top: headerArtTop,
             right: 0,
             width: headerArtWidth,
-            height: headerArtHeight,
+            height: effectiveArtHeight,
           }}
         />
       </View>
@@ -189,31 +203,32 @@ useScreenWaveHeader({
       </View>
     ) : null;
 
-  const textWidthPercent = contentMaxWidthPercent ?? (layout.isCompact ? 55 : 57);
-  const titleFontSize =
-    titleSize === 'compact'
-      ? layout.isCompact
-        ? 20
-        : 22
-      : hasBack
-        ? layout.isCompact
-          ? 22
-          : 24
-        : layout.isCompact
-          ? 25
-          : 28;
-  const titleLineHeight =
-    titleSize === 'compact'
-      ? layout.isCompact
-        ? 25
-        : 28
-      : hasBack
-        ? layout.isCompact
-          ? 27
-          : 30
-        : layout.isCompact
-          ? 30
-          : 34;
+  const textWidthPercent =
+    contentMaxWidthPercent ?? (layout.isCompact ? 56 : layout.isTabletOrWide ? 58 : 57);
+  const tierTitleSize = (() => {
+    if (titleSize === 'compact') {
+      if (layout.tier === 'compact') return 21;
+      if (layout.tier === 'standard') return 23;
+      if (layout.tier === 'large') return 25;
+      return 27;
+    }
+    if (hasBack) {
+      if (layout.tier === 'compact') return 21;
+      if (layout.tier === 'standard') return 23;
+      if (layout.tier === 'large') return 24;
+      return 27;
+    }
+    if (layout.tier === 'compact') return 23;
+    if (layout.tier === 'standard') return 26;
+    if (layout.tier === 'large') return 28;
+    return 31;
+  })();
+  const titleFontSize = tierTitleSize;
+  const titleLineHeight = Math.round(titleFontSize * 1.18);
+  const eyebrowFontSize = layout.isCompact ? 10 : layout.isTabletOrWide ? 11.5 : 10.5;
+  const subtitleFontSize = layout.isCompact ? 12 : layout.isTabletOrWide ? 14 : 12.5;
+  const subtitleLineHeight = Math.round(subtitleFontSize * 1.38);
+  const bannerContentBottomPadding = overlapPx + (layout.isCompact ? 6 : 8);
 
   const topBanner = (
     <View
@@ -221,6 +236,7 @@ useScreenWaveHeader({
       style={{
         height: headerHeight,
         paddingTop: headerTopPadding,
+        paddingBottom: bannerContentBottomPadding,
         backgroundColor: '#DFF6EC',
       }}
     >
@@ -233,7 +249,7 @@ useScreenWaveHeader({
           top: headerArtTop,
           right: 0,
           width: headerArtWidth,
-          height: headerArtHeight,
+          height: effectiveArtHeight,
         }}
       />
       {/* Feathered multi-step fade into #F7FAF8 surface confined to bottom overlap margin */}
@@ -253,7 +269,7 @@ useScreenWaveHeader({
       ))}
 
       <View
-        className="w-full"
+        className="relative w-full flex-1"
         style={[
           { paddingHorizontal: layout.screenPadding },
           layout.maxContentWidth
@@ -304,42 +320,77 @@ useScreenWaveHeader({
 
             {actionControls}
           </View>
+        ) : actionControls ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: layout.screenPadding,
+              zIndex: 5,
+            }}
+          >
+            {actionControls}
+          </View>
         ) : null}
 
-        <View
-          className={`flex-row items-start justify-between gap-2 ${hasBack ? 'mt-2.5' : ''}`}
-        >
-          <View className="min-w-0 flex-1 pr-2" style={{ maxWidth: `${textWidthPercent}%` }}>
+        <View className={`flex-1 justify-center ${hasBack ? 'pt-1.5' : ''}`}>
+          <View className="min-w-0 pr-2" style={{ maxWidth: `${textWidthPercent}%` }}>
             {topBadge ? <View className="mb-1.5 self-start">{topBadge}</View> : null}
             {eyebrow ? (
-              <Text
-                className="mb-0.5 text-[10.5px] font-bold uppercase tracking-[0.7px] text-primary"
-                numberOfLines={1}
-              >
-                {eyebrow}
-              </Text>
+              <View className="mb-1 flex-row items-center gap-1.5">
+                <View
+                  accessible={false}
+                  style={{
+                    width: 12,
+                    height: 2.5,
+                    borderRadius: 99,
+                    backgroundColor: '#0D9468',
+                  }}
+                />
+                <Text
+                  className="font-extrabold uppercase"
+                  style={{
+                    fontSize: eyebrowFontSize,
+                    lineHeight: eyebrowFontSize + 3,
+                    letterSpacing: 1.0,
+                    color: CAREDOSE_EXTENDED_COLORS.primary,
+                  }}
+                  numberOfLines={1}
+                >
+                  {eyebrow}
+                </Text>
+              </View>
             ) : null}
             <Text
-              className="font-bold text-main"
+              className="font-extrabold"
               style={{
                 fontSize: titleFontSize,
                 lineHeight: titleLineHeight,
+                letterSpacing: -0.45,
+                color: '#0D2B24',
               }}
               numberOfLines={titleLines}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
             >
               {title}
             </Text>
             {subtitle ? (
               <Text
-                className="mt-0.5 text-xs leading-[17px] text-[#5A706B]"
+                className="mt-1 font-medium"
+                style={{
+                  fontSize: subtitleFontSize,
+                  lineHeight: subtitleLineHeight,
+                  letterSpacing: -0.1,
+                  color: '#4A665F',
+                }}
                 numberOfLines={subtitleLines}
               >
                 {subtitle}
               </Text>
             ) : null}
           </View>
-
-          {!hasBack ? actionControls : null}
         </View>
       </View>
     </View>

@@ -6,6 +6,7 @@ import expensesHeaderImage from '../assets/expenses-header-illustration.jpg';
 import {
   BottomSheet,
   EmptyState,
+  FloatingAddButton,
   FormField,
   RecordPurchaseModal,
   ScreenContainer,
@@ -103,16 +104,19 @@ export default function ExpensesScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'FINANCES',
     title: 'Medicine Expenses',
-    subtitle: 'Actual monthly spend & future cost estimate.',
     imageSource: expensesHeaderImage,
     onBack: () => router.back(),
-    primaryAction: {
-      label: '+ Purchase',
-      pill: true,
-      onPress: () => setPurchaseOpen(true),
-    },
   });
+
+  const floatingAddPurchaseButton = (
+    <FloatingAddButton
+      label="Purchase"
+      accessibilityLabel="+ Purchase"
+      onPress={() => setPurchaseOpen(true)}
+    />
+  );
 
   return (
     <ScreenContainer
@@ -120,6 +124,7 @@ export default function ExpensesScreen(): React.JSX.Element {
       hideHeader
       topBanner={topBanner}
       topOverlay={topOverlay}
+      floatingOverlay={floatingAddPurchaseButton}
     >
       <SuccessToast message={toast} />
 
@@ -411,7 +416,7 @@ export default function ExpensesScreen(): React.JSX.Element {
           <EmptyState
             iconName="shopping-bag"
             title="No purchases recorded yet"
-            description="Tap + Purchase in the header to log your first medicine purchase."
+            description="Tap + Purchase below to log your first medicine purchase."
           />
         ) : (
           expensesSummary.recentPurchases.map((item, idx) => (

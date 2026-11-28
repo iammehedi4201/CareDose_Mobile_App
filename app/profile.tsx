@@ -36,9 +36,7 @@ export default function ProfileScreen(): React.JSX.Element {
   } = useScreenWaveHeader({
     eyebrow: 'CARE HUB',
     title: 'Profile',
-    subtitle: 'Manage your care profile and tools.',
     imageSource: profileHeaderImage,
-    overlapRatio: 0.25,
     rightSlot: (
       <Pressable
         accessibilityRole="button"

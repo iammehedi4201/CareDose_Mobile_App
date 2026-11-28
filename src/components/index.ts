@@ -8,6 +8,7 @@ export * from './DoseProgressCard';
 export * from './FeedbackStates';
 export * from './FilterChips';
 export * from './FloatingActionMenu';
+export * from './FloatingAddButton';
 export * from './FormFields';
 export * from './LogReadingModal';
 export * from './MedicineCard';

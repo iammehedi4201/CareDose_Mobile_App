@@ -6,6 +6,7 @@ import purchasesHeaderImage from '../assets/purchases-header-illustration.jpg';
 import {
   EmptyState,
   FilterChips,
+  FloatingAddButton,
   RecordPurchaseModal,
   ScreenContainer,
   SearchInput,
@@ -90,16 +91,19 @@ export default function PurchasesScreen(): React.JSX.Element {
     topOverlay,
     overlapPx,
   } = useScreenWaveHeader({
+    eyebrow: 'REFILL LOG',
     title: 'Purchase History',
-    subtitle: 'Recorded packs & stock refills.',
     imageSource: purchasesHeaderImage,
     onBack: () => router.back(),
-    primaryAction: {
-      label: '+ Record',
-      pill: true,
-      onPress: () => setPurchaseOpen(true),
-    },
   });
+
+  const floatingAddRecordButton = (
+    <FloatingAddButton
+      label="Record"
+      accessibilityLabel="+ Record"
+      onPress={() => setPurchaseOpen(true)}
+    />
+  );
 
   return (
     <ScreenContainer
@@ -107,6 +111,7 @@ export default function PurchasesScreen(): React.JSX.Element {
       hideHeader
       topBanner={topBanner}
       topOverlay={topOverlay}
+      floatingOverlay={floatingAddRecordButton}
     >
       <SuccessToast message={toast} />
 
@@ -171,7 +176,7 @@ export default function PurchasesScreen(): React.JSX.Element {
           }
           description={
             purchases.length === 0
-              ? 'Tap + Record in the header to save a purchase and update your medicine stock together.'
+              ? 'Tap + Record below to save a purchase and update your medicine stock together.'
               : 'Try clearing the medicine filter or search query.'
           }
           actionLabel={purchases.length > 0 ? 'Clear filters' : undefined}
